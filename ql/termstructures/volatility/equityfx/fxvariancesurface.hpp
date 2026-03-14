@@ -223,12 +223,17 @@ namespace QuantLib {
                 while (times_[i + 1] < tau)
                     i++;
 
-                // snap to pillar if within tolerance
-                if ((tau - times_[i]) < (1. / (365 * 8))) {
+                // Snap to a pillar only for floating-point coincidence (not a physical window).
+                // A tolerance of 1e-10 is orders of magnitude above rounding noise in
+                // year-fraction arithmetic (~1e-14) yet far below the minimum trading-time
+                // perturbation dτ ≈ 7e-5 used by LocalVolSurface, so the three Dupire
+                // queries around a pillar still receive distinct interpolation weights.
+                static constexpr Time pillarSnapTol = 1e-10;
+                if ((tau - times_[i]) < pillarSnapTol) {
                     Volatility vol = smileSections_[i - 1].volByStrike(strike);
                     return (vol * vol * t);
                 }
-                if ((times_[i + 1] - tau) < (1. / (365 * 8))) {
+                if ((times_[i + 1] - tau) < pillarSnapTol) {
                     Volatility vol = smileSections_[i].volByStrike(strike);
                     return (vol * vol * t);
                 }
