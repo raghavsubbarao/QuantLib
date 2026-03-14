@@ -1,5 +1,7 @@
+/* -*- mode: c++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+
 /*!
- Copyright (C) 2006 Allen Kuo
+ Copyright (C) 2025 Raghav Subbarao
 
  This file is part of QuantLib, a free-software/open-source library
  for financial quantitative analysts and developers - http://quantlib.org/
@@ -15,8 +17,28 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-/*  This example shows how to set up a term structure and price a simple
-    forward-rate agreement.
+/*! \file FXSmileSection.cpp
+    \brief Example showing calibration of all FX smile section types.
+
+    Demonstrates how to construct and calibrate the following concrete
+    fxSmileSection subclasses against a common set of FX volatility market
+    quotes (ATM, 25-delta and 10-delta risk reversals and broker flies):
+
+      Strike-parameterised:
+        - polynomialSmileSection      (quadratic-in-log-moneyness, 3 params)
+        - fxSabrSmileSection          (SABR beta=1, 3 params: alpha, nu, rho)
+        - fxSviSmileSection           (SVI raw, 5 params: a, b, rho, m, sigma)
+        - fxCostSmileSectionFlatDynamics   (cost model, flat smile dynamics)
+        - fxCostSmileSectionScaledDynamics (cost model, scaled smile dynamics)
+
+      Delta-parameterised:
+        - quadraticSmileSection       (quadratic in put delta, 3 params)
+
+    For each model the example prints a row in a table showing:
+      - the calibrated ATM vol (should recover the input)
+      - 25D put / call vols
+      - 10D put / call vols
+      - implied risk reversals and butterflies for both delta tenors
 */
 
 #include <ql/qldefines.hpp>
@@ -27,213 +49,394 @@
 #include <ql/termstructures/volatility/fxsmilesectionbystrike.hpp>
 #include <ql/termstructures/volatility/fxsmilesectionbydelta.hpp>
 #include <ql/termstructures/volatility/fxcostsmilesection.hpp>
-#include <ql/termstructures/tradingtimetermstructure.hpp>
-#include <ql/termstructures/volatility/equityfx/fxvariancesurface.hpp>
-
-#include <ql/time/date.hpp>
+#include <ql/experimental/fx/deltavolquote.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
+#include <ql/time/daycounters/actual365fixed.hpp>
+#include <ql/time/date.hpp>
+#include <ql/settings.hpp>
 
+#include <iomanip>
 #include <iostream>
+#include <string>
 
-using namespace std;
 using namespace QuantLib;
+
+// ---------------------------------------------------------------------------
+//  Helper: print one result row for a calibrated smile section
+// ---------------------------------------------------------------------------
+
+void printRow(const std::string& name,
+              fxSmileSection& ss,
+              Real market_atm,
+              Real market_rr25,
+              Real market_bf25,
+              Real market_rr10,
+              Real market_bf10) {
+
+    const int w0 = 34; // model name column
+    const int w  =  9; // vol columns
+
+    Real atm    = ss.volByStrike(ss.atmLevel());
+    Real v25c   = ss.volByDelta( 0.25, Option::Call);
+    Real v25p   = ss.volByDelta(-0.25, Option::Put);
+    Real v10c   = ss.volByDelta( 0.10, Option::Call);
+    Real v10p   = ss.volByDelta(-0.10, Option::Put);
+    Real rr25   = v25c - v25p;
+    Real bf25   = 0.5 * (v25c + v25p) - atm;
+    Real rr10   = v10c - v10p;
+    Real bf10   = 0.5 * (v10c + v10p) - atm;
+
+    std::cout << std::setw(w0) << std::left  << name
+              << std::fixed    << std::setprecision(4)
+              << std::setw(w)  << std::right  << atm  * 100.0
+              << std::setw(w)  << std::right  << v25p * 100.0
+              << std::setw(w)  << std::right  << v25c * 100.0
+              << std::setw(w)  << std::right  << v10p * 100.0
+              << std::setw(w)  << std::right  << v10c * 100.0
+              << std::setw(w)  << std::right  << rr25 * 100.0
+              << std::setw(w)  << std::right  << bf25 * 100.0
+              << std::setw(w)  << std::right  << rr10 * 100.0
+              << std::setw(w)  << std::right  << bf10 * 100.0
+              << "\n";
+
+    // Print residuals versus market on the next line
+    std::cout << std::setw(w0) << std::left << "  residuals vs market"
+              << std::fixed << std::setprecision(5)
+              << std::setw(w) << std::right << (atm  - market_atm)  * 100.0
+              << std::setw(w) << std::right << ""   // 25p — no direct quote
+              << std::setw(w) << std::right << ""   // 25c — no direct quote
+              << std::setw(w) << std::right << ""   // 10p
+              << std::setw(w) << std::right << ""   // 10c
+              << std::setw(w) << std::right << (rr25 - market_rr25) * 100.0
+              << std::setw(w) << std::right << (bf25 - market_bf25) * 100.0
+              << std::setw(w) << std::right << (rr10 - market_rr10) * 100.0
+              << std::setw(w) << std::right << (bf10 - market_bf10) * 100.0
+              << "\n\n";
+}
+
+// ---------------------------------------------------------------------------
+//  main
+// ---------------------------------------------------------------------------
 
 int main(int, char*[]) {
 
     try {
 
-        std::cout << std::endl;
+        std::cout << "\n"
+                  << "=============================================================\n"
+                  << "  FX Smile Section Calibration Example\n"
+                  << "=============================================================\n\n";
 
-        /*********************
-         ***     Cubic     ***
-         *********************/
-        /*cubic c(std::vector<Real>{8., 12., 6., 1.});
-        std::vector<Real> z;
-        Integer n = c.roots(z);
+        // ------------------------------------------------------------------
+        //  Market data
+        //
+        //  Currency pair: CCY1/CCY2
+        //  Spot:          1.7554
+        //  Expiry:        1 year (2024-01-02 to 2025-01-02)
+        //  Foreign rate:  5% flat (CCY1 risk-free)
+        //  Domestic rate: 3% flat (CCY2 risk-free)
+        //
+        //  Volatility quotes (smile-strangle convention):
+        //    ATM (delta-neutral fwd):  14.483%
+        //    25D risk reversal:         5.770%
+        //    25D broker fly:            0.7425%
+        //    10D risk reversal:        10.1575%
+        //    10D broker fly:            1.6125%
+        //
+        //  Delta convention: premium-adjusted spot delta (PaSpot)
+        //  ATM convention:   delta-neutral forward (AtmFwd)
+        // ------------------------------------------------------------------
 
-        std::cout << "number of roots: " << n << std::endl;
-        
-        for (int i = 0; i < z.size(); i++) 
-        {
-            std::cout << z[i] << ":\t" << c(z[i]) << std::endl;
-        }*/
-
-        /*********************
-         ***    Quartic    ***
-         *********************/
-        /*quartic c(std::vector<Real>{10., 8., 6., 4., 2.});
-        std::vector<Real> z;
-        Integer n = c.roots(z);
-
-        std::cout << "number of roots: " << n << std::endl;
-
-        for (int i = 0; i < z.size(); i++) {
-            std::cout << z[i] << ":\t" << c(z[i]) << std::endl;
-        }*/
-
-        /*
-        Date refDate(14, February, 2025, 20, 30, 00);
-
-        Handle<Quote> spot = makeQuoteHandle(1.7554);
-        Handle<YieldTermStructure> forDiscount(ext::make_shared<FlatForward>(refDate, 0.02, Actual365Fixed()));
-        Handle<YieldTermStructure> domDiscount(ext::make_shared<FlatForward>(refDate, 0.04, Actual365Fixed()));
-        Handle<tradingTimeTermStructure> eventCurve(ext::make_shared<tradingTimeTermStructure>(refDate));
-        Calendar cal = WeekendsOnly();
-
-        std::vector<Date> dates;
-        std::vector<Handle<Quote>> atmVols;
-        std::vector<std::vector<Handle<Quote>>> rrs;
-        std::vector<std::vector<Handle<Quote>>> bfs;
-        std::vector<Real> deltas{0.25, 0.1};
-        std::vector<Date> events;
-        std::vector<Real> weights;
-
-        // ON
-        dates.push_back(Date(17, Feb, 2025));
-        atmVols.push_back(makeQuoteHandle(0.1));
-        rrs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(-0.009), makeQuoteHandle(-0.0162)});
-        bfs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(0.0065), makeQuoteHandle(0.0234)});
-
-        // 1W
-        dates.push_back(Date(21, Feb, 2025));
-        atmVols.push_back(makeQuoteHandle(0.085));
-        rrs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(-0.0085), makeQuoteHandle(-0.0153)});
-        bfs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(0.006), makeQuoteHandle(0.0216)});
-
-        // 2W
-        dates.push_back(Date(28, Feb, 2025));
-        atmVols.push_back(makeQuoteHandle(0.075));
-        rrs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(-0.0075), makeQuoteHandle(-0.0135)});
-        bfs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(0.0055), makeQuoteHandle(0.0198)});
-
-        // 1M
-        dates.push_back(Date(14, Mar, 2025));
-        atmVols.push_back(makeQuoteHandle(0.07));
-        rrs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(-0.007), makeQuoteHandle(-0.0126)});
-        bfs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(0.005), makeQuoteHandle(0.018)});
-
-        // 2M
-        dates.push_back(Date(14, Apr, 2025));
-        atmVols.push_back(makeQuoteHandle(0.08));
-        rrs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(-0.0078), makeQuoteHandle(-0.01404)});
-        bfs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(0.0058), makeQuoteHandle(0.02088)});
-
-        // 3M
-        dates.push_back(Date(14, May, 2025));
-        atmVols.push_back(makeQuoteHandle(0.087));
-        rrs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(-0.0088), makeQuoteHandle(-0.01584)});
-        bfs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(0.0064), makeQuoteHandle(0.02304)});
-
-        // 6M
-        dates.push_back(Date(14, Aug, 2025));
-        atmVols.push_back(makeQuoteHandle(0.091));
-        rrs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(-0.0088), makeQuoteHandle(-0.01584)});
-        bfs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(0.0064), makeQuoteHandle(0.02304)});
-
-        // 9M
-        dates.push_back(Date(14, Nov, 2025));
-        atmVols.push_back(makeQuoteHandle(0.105));
-        rrs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(-0.011), makeQuoteHandle(-0.0198)});
-        bfs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(0.0081), makeQuoteHandle(0.02916)});
-
-        // 1Y
-        dates.push_back(Date(16, Feb, 2026));
-        atmVols.push_back(makeQuoteHandle(0.112));
-        rrs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(-0.016), makeQuoteHandle(-0.0288)});
-        bfs.push_back(std::vector<Handle<Quote>>{makeQuoteHandle(0.0095), makeQuoteHandle(0.0342)});
-
-        Settings::instance().evaluationDate() = refDate;
-        fxVarianceSurfaceNCP<fxCostSmileSectionFlatDynamics> vs(refDate, spot, dates, 
-                                                                  atmVols, rrs, bfs, deltas, 
-                                                                  forDiscount, domDiscount, eventCurve,
-                                                                  DeltaVolQuote::PaSpot, DeltaVolQuote::AtmDeltaNeutral, 
-                                                                  fxSmileSection::SmileStrangle);
-
-        std::cout << vs.atmVol(Date(13, Nov, 2025)) << std::endl;
-
-        Real f = vs.fwd(Date(14, Nov, 2025));
-        std::cout << f << std::endl;
-        std::cout << vs.blackVol(Date(13, Nov, 2025), f) << std::endl;
-
-        Date d(28, Feb, 2025, 16, 30, 00);
-        Time t = eventCurve->timeFromReference(d);
-        std::cout << vs.timeFromReference(d) << std::endl;
-        std::cout << t << std::endl;
-        std::cout << eventCurve->tradingTime(d) << std::endl;
-        std::cout << eventCurve->tradingTime(t) << std::endl;
-        */
-        
-        /*********************
-         ***  MARKET DATA  ***
-         *********************/
-        
         Date todaysDate(2, January, 2024);
         Date expiryDate(2, January, 2025);
         Settings::instance().evaluationDate() = todaysDate;
-        todaysDate = Settings::instance().evaluationDate();
 
-        Handle<YieldTermStructure> forDiscount(ext::make_shared<FlatForward>(todaysDate, 0.05, Actual365Fixed()));
-        Handle<YieldTermStructure> domDiscount(ext::make_shared<FlatForward>(todaysDate, 0.03, Actual365Fixed()));
+        Handle<YieldTermStructure> forDiscount(
+            ext::make_shared<FlatForward>(todaysDate, 0.05, Actual365Fixed()));
+        Handle<YieldTermStructure> domDiscount(
+            ext::make_shared<FlatForward>(todaysDate, 0.03, Actual365Fixed()));
 
-        Handle<Quote> spot = makeQuoteHandle(1.7554);
+        Handle<Quote> spot  = makeQuoteHandle(1.7554);
         Handle<Quote> v_atm = makeQuoteHandle(0.14483);
-        Handle<Quote> v_25rr = makeQuoteHandle(0.05770);
-        Handle<Quote> v_10rr = makeQuoteHandle(0.101575);
-        Handle<Quote> v_25bf = makeQuoteHandle(0.007425);
-        Handle<Quote> v_10bf = makeQuoteHandle(0.016125);
-        std::vector<Real> dlts{0.25, 0.1};
-        DeltaVolQuote::DeltaType delta_type = DeltaVolQuote::PaSpot;
-        DeltaVolQuote::AtmType atm_type = DeltaVolQuote::AtmFwd;
 
-        fxCostSmileSectionFlatDynamics sf(expiryDate, spot, v_atm, std::vector<Handle<Quote>>{v_25rr, v_10rr},
-                                          std::vector<Handle<Quote>>{v_25bf, v_10bf}, dlts, forDiscount, domDiscount,
-                                          DeltaVolQuote::PaSpot, DeltaVolQuote::AtmFwd, fxSmileSection::SmileStrangle, 
-                                          Actual365Fixed(), Date(), true);
-        std::cout << "Atm:" << sf.atmLevel() << std::endl;
-        std::cout << "IVol:" << sf.volByStrike(1.745) << std::endl;
-        std::cout << "IVol:" << sf.volByStrike(1.755) << std::endl;
-        std::cout << "IVol:" << sf.volByStrike(1.765) << std::endl << std::endl;
+        // Risk-reversal and broker-fly quotes at two delta tenors
+        std::vector<Handle<Quote>> rrs = { makeQuoteHandle(0.05770),
+                                           makeQuoteHandle(0.101575) };
+        std::vector<Handle<Quote>> bfs = { makeQuoteHandle(0.007425),
+                                           makeQuoteHandle(0.016125) };
+        std::vector<Real> deltas = { 0.25, 0.10 };
 
-        std::cout << "IVol:" << sf.volByDelta(-0.10, Option::Put) << std::endl;
-        std::cout << "IVol:" << sf.volByDelta(-0.25, Option::Put) << std::endl;
-        std::cout << "IVol:" << sf.atm()->value() << std::endl;
-        std::cout << "IVol:" << sf.volByDelta(0.25, Option::Call) << std::endl;
-        std::cout << "IVol:" << sf.volByDelta(0.10, Option::Call) << std::endl;
-        std::cout << std::endl << std::endl;
+        DeltaVolQuote::DeltaType deltaType = DeltaVolQuote::PaSpot;
+        DeltaVolQuote::AtmType   atmType   = DeltaVolQuote::AtmFwd;
+        fxSmileSection::FlyType  flyType   = fxSmileSection::SmileStrangle;
+        DayCounter               dc        = Actual365Fixed();
 
-        std::cout << "ncp:" << sf.normedCallPrice(spot->value())<< std::endl;
-        Real np = sf.normedProbability(spot->value(), 1e-10);
-        std::cout << "ndp:" << sf.normedProbability(spot->value(), 10e-10) << std::endl;
-        std::cout << "ndp:" << sf.normedProbability(spot->value(), 10e-10) << std::endl;
-        std::cout << "ndp:" << sf.normedProbability(spot->value(), 10e-8) << std::endl;
-        std::cout << "ndp:" << sf.normedProbability(spot->value(), 10e-6) << std::endl;
-        std::cout << "ndp:" << sf.normedProbability(spot->value(), 10e-4) << std::endl;
-        std::cout << "nsk:" << sf.strikeFromNormProb(np) << std::endl;
-        std::cout << std::endl << std::endl;
+        // Derived market quotes for reference
+        Real mkt_atm  = v_atm->value();
+        Real mkt_rr25 = rrs[0]->value();
+        Real mkt_bf25 = bfs[0]->value();
+        Real mkt_rr10 = rrs[1]->value();
+        Real mkt_bf10 = bfs[1]->value();
 
-        fxCostSmileSectionScaledDynamics ss(expiryDate, spot, v_atm, std::vector<Handle<Quote>>{v_25rr, v_10rr},
-                                            std::vector<Handle<Quote>>{v_25bf, v_10bf}, dlts, forDiscount, domDiscount,
-                                            DeltaVolQuote::PaSpot, DeltaVolQuote::AtmFwd, fxSmileSection::SmileStrangle,
-                                            Actual365Fixed(), Date(), true);
-        std::cout << "IVol:" << ss.volByStrike(1.745) << std::endl;
-        std::cout << "IVol:" << ss.volByStrike(1.755) << std::endl;
-        std::cout << "IVol:" << ss.volByStrike(1.765) << std::endl << std::endl;
+        // ------------------------------------------------------------------
+        //  Print market data summary
+        // ------------------------------------------------------------------
 
-        std::cout << "IVol:" << ss.volByDelta(-0.10, Option::Put) << std::endl;
-        std::cout << "IVol:" << ss.volByDelta(-0.25, Option::Put) << std::endl;
-        std::cout << "IVol:" << ss.atm()->value() << std::endl;
-        std::cout << "IVol:" << ss.volByDelta(0.25, Option::Call) << std::endl;
-        std::cout << "IVol:" << ss.volByDelta(0.10, Option::Call) << std::endl;
-        
+        std::cout << std::fixed << std::setprecision(4);
+        std::cout << "  Reference date : " << todaysDate << "\n"
+                  << "  Expiry date    : " << expiryDate << "\n"
+                  << "  Spot           : " << spot->value()  << "\n"
+                  << "  Foreign rate   : " << forDiscount->zeroRate(1.0, Continuous).rate() * 100.0 << "%\n"
+                  << "  Domestic rate  : " << domDiscount->zeroRate(1.0, Continuous).rate() * 100.0 << "%\n"
+                  << "\n"
+                  << "  Vol quotes (smile-strangle convention):\n"
+                  << "    ATM (delta-neutral fwd)  : " << mkt_atm  * 100.0 << "%\n"
+                  << "    25D risk reversal        : " << mkt_rr25 * 100.0 << "%\n"
+                  << "    25D broker fly           : " << mkt_bf25 * 100.0 << "%\n"
+                  << "    10D risk reversal        : " << mkt_rr10 * 100.0 << "%\n"
+                  << "    10D broker fly           : " << mkt_bf10 * 100.0 << "%\n"
+                  << "\n"
+                  << "  Delta convention : premium-adjusted spot (PaSpot)\n"
+                  << "  ATM convention   : delta-neutral forward (AtmFwd)\n\n";
+
+        // ------------------------------------------------------------------
+        //  Column header
+        // ------------------------------------------------------------------
+
+        const int w0 = 34;
+        const int w  =  9;
+        const std::string sep(w0 + 9 * w, '-');
+
+        std::cout << sep << "\n";
+        std::cout << std::setw(w0) << std::left  << "Model"
+                  << std::setw(w)  << std::right << "ATM%"
+                  << std::setw(w)  << std::right << "25P%"
+                  << std::setw(w)  << std::right << "25C%"
+                  << std::setw(w)  << std::right << "10P%"
+                  << std::setw(w)  << std::right << "10C%"
+                  << std::setw(w)  << std::right << "RR25%"
+                  << std::setw(w)  << std::right << "BF25%"
+                  << std::setw(w)  << std::right << "RR10%"
+                  << std::setw(w)  << std::right << "BF10%"
+                  << "\n";
+        std::cout << sep << "\n\n";
+
+        // ------------------------------------------------------------------
+        //  1. Polynomial smile section (strike-parameterised, 3 params)
+        //
+        //     vol(K) = a*(ln K/F)^2 + b*(ln K/F) + c
+        //     Three parameters: (a, b, c)
+        //     Five calibration targets => over-determined, best-fit via LM.
+        // ------------------------------------------------------------------
+
+        std::cout << "--- Strike-parameterised models ---\n\n";
+
+        {
+            polynomialSmileSection ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                      forDiscount, domDiscount,
+                                      deltaType, atmType, flyType, dc);
+            printRow("Polynomial (3 params)", ss,
+                     mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
+        }
+
+        // ------------------------------------------------------------------
+        //  2. FX SABR smile section (strike-parameterised, 3 params)
+        //
+        //     Standard SABR approximation with beta fixed to 1 (log-normal
+        //     backbone).  Free parameters: alpha (initial vol), nu (vol-of-vol),
+        //     rho (correlation between spot and vol).
+        //     Five calibration targets => over-determined, best-fit via LM.
+        // ------------------------------------------------------------------
+
+        {
+            fxSabrSmileSection ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                  forDiscount, domDiscount,
+                                  deltaType, atmType, flyType, dc);
+            printRow("SABR beta=1 (3 params)", ss,
+                     mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
+
+            std::cout << "    Calibrated params: alpha=" << std::setprecision(6) << ss.alpha()
+                      << "  nu=" << ss.nu()
+                      << "  rho=" << ss.rho() << "\n\n";
+        }
+
+        // ------------------------------------------------------------------
+        //  3. FX SVI smile section (strike-parameterised, 5 params)
+        //
+        //     SVI raw parameterisation in total implied variance:
+        //       w(k) = a + b*(rho*(k-m) + sqrt((k-m)^2 + sigma^2))
+        //     where k = ln(K/F) is log-moneyness.
+        //     Five parameters exactly match the five calibration targets.
+        // ------------------------------------------------------------------
+
+        {
+            fxSviSmileSection ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                 forDiscount, domDiscount,
+                                 deltaType, atmType, flyType, dc);
+            printRow("SVI raw (5 params)", ss,
+                     mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
+
+            std::cout << "    Calibrated params: a=" << std::setprecision(6) << ss.a()
+                      << "  b=" << ss.b()
+                      << "  rho=" << ss.rho()
+                      << "  m=" << ss.m()
+                      << "  sigma=" << ss.sigma() << "\n\n";
+        }
+
+        // ------------------------------------------------------------------
+        //  4. Cost smile section — flat dynamics (strike-parameterised)
+        //
+        //     Parameterises the smile in terms of option prices (costs) rather
+        //     than implied vols.  The flat-dynamics variant assumes the absolute
+        //     smile shape does not move with spot.  Calibrates exactly to all
+        //     market quotes.
+        // ------------------------------------------------------------------
+
+        {
+            fxCostSmileSectionFlatDynamics ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                              forDiscount, domDiscount,
+                                              deltaType, atmType, flyType,
+                                              dc, Date(), true);
+            printRow("Cost model — flat dynamics", ss,
+                     mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
+        }
+
+        // ------------------------------------------------------------------
+        //  5. Cost smile section — scaled dynamics (strike-parameterised)
+        //
+        //     As above but uses a scaled (proportional) smile dynamics where
+        //     the relative smile shape is preserved as spot moves.  Also
+        //     calibrates exactly.
+        // ------------------------------------------------------------------
+
+        {
+            fxCostSmileSectionScaledDynamics ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                                forDiscount, domDiscount,
+                                                deltaType, atmType, flyType,
+                                                dc, Date(), true);
+            printRow("Cost model — scaled dynamics", ss,
+                     mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
+        }
+
+        // ------------------------------------------------------------------
+        //  6. Quadratic smile section (delta-parameterised, 3 params)
+        //
+        //     Implied vol is a quadratic function of put delta:
+        //       sigma(delta) = a*delta^2 + b*delta + c
+        //     Three parameters => over-determined, best-fit via LM.
+        // ------------------------------------------------------------------
+
+        std::cout << "--- Delta-parameterised models ---\n\n";
+
+        {
+            quadraticSmileSection ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                     forDiscount, domDiscount,
+                                     deltaType, atmType, flyType, dc);
+            printRow("Quadratic in delta (3 params)", ss,
+                     mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
+
+            std::cout << "    Calibrated params: a=" << std::setprecision(6) << ss.a()
+                      << "  b=" << ss.b()
+                      << "  c=" << ss.c() << "\n\n";
+        }
+
+        // ------------------------------------------------------------------
+        //  Market reference row
+        // ------------------------------------------------------------------
+
+        std::cout << sep << "\n";
+        Real mkt_v25c = mkt_atm + 0.5 * mkt_rr25 + mkt_bf25;
+        Real mkt_v25p = mkt_atm - 0.5 * mkt_rr25 + mkt_bf25;
+        Real mkt_v10c = mkt_atm + 0.5 * mkt_rr10 + mkt_bf10;
+        Real mkt_v10p = mkt_atm - 0.5 * mkt_rr10 + mkt_bf10;
+        std::cout << std::setw(w0) << std::left  << "Market (smile-strangle)"
+                  << std::fixed    << std::setprecision(4)
+                  << std::setw(w)  << std::right  << mkt_atm  * 100.0
+                  << std::setw(w)  << std::right  << mkt_v25p * 100.0
+                  << std::setw(w)  << std::right  << mkt_v25c * 100.0
+                  << std::setw(w)  << std::right  << mkt_v10p * 100.0
+                  << std::setw(w)  << std::right  << mkt_v10c * 100.0
+                  << std::setw(w)  << std::right  << mkt_rr25 * 100.0
+                  << std::setw(w)  << std::right  << mkt_bf25 * 100.0
+                  << std::setw(w)  << std::right  << mkt_rr10 * 100.0
+                  << std::setw(w)  << std::right  << mkt_bf10 * 100.0
+                  << "\n";
+        std::cout << sep << "\n\n";
+
+        // ------------------------------------------------------------------
+        //  Strike grid: show vol by strike for each model
+        // ------------------------------------------------------------------
+
+        std::cout << "--- Vol by strike (selected strikes) ---\n\n";
+
+        // Use the cost flat dynamics model as reference for the ATM strike.
+        fxCostSmileSectionFlatDynamics ref(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                           forDiscount, domDiscount,
+                                           deltaType, atmType, flyType,
+                                           dc, Date(), true);
+        Real fwd = ref.forward();
+        std::vector<Real> strikes = { fwd * 0.85, fwd * 0.90, fwd * 0.95,
+                                      fwd,
+                                      fwd * 1.05, fwd * 1.10, fwd * 1.15 };
+
+        // Header
+        const int wk = 10;
+        const int wv =  9;
+        std::cout << std::setw(wk) << std::right << "Strike";
+        for (Real k : strikes)
+            std::cout << std::setw(wv) << std::right << std::fixed << std::setprecision(4) << k;
+        std::cout << "\n" << std::string(wk + wv * strikes.size(), '-') << "\n";
+
+        auto printStrikeRow = [&](const std::string& nm, fxSmileSection& ss) {
+            std::cout << std::setw(wk) << std::left << nm;
+            for (Real k : strikes)
+                std::cout << std::setw(wv) << std::right << std::fixed
+                          << std::setprecision(4) << ss.volByStrike(k) * 100.0;
+            std::cout << "\n";
+        };
+
+        {
+            polynomialSmileSection s1(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                      forDiscount, domDiscount, deltaType, atmType, flyType, dc);
+            printStrikeRow("Polynomial", s1);
+        }
+        {
+            fxSabrSmileSection s2(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                  forDiscount, domDiscount, deltaType, atmType, flyType, dc);
+            printStrikeRow("SABR", s2);
+        }
+        {
+            fxSviSmileSection s3(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                 forDiscount, domDiscount, deltaType, atmType, flyType, dc);
+            printStrikeRow("SVI", s3);
+        }
+        {
+            fxCostSmileSectionFlatDynamics s4(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                              forDiscount, domDiscount, deltaType, atmType, flyType,
+                                              dc, Date(), true);
+            printStrikeRow("Cost-flat", s4);
+        }
+        {
+            fxCostSmileSectionScaledDynamics s5(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                                forDiscount, domDiscount, deltaType, atmType, flyType,
+                                                dc, Date(), true);
+            printStrikeRow("Cost-scaled", s5);
+        }
+        {
+            quadraticSmileSection s6(expiryDate, spot, v_atm, rrs, bfs, deltas,
+                                     forDiscount, domDiscount, deltaType, atmType, flyType, dc);
+            printStrikeRow("Quadratic-delta", s6);
+        }
+        std::cout << "\n";
 
         return 0;
 
-    } catch (exception& e) {
-        cerr << e.what() << endl;
+    } catch (std::exception& e) {
+        std::cerr << e.what() << std::endl;
         return 1;
     } catch (...) {
-        cerr << "unknown error" << endl;
+        std::cerr << "unknown error" << std::endl;
         return 1;
     }
 }
