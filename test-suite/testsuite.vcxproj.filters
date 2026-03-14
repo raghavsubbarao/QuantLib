@@ -182,6 +182,9 @@
     <ClCompile Include="forwardrateagreement.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="fxsmilesections.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="garch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
