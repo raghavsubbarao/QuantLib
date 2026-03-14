@@ -92,8 +92,17 @@ namespace QuantLib {
         mutable std::vector<T> smileSections_;
 
         // Cache for interpolated smile sections, keyed by discretized trading time.
-        // Precision matches the pillar-snapping tolerance of 1/(365*8).
-        static long tauKey(Time tau) { return std::lround(tau * 365 * 8); }
+        //
+        // Resolution must be fine enough that the ±dt perturbations used by LocalVolSurface
+        // (dt = min(1e-4, t/2) in real time) map to distinct cache bins in trading time.
+        // With a weekends-only calendar the trading-time rate is ~5/7, so the smallest
+        // trading-time step is dτ ≈ 1e-4 × 5/7 ≈ 7e-5.  The key factor must exceed
+        // 1/(2×dτ) ≈ 7 000; using 365×24×60 ≈ 526 000 gives ~1-minute resolution
+        // and keeps the three Dupire queries in separate bins under any reasonable calendar.
+        //
+        // Note: the pillar-snapping tolerance (1/(365×8) ≈ 3 h) and the near-zero guard
+        // are physical thresholds that are independent of this cache precision.
+        static long tauKey(Time tau) { return std::lround(tau * 365 * 24 * 60); }
         mutable std::map<long, Handle<T>> smileCache_;
 
     };
