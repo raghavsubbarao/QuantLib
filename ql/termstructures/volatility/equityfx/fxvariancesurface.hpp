@@ -197,7 +197,7 @@ namespace QuantLib {
 
         // check the cache for an interpolated smile at this trading time
         long key = tauKey(tau);
-        auto it = smileCache_.find(key);
+        auto it = smileCache_.find(key);  // it is a std::pair<long, Handle<T>>
 
         if (it == smileCache_.end()) {
             // cache miss — build the interpolated smile
@@ -205,10 +205,10 @@ namespace QuantLib {
             if (tau <= times_[1]) {
                 // before first expiry — scale down the first smile
                 Real wFinal = tau / times_[1];
-                it = smileCache_.emplace(key,
-                        interpolatedSmileSection(t, 0.0, smileSections_.front(),
-                                                 wFinal, smileSections_.front())).first;
-            } else if (tau <= times_.back()) {
+                it = smileCache_.emplace(key, interpolatedSmileSection(t, 0.0, smileSections_.front(),
+                                                                        wFinal, smileSections_.front())).first;
+            } 
+            else if (tau <= times_.back()) {
                 // between two pillar smiles
                 Size i = 0;
                 while (times_[i + 1] < tau)
@@ -225,15 +225,14 @@ namespace QuantLib {
                 }
 
                 Real w = (tau - times_[i]) / (times_[i + 1] - times_[i]);
-                it = smileCache_.emplace(key,
-                        interpolatedSmileSection(t, 1.0 - w, smileSections_[i - 1],
-                                                 w, smileSections_[i])).first;
-            } else {
+                it = smileCache_.emplace(key, interpolatedSmileSection(t, 1.0 - w, smileSections_[i - 1],
+                                                                        w, smileSections_[i])).first;
+            } 
+            else {
                 // beyond final expiry — scale up the last smile
                 Real wInit = tau / times_.back();
-                it = smileCache_.emplace(key,
-                        interpolatedSmileSection(t, wInit, smileSections_.back(),
-                                                 0.0, smileSections_.back())).first;
+                it = smileCache_.emplace(key, interpolatedSmileSection(t, wInit, smileSections_.back(),
+                                                                        0.0, smileSections_.back())).first;
             }
         }
 
@@ -243,9 +242,8 @@ namespace QuantLib {
 
     template <class T>
     void fxVarianceSurface<T>::registerWithMarketData() {
-        for (Size i = 0; i < smileSections_.size(); i++) {
+        for (Size i = 0; i < smileSections_.size(); i++)
             registerWith(ext::make_shared<Observable>(smileSections_[i]));
-        }
         registerWith(timeTs_);
     }
 
@@ -465,13 +463,11 @@ namespace QuantLib {
             // convert the (strike, vol) to a (delta, vol) to create a DeltaVolQuote
             Real d;
             if (k > fwd) {
-                d = BlackDeltaCalculator(Option::Call, ssFinal.deltaType(), spt, ddom, dfor, iw)
-                        .deltaFromStrike(k);
+                d = BlackDeltaCalculator(Option::Call, ssFinal.deltaType(), spt, ddom, dfor, iw).deltaFromStrike(k);
             }
             else
             {
-                d = BlackDeltaCalculator(Option::Put, ssFinal.deltaType(), spt, ddom, dfor, iw)
-                        .deltaFromStrike(k);
+                d = BlackDeltaCalculator(Option::Put, ssFinal.deltaType(), spt, ddom, dfor, iw).deltaFromStrike(k);
             }
             return DeltaVolQuote(d, makeQuoteHandle(v), t, ssFinal.deltaType());
         };
