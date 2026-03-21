@@ -59,6 +59,7 @@ namespace {
         Date expiry3M;
         Date expiry6M;
 
+        DayCounter dc;
         Handle<YieldTermStructure> eurTs; // foreign
         Handle<YieldTermStructure> usdTs; // domestic
         Handle<tradingTimeTermStructure> timeTs;
@@ -72,6 +73,10 @@ namespace {
         std::vector<Real> deltas;
         std::vector<ext::shared_ptr<SimpleQuote>> atmSQs;
 
+        // Per-pillar RR and BF SimpleQuotes for rega/sega.
+        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> rrPillarSQs, bfPillarSQs;
+        std::vector<Time> rrPillarTimes, bfPillarTimes;
+
         DeltaVolQuote::DeltaType deltaType;
         DeltaVolQuote::AtmType   atmType;
         fxSmileSection::FlyType  flyType;
@@ -84,13 +89,12 @@ namespace {
             expiry3M = Date(2, April,   2024);
             expiry6M = Date(2, July,    2024);
             Settings::instance().evaluationDate() = today;
+            dc = Actual365Fixed();
 
-            // Use settlement-days=0 so referenceDate() tracks evaluationDate,
-            // allowing theta to be computed via an evaluationDate shift.
             eurTs = Handle<YieldTermStructure>(
-                ext::make_shared<FlatForward>(0, NullCalendar(), 0.04, Actual365Fixed()));
+                ext::make_shared<FlatForward>(0, NullCalendar(), 0.04, dc));
             usdTs = Handle<YieldTermStructure>(
-                ext::make_shared<FlatForward>(0, NullCalendar(), 0.0525, Actual365Fixed()));
+                ext::make_shared<FlatForward>(0, NullCalendar(), 0.0525, dc));
             timeTs = Handle<tradingTimeTermStructure>(
                 ext::make_shared<tradingTimeTermStructure>(today, WeekendsOnly(), 0.0));
 
@@ -102,7 +106,7 @@ namespace {
             flyType   = fxSmileSection::SmileStrangle;
             deltas    = { 0.25, 0.10 };
 
-            // Two pillars: 3M and 6M — sufficient for testing
+            // Two pillars: 3M and 6M
             pillars = { expiry3M, expiry6M };
 
             struct Vol { Real atm, rr25, bf25, rr10, bf10; };
@@ -111,12 +115,28 @@ namespace {
                 { 0.0900, -0.015, 0.005, -0.030, 0.012 }, // 6M
             };
 
-            for (const auto& v : mkt) {
-                auto atmSQ = ext::make_shared<SimpleQuote>(v.atm);
+            rrPillarSQs.resize(pillars.size());
+            bfPillarSQs.resize(pillars.size());
+            rrPillarTimes.resize(pillars.size());
+            bfPillarTimes.resize(pillars.size());
+
+            for (Size i = 0; i < pillars.size(); ++i) {
+                auto atmSQ  = ext::make_shared<SimpleQuote>(mkt[i].atm);
+                auto rr25SQ = ext::make_shared<SimpleQuote>(mkt[i].rr25);
+                auto rr10SQ = ext::make_shared<SimpleQuote>(mkt[i].rr10);
+                auto bf25SQ = ext::make_shared<SimpleQuote>(mkt[i].bf25);
+                auto bf10SQ = ext::make_shared<SimpleQuote>(mkt[i].bf10);
+
                 atmSQs.push_back(atmSQ);
+                rrPillarSQs[i] = { rr25SQ, rr10SQ };
+                bfPillarSQs[i] = { bf25SQ, bf10SQ };
+
+                const Time T = dc.yearFraction(today, pillars[i]);
+                rrPillarTimes[i] = bfPillarTimes[i] = T;
+
                 atms.push_back(Handle<Quote>(atmSQ));
-                rrs.push_back({ makeQuoteHandle(v.rr25), makeQuoteHandle(v.rr10) });
-                bfs.push_back({ makeQuoteHandle(v.bf25), makeQuoteHandle(v.bf10) });
+                rrs.push_back({ Handle<Quote>(rr25SQ), Handle<Quote>(rr10SQ) });
+                bfs.push_back({ Handle<Quote>(bf25SQ), Handle<Quote>(bf10SQ) });
             }
 
             surface = ext::make_shared<fxVarianceSurfaceNCP<quadraticSmileSection>>(
@@ -133,7 +153,7 @@ namespace {
 
         // Build a 3M EUR call at ATM forward
         ext::shared_ptr<VanillaOption> makeAtmCall() const {
-            Time T   = Actual365Fixed().yearFraction(today, expiry3M);
+            Time T   = dc.yearFraction(today, expiry3M);
             Real fwd = spot->value() * eurTs->discount(T) / usdTs->discount(T);
             auto payoff   = ext::make_shared<PlainVanillaPayoff>(Option::Call, fwd);
             auto exercise = ext::make_shared<EuropeanExercise>(expiry3M);
@@ -142,7 +162,7 @@ namespace {
 
         // Build a 3M EUR put at ATM forward
         ext::shared_ptr<VanillaOption> makeAtmPut() const {
-            Time T   = Actual365Fixed().yearFraction(today, expiry3M);
+            Time T   = dc.yearFraction(today, expiry3M);
             Real fwd = spot->value() * eurTs->discount(T) / usdTs->discount(T);
             auto payoff   = ext::make_shared<PlainVanillaPayoff>(Option::Put, fwd);
             auto exercise = ext::make_shared<EuropeanExercise>(expiry3M);
@@ -168,7 +188,6 @@ BOOST_AUTO_TEST_CASE(testLocalVolSurfaceNonNegative) {
                         mkt.process->x0());
     lv.enableExtrapolation();
 
-    // Sample the surface on a grid and check that all local vols are positive
     std::vector<Time> times  = { 1.0/12, 3.0/12, 6.0/12 };
     std::vector<Real> strikes = { 0.95, 1.00, 1.05, 1.08, 1.10, 1.15 };
 
@@ -222,8 +241,9 @@ BOOST_AUTO_TEST_CASE(testFixedLocalVolConsistency) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Test 3: Greek signs
-//    Call:  delta > 0, gamma > 0, theta < 0, volga > 0
-//    Put:   delta < 0, gamma > 0, theta < 0, volga > 0
+//    Call:  spotDelta > 0, spotGamma > 0, theta < 0, volga > 0, vega > 0
+//    Put:   spotDelta < 0, spotGamma > 0, theta < 0, volga > 0, vega > 0
+//    navva == vanna (by construction)
 // ─────────────────────────────────────────────────────────────────────────────
 
 BOOST_AUTO_TEST_CASE(testGreekSigns) {
@@ -235,9 +255,13 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
     {
         auto option = mkt.makeAtmCall();
         FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+                                   mkt.rrPillarSQs, mkt.rrPillarTimes,
+                                   mkt.bfPillarSQs, mkt.bfPillarTimes,
                                    /*notional=*/1.0e6,
                                    /*spotBump=*/0.001,
                                    /*volBump=*/0.001,
+                                   /*rrBump=*/0.001,
+                                   /*bfBump=*/0.001,
                                    /*tGrid=*/50, /*xGrid=*/50);
 
         FxVanillaGreeks g = riskCalc.calculate(/*localVol=*/true);
@@ -248,16 +272,25 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
         BOOST_CHECK_MESSAGE(g.spotGamma > 0.0, "call spot gamma must be >0: "   << g.spotGamma);
         BOOST_CHECK_MESSAGE(g.fwdGamma  > 0.0, "call fwd gamma must be >0: "    << g.fwdGamma);
         BOOST_CHECK_MESSAGE(g.theta     < 0.0, "call theta must be negative: "  << g.theta);
+        BOOST_CHECK_MESSAGE(g.vega      > 0.0, "call vega must be positive: "   << g.vega);
         BOOST_CHECK_MESSAGE(g.volga     > 0.0, "call volga must be positive: "  << g.volga);
+
+        // navva == vanna (identity, not approximate)
+        BOOST_CHECK_MESSAGE(g.navva == g.vanna,
+            "navva must equal vanna: navva=" << g.navva << " vanna=" << g.vanna);
     }
 
     // ── Put Greeks ───────────────────────────────────────────────────────────
     {
         auto option = mkt.makeAtmPut();
         FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+                                   mkt.rrPillarSQs, mkt.rrPillarTimes,
+                                   mkt.bfPillarSQs, mkt.bfPillarTimes,
                                    /*notional=*/1.0e6,
                                    /*spotBump=*/0.001,
                                    /*volBump=*/0.001,
+                                   /*rrBump=*/0.001,
+                                   /*bfBump=*/0.001,
                                    /*tGrid=*/50, /*xGrid=*/50);
 
         FxVanillaGreeks g = riskCalc.calculate(/*localVol=*/true);
@@ -268,13 +301,13 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
         BOOST_CHECK_MESSAGE(g.spotGamma > 0.0, "put spot gamma must be >0: "   << g.spotGamma);
         BOOST_CHECK_MESSAGE(g.fwdGamma  > 0.0, "put fwd gamma must be >0: "    << g.fwdGamma);
         BOOST_CHECK_MESSAGE(g.theta     < 0.0, "put theta must be negative: "  << g.theta);
+        BOOST_CHECK_MESSAGE(g.vega      > 0.0, "put vega must be positive: "   << g.vega);
         BOOST_CHECK_MESSAGE(g.volga     > 0.0, "put volga must be positive: "  << g.volga);
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Test 4: Put-call parity
-//    call NPV - put NPV = (F - K) * B_d * notional
 // ─────────────────────────────────────────────────────────────────────────────
 
 BOOST_AUTO_TEST_CASE(testPutCallParity) {
@@ -282,12 +315,10 @@ BOOST_AUTO_TEST_CASE(testPutCallParity) {
 
     FxMarket mkt;
 
-    DayCounter dc = Actual365Fixed();
-    Time T        = dc.yearFraction(mkt.today, mkt.expiry3M);
-    Real Bd       = mkt.usdTs->discount(T);
-    Real Bf       = mkt.eurTs->discount(T);
-    Real fwd      = mkt.spot->value() * Bf / Bd;
-    const Real K  = fwd; // ATM forward => F - K = 0 exactly
+    Time T   = mkt.dc.yearFraction(mkt.today, mkt.expiry3M);
+    Real Bd  = mkt.usdTs->discount(T);
+    Real Bf  = mkt.eurTs->discount(T);
+    Real fwd = mkt.spot->value() * Bf / Bd;
 
     const Real notional = 1.0e6;
 
@@ -295,33 +326,44 @@ BOOST_AUTO_TEST_CASE(testPutCallParity) {
     auto putOption  = mkt.makeAtmPut();
 
     FxVanillaBumpRisk callCalc(callOption, mkt.process, mkt.spotSQ, mkt.atmSQs,
-                                notional, 0.001, 0.001, 50, 50);
+                                mkt.rrPillarSQs, mkt.rrPillarTimes,
+                                mkt.bfPillarSQs, mkt.bfPillarTimes,
+                                notional, 0.001, 0.001, 0.001, 0.001, 50, 50);
     FxVanillaBumpRisk putCalc(putOption, mkt.process, mkt.spotSQ, mkt.atmSQs,
-                               notional, 0.001, 0.001, 50, 50);
+                               mkt.rrPillarSQs, mkt.rrPillarTimes,
+                               mkt.bfPillarSQs, mkt.bfPillarTimes,
+                               notional, 0.001, 0.001, 0.001, 0.001, 50, 50);
 
     FxVanillaGreeks callG = callCalc.calculate(true);
     FxVanillaGreeks putG  = putCalc.calculate(true);
 
-    // For ATM forward: call NPV - put NPV = 0
-    Real parityResidual = callG.npv - putG.npv;
-    const Real priceTol = 10.0; // $10 on a 1M notional position (0.001% tolerance)
+    // For ATM forward: call NPV - put NPV ≈ 0
+    const Real priceTol = 10.0; // $10 on a 1M notional position
     BOOST_CHECK_MESSAGE(
-        std::fabs(parityResidual) < priceTol,
-        "put-call parity violation: call-put=" << parityResidual
+        std::fabs(callG.npv - putG.npv) < priceTol,
+        "put-call parity violation: call-put=" << (callG.npv - putG.npv)
         << " (tolerance=" << priceTol << ")");
 
-    // Gamma parity: call gamma == put gamma
-    const Real gammaTol = 1.0;
+    // Gamma parity: call gamma == put gamma (both in USD per 1% spot^2)
+    const Real gammaTol = 0.01; // $0.01 in scaled units
     BOOST_CHECK_MESSAGE(
         std::fabs(callG.spotGamma - putG.spotGamma) < gammaTol,
         "gamma parity violation: call gamma=" << callG.spotGamma
         << " put gamma=" << putG.spotGamma);
+
+    // Vega parity: call vega == put vega
+    const Real vegaTol = 0.10;
+    BOOST_CHECK_MESSAGE(
+        std::fabs(callG.vega - putG.vega) < vegaTol,
+        "vega parity violation: call vega=" << callG.vega
+        << " put vega=" << putG.vega);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Test 5: Delta and gamma consistency
-//    Finite difference delta should integrate consistently with gamma.
-//    Moving spot by ds shifts NPV by roughly delta*ds + 0.5*gamma*ds^2.
+//
+//  Taylor approximation: ΔV ≈ spotDelta × pctMove + 0.5 × spotGamma × pctMove²
+//  where pctMove = ds / (0.01 × S)  (spot move expressed in units of 1%)
 // ─────────────────────────────────────────────────────────────────────────────
 
 BOOST_AUTO_TEST_CASE(testDeltaGammaConsistency) {
@@ -333,24 +375,25 @@ BOOST_AUTO_TEST_CASE(testDeltaGammaConsistency) {
     const Real notional = 1.0;  // unit notional for this test
 
     FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
-                                notional, 0.001, 0.001, 50, 50);
+                                mkt.rrPillarSQs, mkt.rrPillarTimes,
+                                mkt.bfPillarSQs, mkt.bfPillarTimes,
+                                notional, 0.001, 0.001, 0.001, 0.001, 50, 50);
     FxVanillaGreeks g = riskCalc.calculate(true);
 
-    // Shift spot by 5 pips and compare the predicted vs. actual PnL
     Real S0  = mkt.spotSQ->value();
-    Real ds  = 0.0005; // 5 pips
+    Real ds  = 0.0005; // 5 pips absolute
     Real V0  = g.npv;
 
     mkt.spotSQ->setValue(S0 + ds);
-
-    // We need to reprice using the same setup — reuse the risk calculator
     FxVanillaGreeks gShifted = riskCalc.calculate(true);
     Real Vshifted = gShifted.npv;
+    mkt.spotSQ->setValue(S0);
 
-    mkt.spotSQ->setValue(S0); // restore
+    Real actualPnL = Vshifted - V0;
 
-    Real actualPnL    = Vshifted - V0;
-    Real predictedPnL = g.spotDelta * ds + 0.5 * g.spotGamma * ds * ds;
+    // spotDelta is in USD per 1% spot; convert ds to units of 1% spot.
+    Real pctMove     = ds / (0.01 * S0);
+    Real predictedPnL = g.spotDelta * pctMove + 0.5 * g.spotGamma * pctMove * pctMove;
 
     // Allow 5% relative error in the second-order Taylor approximation
     Real relErr = std::fabs(actualPnL - predictedPnL) / std::fabs(actualPnL);
@@ -361,11 +404,7 @@ BOOST_AUTO_TEST_CASE(testDeltaGammaConsistency) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Test 6: BS vs local vol Greeks comparison (local vol price >= BS for smile)
-//
-//  For a standard EUR put skew, the local vol engine should assign more vol to
-//  OTM strikes, changing the smile-consistent price vs. the ATM-only BS price.
-//  At ATM, the two should be close but not identical due to smile adjustment.
+//  Test 6: BS vs local vol pricing
 // ─────────────────────────────────────────────────────────────────────────────
 
 BOOST_AUTO_TEST_CASE(testBsVsLocalVolPricing) {
@@ -376,16 +415,16 @@ BOOST_AUTO_TEST_CASE(testBsVsLocalVolPricing) {
     const Real notional = 1.0e6;
 
     FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
-                                notional, 0.001, 0.001, 100, 100);
+                                mkt.rrPillarSQs, mkt.rrPillarTimes,
+                                mkt.bfPillarSQs, mkt.bfPillarTimes,
+                                notional, 0.001, 0.001, 0.001, 0.001, 100, 100);
 
     FxVanillaGreeks bsG = riskCalc.calculate(false);
     FxVanillaGreeks lvG = riskCalc.calculate(true);
 
-    // Both should give positive prices
     BOOST_CHECK_MESSAGE(bsG.npv > 0.0, "BS price must be positive: " << bsG.npv);
     BOOST_CHECK_MESSAGE(lvG.npv > 0.0, "LV price must be positive: " << lvG.npv);
 
-    // Prices should be in the same ballpark (within 20% of each other)
     Real relDiff = std::fabs(bsG.npv - lvG.npv) / bsG.npv;
     BOOST_CHECK_MESSAGE(
         relDiff < 0.20,
@@ -395,52 +434,45 @@ BOOST_AUTO_TEST_CASE(testBsVsLocalVolPricing) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Test 7: Sticky-delta vs sticky-strike deltas differ when skew is present
-//
-//  With EURUSD negative RR (put skew), bumping spot in sticky-delta mode causes
-//  the vol surface to re-anchor (the call moves toward lower implied vol as spot
-//  rises), reducing delta relative to the frozen-grid sticky-strike delta.
-//  The two modes must give different deltas for any non-zero skew.
 // ─────────────────────────────────────────────────────────────────────────────
 
 BOOST_AUTO_TEST_CASE(testStickyDeltaVsStickyStrike) {
     BOOST_TEST_MESSAGE("Testing FX local vol: sticky-delta vs sticky-strike deltas differ...");
 
     FxMarket mkt;
-    // The 3M pillar has rr25=-0.012 (negative, EUR put skew), so the two sticky
-    // modes should give noticeably different deltas.
     auto option = mkt.makeAtmCall();
     const Real notional = 1.0e6;
 
     FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+                                mkt.rrPillarSQs, mkt.rrPillarTimes,
+                                mkt.bfPillarSQs, mkt.bfPillarTimes,
                                 notional,
                                 /*spotBump=*/0.001,
                                 /*volBump=*/0.001,
+                                /*rrBump=*/0.001,
+                                /*bfBump=*/0.001,
                                 /*tGrid=*/50, /*xGrid=*/50,
                                 /*lvTimePts=*/15, /*lvStrikePts=*/30);
 
     FxVanillaGreeks sdG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Delta);
     FxVanillaGreeks ssG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Strike);
 
-    // Both modes must give positive delta for a call.
     BOOST_CHECK_MESSAGE(sdG.spotDelta > 0.0,
         "sticky-delta call spot delta must be >0: " << sdG.spotDelta);
     BOOST_CHECK_MESSAGE(ssG.spotDelta > 0.0,
         "sticky-strike call spot delta must be >0: " << ssG.spotDelta);
 
-    // Both modes must give positive NPV.
     BOOST_CHECK_MESSAGE(sdG.npv > 0.0, "sticky-delta NPV must be >0: " << sdG.npv);
     BOOST_CHECK_MESSAGE(ssG.npv > 0.0, "sticky-strike NPV must be >0: " << ssG.npv);
 
-    // The NPVs should agree (same model, same vol state at t=0).
-    const Real npvTol = 10.0; // $10 tolerance
+    const Real npvTol = 10.0;
     BOOST_CHECK_MESSAGE(
         std::fabs(sdG.npv - ssG.npv) < npvTol,
         "sticky-delta and sticky-strike NPVs should agree: "
         << "sd=" << sdG.npv << " ss=" << ssG.npv
         << " diff=" << std::fabs(sdG.npv - ssG.npv));
 
-    // The deltas must differ due to the skew — at least 0.01% relative difference.
-    // With rr25=-0.012, the skew adjustment to delta is typically 1-5% of delta.
+    // Deltas must differ due to skew (at least 0.01% relative difference).
     const Real minRelDiff = 1.0e-4;
     const Real relDiff = std::fabs(sdG.spotDelta - ssG.spotDelta)
                          / std::fabs(sdG.spotDelta);
@@ -451,12 +483,17 @@ BOOST_AUTO_TEST_CASE(testStickyDeltaVsStickyStrike) {
         << " relDiff=" << relDiff * 100.0 << "%"
         << " (min expected=" << minRelDiff * 100.0 << "%)");
 
-    // For EURUSD negative RR (put skew): as spot rises the call moves toward
-    // lower delta (lower vol on sticky-delta surface), so sticky-delta < sticky-strike.
+    // With EUR put skew: sticky-delta < sticky-strike.
     BOOST_CHECK_MESSAGE(
         sdG.spotDelta < ssG.spotDelta,
         "with EUR put skew, sticky-delta should be < sticky-strike: "
         << "sd=" << sdG.spotDelta << " ss=" << ssG.spotDelta);
+
+    // navva == vanna in both modes.
+    BOOST_CHECK_MESSAGE(sdG.navva == sdG.vanna,
+        "sticky-delta: navva must equal vanna");
+    BOOST_CHECK_MESSAGE(ssG.navva == ssG.vanna,
+        "sticky-strike: navva must equal vanna");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

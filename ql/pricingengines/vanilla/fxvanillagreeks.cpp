@@ -28,25 +28,48 @@
 
 namespace QuantLib {
 
-    FxVanillaBumpRisk::FxVanillaBumpRisk(ext::shared_ptr<VanillaOption> option,
-                                         ext::shared_ptr<GeneralizedBlackScholesProcess> process,
-                                         ext::shared_ptr<SimpleQuote> spotQuote,
-                                         std::vector<ext::shared_ptr<SimpleQuote>> atmVolQuotes,
-                                         Real notional,
-                                         Real spotBump,
-                                         Real volBump,
-                                         Size tGrid,
-                                         Size xGrid,
-                                         Size lvTimePts,
-                                         Size lvStrikePts,
-                                         Real lvStrikeSpread)
+    namespace {
+        // Reference tenor for rega/sega time-scaling: 1 month.
+        const Real T_1M = 1.0 / 12.0;
+    }
+
+    FxVanillaBumpRisk::FxVanillaBumpRisk(
+        ext::shared_ptr<VanillaOption> option,
+        ext::shared_ptr<GeneralizedBlackScholesProcess> process,
+        ext::shared_ptr<SimpleQuote> spotQuote,
+        std::vector<ext::shared_ptr<SimpleQuote>> atmVolQuotes,
+        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> rrPillarQuotes,
+        std::vector<Time> rrPillarTimes,
+        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> bfPillarQuotes,
+        std::vector<Time> bfPillarTimes,
+        Real notional,
+        Real spotBump,
+        Real volBump,
+        Real rrBump,
+        Real bfBump,
+        Size tGrid,
+        Size xGrid,
+        Size lvTimePts,
+        Size lvStrikePts,
+        Real lvStrikeSpread)
     : option_(std::move(option)), process_(std::move(process)),
       spotQuote_(std::move(spotQuote)), atmVolQuotes_(std::move(atmVolQuotes)),
+      rrPillarQuotes_(std::move(rrPillarQuotes)), rrPillarTimes_(std::move(rrPillarTimes)),
+      bfPillarQuotes_(std::move(bfPillarQuotes)), bfPillarTimes_(std::move(bfPillarTimes)),
       notional_(notional), spotBump_(spotBump), volBump_(volBump),
+      rrBump_(rrBump), bfBump_(bfBump),
       tGrid_(tGrid), xGrid_(xGrid),
       lvTimePts_(lvTimePts), lvStrikePts_(lvStrikePts), lvStrikeSpread_(lvStrikeSpread) {
         QL_REQUIRE(spotQuote_ != nullptr, "null spot quote");
         QL_REQUIRE(!atmVolQuotes_.empty(), "at least one ATM vol quote required");
+        QL_REQUIRE(rrPillarQuotes_.size() == rrPillarTimes_.size(),
+                   "rrPillarQuotes and rrPillarTimes must have the same size");
+        QL_REQUIRE(bfPillarQuotes_.size() == bfPillarTimes_.size(),
+                   "bfPillarQuotes and bfPillarTimes must have the same size");
+        for (Time t : rrPillarTimes_)
+            QL_REQUIRE(t > 0.0, "rrPillarTimes must be positive");
+        for (Time t : bfPillarTimes_)
+            QL_REQUIRE(t > 0.0, "bfPillarTimes must be positive");
         QL_REQUIRE(lvTimePts_ >= 2, "lvTimePts must be at least 2");
         QL_REQUIRE(lvStrikePts_ >= 2, "lvStrikePts must be at least 2");
         QL_REQUIRE(lvStrikeSpread_ > 0.0, "lvStrikeSpread must be positive");
@@ -73,19 +96,15 @@ namespace QuantLib {
         const Time T = process_->time(expiry);
         QL_REQUIRE(T > 0.0, "option has expired; cannot build local vol grid");
 
-        // Average ATM vol across all pillar quotes for grid sizing.
         Real avgAtm = 0.0;
         for (const auto& q : atmVolQuotes_)
             avgAtm += q->value();
         avgAtm /= static_cast<Real>(atmVolQuotes_.size());
 
-        // Time grid: lvTimePts_ equally-spaced points from T/lvTimePts_ to T.
         std::vector<Time> times(lvTimePts_);
         for (Size i = 0; i < lvTimePts_; ++i)
             times[i] = T * (i + 1.0) / static_cast<Real>(lvTimePts_);
 
-        // Strike grid: lvStrikePts_ log-spaced points spanning
-        //   ± lvStrikeSpread_ * avgAtm * sqrt(T)  around current spot.
         const Real S = spotQuote_->value();
         const Real halfWidth = lvStrikeSpread_ * avgAtm * std::sqrt(T);
         std::vector<Real> strikes(lvStrikePts_);
@@ -102,12 +121,6 @@ namespace QuantLib {
                                           const std::vector<Real>& strikes) const {
         auto fixedLV = buildFixedLocalVolSurface(times, strikes);
         fixedLV->enableExtrapolation();
-
-        // Construct a GBS process using the external local vol constructor.
-        // When hasExternalLocalVol_=true, process->localVolatility() returns
-        // fixedLV directly, bypassing the Dupire formula.  Since FixedLocalVolSurface
-        // does not observe the spot quote, local vols are frozen at fixed (t,K) points
-        // even when spotQuote_ is bumped — implementing sticky-strike dynamics.
         return ext::make_shared<GeneralizedBlackScholesProcess>(
             Handle<Quote>(spotQuote_),
             process_->dividendYield(),
@@ -117,15 +130,36 @@ namespace QuantLib {
     }
 
     FxVanillaGreeks FxVanillaBumpRisk::calculate(bool localVol, StickyType sticky) const {
-        const Real S = spotQuote_->value();
+        const Real S  = spotQuote_->value();
         const Real ds = S * spotBump_;
         const Real dv = volBump_;
 
-        // Capture ATM vol base values for later restoration.
-        std::vector<Real> sigmas;
-        sigmas.reserve(atmVolQuotes_.size());
-        for (const auto& q : atmVolQuotes_)
-            sigmas.push_back(q->value());
+        // ── Discount factors and forward for delta/gamma scaling ──────────────
+        const Date expiry = option_->exercise()->lastDate();
+        const Time T_exp  = process_->time(expiry);
+        const Real Bd     = process_->riskFreeRate()->discount(T_exp);
+        const Real Bf     = process_->dividendYield()->discount(T_exp);
+
+        // ── Capture base values for all bumped quotes ─────────────────────────
+        std::vector<Real> sigmas(atmVolQuotes_.size());
+        for (Size i = 0; i < atmVolQuotes_.size(); ++i)
+            sigmas[i] = atmVolQuotes_[i]->value();
+
+        std::vector<std::vector<Real>> rrBase(rrPillarQuotes_.size());
+        for (Size i = 0; i < rrPillarQuotes_.size(); ++i) {
+            rrBase[i].resize(rrPillarQuotes_[i].size());
+            for (Size j = 0; j < rrPillarQuotes_[i].size(); ++j)
+                rrBase[i][j] = rrPillarQuotes_[i][j]->value();
+        }
+
+        std::vector<std::vector<Real>> bfBase(bfPillarQuotes_.size());
+        for (Size i = 0; i < bfPillarQuotes_.size(); ++i) {
+            bfBase[i].resize(bfPillarQuotes_[i].size());
+            for (Size j = 0; j < bfPillarQuotes_[i].size(); ++j)
+                bfBase[i][j] = bfPillarQuotes_[i][j]->value();
+        }
+
+        // ── Helper lambdas ────────────────────────────────────────────────────
 
         auto shiftAtms = [&](Real delta) {
             for (Size i = 0; i < atmVolQuotes_.size(); ++i)
@@ -136,61 +170,121 @@ namespace QuantLib {
                 atmVolQuotes_[i]->setValue(sigmas[i]);
         };
 
-        // Forward discount ratio: F = S * Bf/Bd  =>  dF/dS = Bf/Bd
-        const Date expiry = option_->exercise()->lastDate();
-        const Time T_exp = process_->time(expiry);
-        const Real Bd = process_->riskFreeRate()->discount(T_exp);
-        const Real Bf = process_->dividendYield()->discount(T_exp);
-        const Real dFdS = Bf / Bd;
+        // Each RR pillar is bumped by rrBump_ * sqrt(T_1M / T_pillar).
+        // This normalises so the 1M pillar moves by rrBump_ and longer
+        // tenors move by progressively smaller amounts (∝ 1/sqrt(T)).
+        auto shiftRRs = [&](Real sign) {
+            for (Size i = 0; i < rrPillarQuotes_.size(); ++i) {
+                const Real scaledBump = sign * rrBump_ * std::sqrt(T_1M / rrPillarTimes_[i]);
+                for (Size j = 0; j < rrPillarQuotes_[i].size(); ++j)
+                    rrPillarQuotes_[i][j]->setValue(rrBase[i][j] + scaledBump);
+            }
+        };
+        auto restoreRRs = [&]() {
+            for (Size i = 0; i < rrPillarQuotes_.size(); ++i)
+                for (Size j = 0; j < rrPillarQuotes_[i].size(); ++j)
+                    rrPillarQuotes_[i][j]->setValue(rrBase[i][j]);
+        };
+
+        auto shiftBFs = [&](Real sign) {
+            for (Size i = 0; i < bfPillarQuotes_.size(); ++i) {
+                const Real scaledBump = sign * bfBump_ * std::sqrt(T_1M / bfPillarTimes_[i]);
+                for (Size j = 0; j < bfPillarQuotes_[i].size(); ++j)
+                    bfPillarQuotes_[i][j]->setValue(bfBase[i][j] + scaledBump);
+            }
+        };
+        auto restoreBFs = [&]() {
+            for (Size i = 0; i < bfPillarQuotes_.size(); ++i)
+                for (Size j = 0; j < bfPillarQuotes_[i].size(); ++j)
+                    bfPillarQuotes_[i][j]->setValue(bfBase[i][j]);
+        };
+
+        // Compute rega and sega using the current engine (assumed non-frozen).
+        // Returns {rega, sega}.  If no RR/BF quotes are provided, returns {0,0}.
+        auto computeRegaSega = [&]() -> std::pair<Real, Real> {
+            Real rega = 0.0, sega = 0.0;
+            if (!rrPillarQuotes_.empty()) {
+                shiftRRs(+1.0);
+                const Real V_rrp = option_->NPV() * notional_;
+                shiftRRs(-1.0);
+                const Real V_rrm = option_->NPV() * notional_;
+                restoreRRs();
+                rega = (V_rrp - V_rrm) / 2.0;
+            }
+            if (!bfPillarQuotes_.empty()) {
+                shiftBFs(+1.0);
+                const Real V_bfp = option_->NPV() * notional_;
+                shiftBFs(-1.0);
+                const Real V_bfm = option_->NPV() * notional_;
+                restoreBFs();
+                sega = (V_bfp - V_bfm) / 2.0;
+            }
+            return {rega, sega};
+        };
+
+        // ── Scaling helpers ───────────────────────────────────────────────────
+        // spotDelta = dV/dS * 0.01*S      (PV per 1% spot)
+        // fwdDelta  = d(V/Bd)/dF * 0.01*F = spotDelta / Bd   (fwd-PV per 1% fwd)
+        // spotGamma = d²V/dS² * (0.01*S)² (spot-delta change per 1% spot)
+        // fwdGamma  = spotGamma / Bd
+        // vega      = dV/dσ * 0.01        (PV per 1% vol)
+        // vanna     = d²V/(dS dσ) * 0.01*S * 0.01  (spot-delta change per 1% vol)
+        // volga     = d²V/dσ² * 0.01²    (vega change per 1% vol)
+        const Real pct1S = 0.01 * S;
+
+        auto scaleResults = [&](Real V0, Real Vup, Real Vdn,
+                                Real Vvp, Real Vvm,
+                                Real Vpp, Real Vpm, Real Vmp, Real Vmm,
+                                Real theta_raw, Real rega, Real sega) {
+            const Real spotDelta_raw = (Vup - Vdn) / (2.0 * ds);
+            const Real spotGamma_raw = (Vup - 2.0 * V0 + Vdn) / (ds * ds);
+            const Real vega_raw      = (Vvp - Vvm) / (2.0 * dv);
+            const Real volga_raw     = (Vvp - 2.0 * V0 + Vvm) / (dv * dv);
+            const Real vanna_raw     = (Vpp - Vpm - Vmp + Vmm) / (4.0 * ds * dv);
+
+            FxVanillaGreeks r;
+            r.npv       = V0;
+            r.spotDelta = spotDelta_raw * pct1S;
+            r.fwdDelta  = r.spotDelta / Bd;
+            r.spotGamma = spotGamma_raw * pct1S * pct1S;
+            r.fwdGamma  = r.spotGamma / Bd;
+            r.theta     = theta_raw;
+            r.vega      = vega_raw * 0.01;
+            r.vanna     = vanna_raw * pct1S * 0.01;
+            r.navva     = r.vanna;   // same by symmetry of mixed partials
+            r.volga     = volga_raw * 0.01 * 0.01;
+            r.rega      = rega;
+            r.sega      = sega;
+            return r;
+        };
 
         if (!localVol || sticky == StickyType::Delta) {
             // ── Sticky-delta path (or BS mode) ────────────────────────────────
-            //
-            // The FX variance surface is delta-parameterised: when spot is bumped,
-            // the smile moves with it in delta space.  This is the market convention.
             option_->setPricingEngine(makeEngine(localVol));
 
-            // Base NPV
-            const Real V0 = option_->NPV() * notional_;
+            const Real V0  = option_->NPV() * notional_;
 
-            // Spot delta and gamma
             spotQuote_->setValue(S + ds);
             const Real Vup = option_->NPV() * notional_;
-
             spotQuote_->setValue(S - ds);
             const Real Vdn = option_->NPV() * notional_;
-
             spotQuote_->setValue(S);
 
-            const Real spotDelta = (Vup - Vdn) / (2.0 * ds);
-            const Real spotGamma = (Vup - 2.0 * V0 + Vdn) / (ds * ds);
+            shiftAtms(+dv);
+            const Real Vvp = option_->NPV() * notional_;
+            shiftAtms(-2.0 * dv);
+            const Real Vvm = option_->NPV() * notional_;
+            restoreAtms();
 
-            // Forward delta/gamma
-            const Real fwdDelta = spotDelta / dFdS;
-            const Real fwdGamma = spotGamma / (dFdS * dFdS);
-
-            // Theta: shift evaluation date forward by one calendar day
             const Date today = Settings::instance().evaluationDate();
             Settings::instance().evaluationDate() = today + 1;
             const Real Vnext = option_->NPV() * notional_;
             Settings::instance().evaluationDate() = today;
-            const Real theta = Vnext - V0;
+            const Real theta_raw = Vnext - V0;
 
-            // Volga: second derivative w.r.t. parallel ATM vol shift
-            shiftAtms(+dv);
-            const Real Vvp = option_->NPV() * notional_;
-
-            shiftAtms(-2.0 * dv);
-            const Real Vvm = option_->NPV() * notional_;
-
-            restoreAtms();
-            const Real volga = (Vvp - 2.0 * V0 + Vvm) / (dv * dv);
-
-            // Vanna: cross second derivative — (V++ - V+- - V-+ + V--) / (4 ds dv)
             spotQuote_->setValue(S + ds);
             shiftAtms(+dv);
             const Real Vpp = option_->NPV() * notional_;
-
             shiftAtms(-2.0 * dv);
             const Real Vpm = option_->NPV() * notional_;
             restoreAtms();
@@ -198,40 +292,21 @@ namespace QuantLib {
             spotQuote_->setValue(S - ds);
             shiftAtms(+dv);
             const Real Vmp = option_->NPV() * notional_;
-
             shiftAtms(-2.0 * dv);
             const Real Vmm = option_->NPV() * notional_;
             restoreAtms();
 
             spotQuote_->setValue(S);
 
-            const Real vanna = (Vpp - Vpm - Vmp + Vmm) / (4.0 * ds * dv);
+            auto [rega, sega] = computeRegaSega();
 
-            FxVanillaGreeks result;
-            result.npv = V0;
-            result.spotDelta = spotDelta;
-            result.fwdDelta = fwdDelta;
-            result.spotGamma = spotGamma;
-            result.fwdGamma = fwdGamma;
-            result.theta = theta;
-            result.vanna = vanna;
-            result.volga = volga;
-            return result;
+            return scaleResults(V0, Vup, Vdn, Vvp, Vvm, Vpp, Vpm, Vmp, Vmm,
+                                theta_raw, rega, sega);
 
         } else {
             // ── Sticky-strike path (localVol=true only) ───────────────────────
             //
-            // Pre-sample the Dupire local vol on a fixed (time, strike) grid and
-            // freeze it in a FixedLocalVolSurface before bumping.  Because
-            // FixedLocalVolSurface does not observe the spot quote, local vols at
-            // fixed (t,K) points are unchanged when spot is bumped — giving the
-            // model-consistent (sticky-strike) delta.
-            //
-            // Three frozen surfaces are needed:
-            //   stickyBase : sampled at base vols  (for NPV, delta, gamma, theta)
-            //   stickyVp   : sampled at vols + dv  (for vanna and volga)
-            //   stickyVm   : sampled at vols - dv  (for vanna and volga)
-
+            // Build three frozen local vol surfaces at base, vol+dv, vol-dv.
             auto [times, strikes] = buildLvGrid();
 
             auto stickyBase = makeStickyProcess(times, strikes);
@@ -244,81 +319,59 @@ namespace QuantLib {
 
             restoreAtms();
 
-            // Build engines once — reused across multiple spot bumps.
             auto engBase = makeEngineFor(stickyBase, true);
             auto engVp   = makeEngineFor(stickyVp,   true);
             auto engVm   = makeEngineFor(stickyVm,   true);
 
-            // ── Base NPV ─────────────────────────────────────────────────────
+            // Base NPV and spot delta/gamma (frozen local vol, spot bumped).
             option_->setPricingEngine(engBase);
-            const Real V0 = option_->NPV() * notional_;
+            const Real V0  = option_->NPV() * notional_;
 
-            // ── Spot delta and gamma (frozen local vol, spot bumped) ──────────
             spotQuote_->setValue(S + ds);
             const Real Vup = option_->NPV() * notional_;
-
             spotQuote_->setValue(S - ds);
             const Real Vdn = option_->NPV() * notional_;
-
             spotQuote_->setValue(S);
 
-            const Real spotDelta = (Vup - Vdn) / (2.0 * ds);
-            const Real spotGamma = (Vup - 2.0 * V0 + Vdn) / (ds * ds);
-
-            // Forward delta/gamma
-            const Real fwdDelta = spotDelta / dFdS;
-            const Real fwdGamma = spotGamma / (dFdS * dFdS);
-
-            // ── Theta (frozen local vol, evaluation date shifted) ─────────────
+            // Theta (frozen local vol, evaluation date shifted).
             const Date today = Settings::instance().evaluationDate();
             Settings::instance().evaluationDate() = today + 1;
             const Real Vnext = option_->NPV() * notional_;
             Settings::instance().evaluationDate() = today;
-            const Real theta = Vnext - V0;
+            const Real theta_raw = Vnext - V0;
 
-            // ── Volga: second derivative w.r.t. parallel ATM vol shift ────────
-            // Price using surfaces frozen at vol±dv, then apply 3-point formula.
+            // Vega and volga using vol-bumped frozen surfaces.
             option_->setPricingEngine(engVp);
             const Real Vvp = option_->NPV() * notional_;
 
             option_->setPricingEngine(engVm);
             const Real Vvm = option_->NPV() * notional_;
 
-            const Real volga = (Vvp - 2.0 * V0 + Vvm) / (dv * dv);
-
-            // ── Vanna: cross second derivative — (V++ - V+- - V-+ + V--) / (4 ds dv)
-            // Each scenario uses the surface frozen at the corresponding vol level.
+            // Vanna: 4-point cross with frozen vol-bumped surfaces.
             spotQuote_->setValue(S + ds);
             option_->setPricingEngine(engVp);
             const Real Vpp = option_->NPV() * notional_;
-
             option_->setPricingEngine(engVm);
             const Real Vpm = option_->NPV() * notional_;
 
             spotQuote_->setValue(S - ds);
             option_->setPricingEngine(engVp);
             const Real Vmp = option_->NPV() * notional_;
-
             option_->setPricingEngine(engVm);
             const Real Vmm = option_->NPV() * notional_;
 
             spotQuote_->setValue(S);
 
-            const Real vanna = (Vpp - Vpm - Vmp + Vmm) / (4.0 * ds * dv);
+            // Rega/sega: use non-frozen Dupire engine (sticky-delta dynamics
+            // for vol-surface input sensitivities, per user requirement).
+            option_->setPricingEngine(makeEngine(true));
+            auto [rega, sega] = computeRegaSega();
 
-            // Restore base engine so the option is left in a consistent state.
+            // Leave option with the base frozen engine.
             option_->setPricingEngine(engBase);
 
-            FxVanillaGreeks result;
-            result.npv = V0;
-            result.spotDelta = spotDelta;
-            result.fwdDelta = fwdDelta;
-            result.spotGamma = spotGamma;
-            result.fwdGamma = fwdGamma;
-            result.theta = theta;
-            result.vanna = vanna;
-            result.volga = volga;
-            return result;
+            return scaleResults(V0, Vup, Vdn, Vvp, Vvm, Vpp, Vpm, Vmp, Vmm,
+                                theta_raw, rega, sega);
         }
     }
 
@@ -328,16 +381,12 @@ namespace QuantLib {
         QL_REQUIRE(!times.empty(), "time grid is empty");
         QL_REQUIRE(!strikes.empty(), "strike grid is empty");
 
-        // Build the Dupire local vol surface wrapping the process's implied vol surface.
-        // Mapping for FX:  riskFreeTS = domestic,  dividendTS = foreign.
         LocalVolSurface lvDupire(process_->blackVolatility(),
                                   process_->riskFreeRate(),
                                   process_->dividendYield(),
                                   process_->x0());
         lvDupire.enableExtrapolation();
 
-        // FixedLocalVolSurface stores local vols in a matrix with
-        // rows = strikes, columns = times.
         auto lvMatrix = ext::make_shared<Matrix>(strikes.size(), times.size());
         for (Size ti = 0; ti < times.size(); ++ti)
             for (Size si = 0; si < strikes.size(); ++si)
@@ -363,9 +412,9 @@ namespace QuantLib {
         auto fixedLV = buildFixedLocalVolSurface(times, strikes);
         fixedLV->enableExtrapolation();
 
-        const int wt = 10; // column width for time headers
-        const int wv = 9;  // column width for vol values
-        const int wk = 8;  // column width for strike labels
+        const int wt = 10;
+        const int wv = 9;
+        const int wk = 8;
 
         out << "\n--- Local vol surface: Dupire (D) vs FixedLocalVolSurface (F) ---\n";
         out << std::setw(wk) << "K\\t";
@@ -374,14 +423,12 @@ namespace QuantLib {
         out << "\n" << std::string(wk + wt * times.size(), '-') << "\n";
 
         for (Real K : strikes) {
-            // Dupire row
             out << std::setw(wk - 1) << std::fixed << std::setprecision(4) << K << "D";
             for (Time t : times)
                 out << std::setw(wv) << std::fixed << std::setprecision(2)
                     << lvDupire.localVol(t, K, true) * 100.0;
             out << "\n";
 
-            // FixedLocalVolSurface row
             out << std::setw(wk - 1) << std::fixed << std::setprecision(4) << K << "F";
             for (Time t : times)
                 out << std::setw(wv) << std::fixed << std::setprecision(2)

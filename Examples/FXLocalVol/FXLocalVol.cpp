@@ -26,37 +26,28 @@
     1.  Market data setup: EURUSD-like pillar quotes (ATM, 25d and 10d RR/BF)
         for five tenors (1W, 1M, 3M, 6M, 1Y).
 
-    2.  Calibrate an fxVarianceSurfaceNCP<quadraticSmileSection> — a variance
-        term structure that interpolates between pillar smiles in probability space.
+    2.  Calibrate an fxVarianceSurfaceNCP<quadraticSmileSection>.
 
-    3.  Wrap the variance surface in a GeneralizedBlackScholesProcess, which makes
-        it usable by all QuantLib pricing engines.
+    3.  Wrap the variance surface in a GeneralizedBlackScholesProcess.
 
     4.  Price a 3-month EURUSD EUR call at the ATM forward strike using:
-        - Black-Scholes FD  (constant implied vol, localVol=false)
-        - Local-vol Dupire FD  (Dupire formula at each grid cell, localVol=true)
+        - Black-Scholes FD  (localVol=false)
+        - Local-vol Dupire FD  (localVol=true)
 
-    5.  Compute all standard FX option risk metrics via FxVanillaBumpRisk:
-        - NPV (domestic currency, notional-scaled)
-        - Spot delta  and  forward delta
-        - Spot gamma  and  forward gamma
-        - Theta  (per calendar day)
-        - Vanna  (cross derivative: spot × ATM vol)
-        - Volga  (second derivative: ATM vol²)
+    5.  Compute all standard FX option risk metrics via FxVanillaBumpRisk.
+        Reported units:
+        - spotDelta / fwdDelta : USD per 1% spot / fwd move
+        - spotGamma / fwdGamma : USD (delta change per 1% spot / fwd move)
+        - theta                : USD per calendar day
+        - vega                 : USD per 1% (100bp) ATM vol move
+        - rega                 : USD per 0.1% 1M-equivalent RR move
+        - sega                 : USD per 0.01% 1M-equivalent BF move
+        - vanna / navva        : USD (delta/vega change per 1% vol/spot move)
+        - volga                : USD (vega change per 1% vol move)
 
-    6.  Compare sticky-delta vs sticky-strike Greeks:
-        - Sticky-delta (StickyType::Delta, default): market convention.  The FX
-          variance surface is delta-parameterised; when spot is bumped the smile
-          re-anchors in delta space.  The resulting delta blends direct spot
-          sensitivity with the vol surface moving with spot (total delta).
-        - Sticky-strike (StickyType::Strike): model-consistent.  The Dupire local
-          vol is pre-sampled on a (t,K) grid and frozen before bumping spot, so
-          local vols at fixed strikes do not change.  Differences from sticky-delta
-          reveal the vol-of-vol adjustment implicit in the skew.
+    6.  Compare sticky-delta vs sticky-strike Greeks.
 
-    7.  Build a FixedLocalVolSurface by sampling the Dupire local vol on a
-        (time, strike) grid and print a side-by-side comparison showing that
-        the two surfaces agree at grid points.
+    7.  Build a FixedLocalVolSurface and compare with Dupire at grid points.
 */
 
 #include <ql/qldefines.hpp>
@@ -106,8 +97,8 @@ static void printSeparator(int width = 72) {
 }
 
 static void printGreeks(const std::string& label, const FxVanillaGreeks& g) {
-    const int w0 = 28;
-    const int w1 = 16;
+    const int w0 = 40;
+    const int w1 = 14;
     std::cout << "\n  " << label << "\n"
               << "  " << std::string(w0 + w1, '-') << "\n"
               << std::fixed;
@@ -116,14 +107,18 @@ static void printGreeks(const std::string& label, const FxVanillaGreeks& g) {
                   << std::setw(w1) << std::right << std::setprecision(prec) << val
                   << "\n";
     };
-    row("NPV (USD)",            g.npv,       2);
-    row("Spot delta (USD/pip)", g.spotDelta * 0.0001,  4); // scaled to 1 pip
-    row("Fwd delta  (USD/pip)", g.fwdDelta  * 0.0001,  4);
-    row("Spot gamma (USD/pip²)",g.spotGamma * 1e-8,    4); // per pip²
-    row("Fwd gamma  (USD/pip²)",g.fwdGamma  * 1e-8,    4);
-    row("Theta (USD/day)",      g.theta,     2);
-    row("Vanna  (USD/vol-pt)",  g.vanna * 0.01,  2); // vol-pt = 1 percent
-    row("Volga  (USD/vol-pt²)", g.volga * 1e-4,  2); // per (1 percent)²
+    row("NPV (USD)",                              g.npv,       2);
+    row("Spot delta  (USD per 1% spot)",          g.spotDelta, 2);
+    row("Fwd delta   (USD per 1% fwd)",           g.fwdDelta,  2);
+    row("Spot gamma  (USD per 1% spot move)",     g.spotGamma, 2);
+    row("Fwd gamma   (USD per 1% fwd move)",      g.fwdGamma,  2);
+    row("Theta       (USD/day)",                  g.theta,     2);
+    row("Vega        (USD per 1% vol)",           g.vega,      2);
+    row("Rega        (USD per 0.1% 1M RR)",       g.rega,      2);
+    row("Sega        (USD per 0.01% 1M BF)",      g.sega,      2);
+    row("Vanna       (USD per 1%S x 1%vol)",      g.vanna,     2);
+    row("Navva       (USD per 1%vol x 1%S) =Vanna",g.navva,   2);
+    row("Volga       (USD per 1%vol x 1%vol)",    g.volga,     2);
     std::cout << "  " << std::string(w0 + w1, '-') << "\n";
 }
 
@@ -141,38 +136,26 @@ int main(int, char*[]) {
 
         // ──────────────────────────────────────────────────────────────────────
         //  1. Market data
-        //
-        //  Currency pair : EUR/USD  (spot = USD per EUR)
-        //  Spot          : 1.0850
-        //  EUR rate      : 4.00% flat   (foreign, "dividend" yield in GBS)
-        //  USD rate      : 5.25% flat   (domestic, risk-free in GBS)
-        //  Delta type    : forward delta (standard for G10 non-USD/JPY)
-        //  ATM type      : delta-neutral forward
-        //  Fly type      : smile strangle
         // ──────────────────────────────────────────────────────────────────────
 
         Date today(2, January, 2024);
         Settings::instance().evaluationDate() = today;
+        DayCounter dc = Actual365Fixed();
 
         auto spotSQ = ext::make_shared<SimpleQuote>(1.0850);
         Handle<Quote> spot(spotSQ);
 
-        // Use settlement-days=0 so that referenceDate() tracks evaluationDate.
-        // This is required for theta to compute correctly when the evaluation
-        // date is shifted by one calendar day.
         Handle<YieldTermStructure> eurTs(
-            ext::make_shared<FlatForward>(0, NullCalendar(), 0.0400, Actual365Fixed()));
+            ext::make_shared<FlatForward>(0, NullCalendar(), 0.0400, dc));
         Handle<YieldTermStructure> usdTs(
-            ext::make_shared<FlatForward>(0, NullCalendar(), 0.0525, Actual365Fixed()));
+            ext::make_shared<FlatForward>(0, NullCalendar(), 0.0525, dc));
 
-        // Trading time term structure: weekends carry zero vol-time weight
         Handle<tradingTimeTermStructure> timeTs(
             ext::make_shared<tradingTimeTermStructure>(today, WeekendsOnly(), 0.0));
 
         DeltaVolQuote::DeltaType  deltaType = DeltaVolQuote::Fwd;
         DeltaVolQuote::AtmType    atmType   = DeltaVolQuote::AtmFwd;
         fxSmileSection::FlyType   flyType   = fxSmileSection::SmileStrangle;
-        DayCounter                dc        = Actual365Fixed();
 
         // Pillar dates: 1W, 1M, 3M, 6M, 1Y
         std::vector<Date> pillars = {
@@ -183,8 +166,6 @@ int main(int, char*[]) {
             Date(2,  January,  2025), // 1Y
         };
 
-        // EURUSD-like vol quotes (smile-strangle convention, negative RR = put skew)
-        //  Tenor  ATM    25RR   25BF   10RR   10BF
         struct PillarVols { Real atm, rr25, bf25, rr10, bf10; };
         std::vector<PillarVols> mkt = {
             { 0.0750, -0.008, 0.002, -0.015, 0.005 }, // 1W
@@ -194,28 +175,40 @@ int main(int, char*[]) {
             { 0.0950, -0.020, 0.007, -0.040, 0.015 }, // 1Y
         };
 
-        // Build quote handles and collect ATM SimpleQuotes for bumping
+        std::vector<Real> deltas = { 0.25, 0.10 };
+
+        // Build all quote handles, keeping SimpleQuote* for bumping.
         std::vector<Handle<Quote>> atms;
         std::vector<std::vector<Handle<Quote>>> rrs(pillars.size()),
                                                  bfs(pillars.size());
-        std::vector<ext::shared_ptr<SimpleQuote>> atmSQs; // for FxVanillaBumpRisk
+        std::vector<ext::shared_ptr<SimpleQuote>> atmSQs;
 
-        std::vector<Real> deltas = { 0.25, 0.10 };
+        // Per-pillar RR and BF SimpleQuotes for rega/sega.
+        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> rrPillarSQs(pillars.size());
+        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> bfPillarSQs(pillars.size());
+        std::vector<Time> rrPillarTimes(pillars.size()), bfPillarTimes(pillars.size());
 
         for (Size i = 0; i < pillars.size(); ++i) {
-            auto atmSQ = ext::make_shared<SimpleQuote>(mkt[i].atm);
+            auto atmSQ  = ext::make_shared<SimpleQuote>(mkt[i].atm);
+            auto rr25SQ = ext::make_shared<SimpleQuote>(mkt[i].rr25);
+            auto rr10SQ = ext::make_shared<SimpleQuote>(mkt[i].rr10);
+            auto bf25SQ = ext::make_shared<SimpleQuote>(mkt[i].bf25);
+            auto bf10SQ = ext::make_shared<SimpleQuote>(mkt[i].bf10);
+
             atmSQs.push_back(atmSQ);
+            rrPillarSQs[i] = { rr25SQ, rr10SQ };
+            bfPillarSQs[i] = { bf25SQ, bf10SQ };
+
+            const Time T = dc.yearFraction(today, pillars[i]);
+            rrPillarTimes[i] = bfPillarTimes[i] = T;
+
             atms.push_back(Handle<Quote>(atmSQ));
-            rrs[i] = { makeQuoteHandle(mkt[i].rr25), makeQuoteHandle(mkt[i].rr10) };
-            bfs[i] = { makeQuoteHandle(mkt[i].bf25), makeQuoteHandle(mkt[i].bf10) };
+            rrs[i] = { Handle<Quote>(rr25SQ), Handle<Quote>(rr10SQ) };
+            bfs[i] = { Handle<Quote>(bf25SQ), Handle<Quote>(bf10SQ) };
         }
 
         // ──────────────────────────────────────────────────────────────────────
         //  2. Calibrate the FX variance surface
-        //
-        //  fxVarianceSurfaceNCP<quadraticSmileSection> interpolates between
-        //  pillar smiles in probability space (NCP = normed call price), giving
-        //  an arbitrage-free surface across tenors.
         // ──────────────────────────────────────────────────────────────────────
 
         auto fxVolSurface = ext::make_shared<fxVarianceSurfaceNCP<quadraticSmileSection>>(
@@ -228,30 +221,24 @@ int main(int, char*[]) {
 
         // ──────────────────────────────────────────────────────────────────────
         //  3. Build the GeneralizedBlackScholesProcess
-        //
-        //  For FX: dividendTS = foreign (EUR) rate,  riskFreeTS = domestic (USD).
         // ──────────────────────────────────────────────────────────────────────
 
         auto process = ext::make_shared<GeneralizedBlackScholesProcess>(
             spot,
-            eurTs,  // dividendYield = foreign rate
-            usdTs,  // riskFreeRate  = domestic rate
+            eurTs,  // dividendYield = foreign (EUR) rate
+            usdTs,  // riskFreeRate  = domestic (USD) rate
             Handle<BlackVolTermStructure>(fxVolSurface));
 
         // ──────────────────────────────────────────────────────────────────────
         //  4. Define the option: 3M EUR call at ATM forward
-        //
-        //  ATM forward strike = S * B_EUR(3M) / B_USD(3M)
         // ──────────────────────────────────────────────────────────────────────
 
         Date expiryDate = pillars[2]; // 3M: 2024-04-02
-        Time T = dc.yearFraction(today, expiryDate);
-        Real Bd = usdTs->discount(T);
-        Real Bf = eurTs->discount(T);
-        Real fwd = spot->value() * Bf / Bd;
-
-        // Use the ATM forward as the strike (at-the-money forward call)
-        Real strike = fwd;
+        Time T          = dc.yearFraction(today, expiryDate);
+        Real Bd         = usdTs->discount(T);
+        Real Bf         = eurTs->discount(T);
+        Real fwd        = spot->value() * Bf / Bd;
+        Real strike     = fwd; // ATM forward
 
         auto payoff   = ext::make_shared<PlainVanillaPayoff>(Option::Call, strike);
         auto exercise = ext::make_shared<EuropeanExercise>(expiryDate);
@@ -303,19 +290,23 @@ int main(int, char*[]) {
                   << std::fixed << std::setprecision(0) << notional << "\n";
 
         // ──────────────────────────────────────────────────────────────────────
-        //  5. Pricing comparison: Black-Scholes FD vs Local-vol Dupire FD
+        //  5. Compute Greeks
         // ──────────────────────────────────────────────────────────────────────
 
         FxVanillaBumpRisk riskCalc(
             option, process, spotSQ, atmSQs,
+            rrPillarSQs, rrPillarTimes,
+            bfPillarSQs, bfPillarTimes,
             notional,
-            /*spotBump=*/0.001,  // 0.1% of spot
-            /*volBump=*/0.001,   // 10 bp
+            /*spotBump=*/0.001,
+            /*volBump=*/0.001,
+            /*rrBump=*/0.001,
+            /*bfBump=*/0.001,
             /*tGrid=*/100,
             /*xGrid=*/100);
 
-        FxVanillaGreeks bsGreeks  = riskCalc.calculate(/*localVol=*/false);
-        FxVanillaGreeks lvGreeks  = riskCalc.calculate(/*localVol=*/true);
+        FxVanillaGreeks bsGreeks = riskCalc.calculate(/*localVol=*/false);
+        FxVanillaGreeks lvGreeks = riskCalc.calculate(/*localVol=*/true);
 
         // ──────────────────────────────────────────────────────────────────────
         //  Print pricing comparison
@@ -350,63 +341,49 @@ int main(int, char*[]) {
         std::cout << "  Greeks  (notional = EUR 1,000,000)\n";
         printSeparator();
 
-        printGreeks("Black-Scholes FD", bsGreeks);
+        printGreeks("Black-Scholes FD (sticky-delta)", bsGreeks);
         printGreeks("Local vol Dupire FD (sticky-delta)", lvGreeks);
 
-        // Notes on units:
-        std::cout << "\n  Notes:\n"
-                  << "    Spot/Fwd delta : USD PnL per 1-pip (0.0001) move in spot\n"
-                  << "    Spot/Fwd gamma : USD PnL per 1-pip² move (second order)\n"
-                  << "    Vanna          : USD PnL per 1-pip × 1-vol-point (1%) move\n"
-                  << "    Volga          : USD PnL per (1-vol-point)² move\n\n";
+        std::cout << "\n  Notes on rega/sega time-scaling:\n"
+                  << "    Rega: 1M tenor bumped by rrBump=0.1%; other tenors by\n"
+                  << "          rrBump * sqrt(T_1M / T_pillar). E.g.:\n"
+                  << "          3M: 0.1% * sqrt(1/3) = 0.058%\n"
+                  << "          1Y: 0.1% * sqrt(1/12) = 0.029%\n"
+                  << "    Sega: same scaling with bfBump=0.1%, reported for 0.01%.\n\n";
 
         // ──────────────────────────────────────────────────────────────────────
         //  Sticky-delta vs sticky-strike comparison
-        //
-        //  For EURUSD with negative RR (put skew), the sticky-delta and
-        //  sticky-strike deltas differ because:
-        //
-        //  Sticky-delta: as spot rises, the surface re-anchors.  With negative
-        //  skew the call at fixed K becomes slightly OTM, moving to lower vol.
-        //  This vol decrease offsets the delta, so sticky-delta < sticky-strike.
-        //
-        //  Sticky-strike: local vols at fixed K are frozen.  The delta only
-        //  reflects direct spot sensitivity (no vol adjustment).
-        //
-        //  The difference between the two is the "skew adjustment" to delta,
-        //  sometimes called the "smile delta" correction.
         // ──────────────────────────────────────────────────────────────────────
 
         printSeparator();
         std::cout << "  Sticky-delta vs Sticky-strike (Local vol Dupire FD)\n";
         printSeparator();
 
-        // sticky-delta already computed above as lvGreeks
         FxVanillaGreeks ssGreeks = riskCalc.calculate(/*localVol=*/true,
                                                        FxVanillaBumpRisk::StickyType::Strike);
 
         printGreeks("Local vol Dupire FD (sticky-delta)", lvGreeks);
         printGreeks("Local vol Dupire FD (sticky-strike)", ssGreeks);
 
-        const int wd = 36, wdv = 12;
+        const int wd = 44, wdv = 12;
         std::cout << "\n  Difference (sticky-delta minus sticky-strike):\n"
                   << "  " << std::string(wd + wdv, '-') << "\n"
                   << std::fixed;
-        auto diffRow = [&](const std::string& name, Real a, Real b, Real scale, int prec = 4) {
+        auto diffRow = [&](const std::string& name, Real a, Real b, int prec = 2) {
             std::cout << "  " << std::setw(wd) << std::left << name
                       << std::setw(wdv) << std::right << std::setprecision(prec)
-                      << (a - b) * scale << "\n";
+                      << (a - b) << "\n";
         };
-        diffRow("Spot delta (USD/pip)",  lvGreeks.spotDelta, ssGreeks.spotDelta, 0.0001);
-        diffRow("Fwd delta  (USD/pip)",  lvGreeks.fwdDelta,  ssGreeks.fwdDelta,  0.0001);
-        diffRow("Spot gamma (USD/pip²)", lvGreeks.spotGamma, ssGreeks.spotGamma, 1e-8);
-        diffRow("Vanna  (USD/vol-pt)",   lvGreeks.vanna,     ssGreeks.vanna,     0.01, 2);
-        diffRow("Volga  (USD/vol-pt²)",  lvGreeks.volga,     ssGreeks.volga,     1e-4, 2);
+        diffRow("Spot delta (USD per 1% spot)",  lvGreeks.spotDelta, ssGreeks.spotDelta);
+        diffRow("Fwd delta  (USD per 1% fwd)",   lvGreeks.fwdDelta,  ssGreeks.fwdDelta);
+        diffRow("Spot gamma (USD per 1% spot)",  lvGreeks.spotGamma, ssGreeks.spotGamma);
+        diffRow("Vega       (USD per 1% vol)",   lvGreeks.vega,      ssGreeks.vega);
+        diffRow("Vanna      (USD per 1%S x 1%vol)", lvGreeks.vanna,  ssGreeks.vanna);
+        diffRow("Volga      (USD per 1%vol x 1%vol)", lvGreeks.volga, ssGreeks.volga);
         std::cout << "  " << std::string(wd + wdv, '-') << "\n\n"
-                  << "  A non-zero spot delta difference reflects the vol-of-vol\n"
-                  << "  adjustment from the EUR put skew (negative 25d RR):\n"
-                  << "  sticky-delta is lower because the vol surface falls as\n"
-                  << "  spot rises (the call moves to lower delta / lower vol).\n\n";
+                  << "  Non-zero spot delta difference = skew adjustment to delta.\n"
+                  << "  With EUR put skew (negative RR), sticky-delta delta is lower\n"
+                  << "  because the vol surface falls as spot rises.\n\n";
 
         // ──────────────────────────────────────────────────────────────────────
         //  6. Local vol surface: Dupire vs FixedLocalVolSurface comparison
@@ -416,10 +393,8 @@ int main(int, char*[]) {
         std::cout << "  Local vol surface comparison\n";
         printSeparator();
 
-        // Time grid: 1M, 3M, 6M, 1Y (as year fractions)
         std::vector<Time> lvTimes = { 1.0/12, 3.0/12, 6.0/12, 12.0/12 };
 
-        // Strike grid: ±15% around ATM forward
         std::vector<Real> lvStrikes;
         for (int i = -3; i <= 3; ++i)
             lvStrikes.push_back(fwd * std::exp(0.05 * i));
@@ -430,13 +405,9 @@ int main(int, char*[]) {
                   << "  F = pre-sampled FixedLocalVolSurface\n"
                   << "  Values in percent (%)\n\n";
 
-        // ──────────────────────────────────────────────────────────────────────
-        //  Show how the FixedLocalVolSurface is built
-        // ──────────────────────────────────────────────────────────────────────
-
         auto fixedLV = riskCalc.buildFixedLocalVolSurface(lvTimes, lvStrikes);
         std::cout << "  FixedLocalVolSurface built with "
-                  << lvTimes.size() << " time steps × "
+                  << lvTimes.size() << " time steps x "
                   << lvStrikes.size() << " strikes.\n"
                   << "  Sample local vol at (T=0.25, K=" << std::fixed
                   << std::setprecision(4) << strike << "): "
