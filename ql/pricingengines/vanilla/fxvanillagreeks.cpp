@@ -22,6 +22,7 @@
 #include <ql/termstructures/volatility/equityfx/localvolsurface.hpp>
 #include <ql/methods/finitedifferences/solvers/fdmbackwardsolver.hpp>
 #include <ql/settings.hpp>
+#include <cmath>
 #include <iomanip>
 #include <utility>
 
@@ -35,29 +36,87 @@ namespace QuantLib {
                                          Real spotBump,
                                          Real volBump,
                                          Size tGrid,
-                                         Size xGrid)
+                                         Size xGrid,
+                                         Size lvTimePts,
+                                         Size lvStrikePts,
+                                         Real lvStrikeSpread)
     : option_(std::move(option)), process_(std::move(process)),
       spotQuote_(std::move(spotQuote)), atmVolQuotes_(std::move(atmVolQuotes)),
       notional_(notional), spotBump_(spotBump), volBump_(volBump),
-      tGrid_(tGrid), xGrid_(xGrid) {
+      tGrid_(tGrid), xGrid_(xGrid),
+      lvTimePts_(lvTimePts), lvStrikePts_(lvStrikePts), lvStrikeSpread_(lvStrikeSpread) {
         QL_REQUIRE(spotQuote_ != nullptr, "null spot quote");
         QL_REQUIRE(!atmVolQuotes_.empty(), "at least one ATM vol quote required");
+        QL_REQUIRE(lvTimePts_ >= 2, "lvTimePts must be at least 2");
+        QL_REQUIRE(lvStrikePts_ >= 2, "lvStrikePts must be at least 2");
+        QL_REQUIRE(lvStrikeSpread_ > 0.0, "lvStrikeSpread must be positive");
     }
 
-    ext::shared_ptr<PricingEngine> FxVanillaBumpRisk::makeEngine(bool localVol) const {
-        // Use a small positive overwrite for illegal (negative) local vols that
-        // can arise from numerical differentiation of a noisy implied vol surface.
+    ext::shared_ptr<PricingEngine>
+    FxVanillaBumpRisk::makeEngineFor(
+        const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc,
+        bool localVol) const {
         return ext::make_shared<FdBlackScholesVanillaEngine>(
-            process_, tGrid_, xGrid_,
+            proc, tGrid_, xGrid_,
             /*dampingSteps=*/0,
             FdmSchemeDesc::Douglas(),
             localVol,
             localVol ? 0.20 : -Null<Real>());
     }
 
-    FxVanillaGreeks FxVanillaBumpRisk::calculate(bool localVol) const {
-        option_->setPricingEngine(makeEngine(localVol));
+    ext::shared_ptr<PricingEngine> FxVanillaBumpRisk::makeEngine(bool localVol) const {
+        return makeEngineFor(process_, localVol);
+    }
 
+    std::pair<std::vector<Time>, std::vector<Real>> FxVanillaBumpRisk::buildLvGrid() const {
+        const Date expiry = option_->exercise()->lastDate();
+        const Time T = process_->time(expiry);
+        QL_REQUIRE(T > 0.0, "option has expired; cannot build local vol grid");
+
+        // Average ATM vol across all pillar quotes for grid sizing.
+        Real avgAtm = 0.0;
+        for (const auto& q : atmVolQuotes_)
+            avgAtm += q->value();
+        avgAtm /= static_cast<Real>(atmVolQuotes_.size());
+
+        // Time grid: lvTimePts_ equally-spaced points from T/lvTimePts_ to T.
+        std::vector<Time> times(lvTimePts_);
+        for (Size i = 0; i < lvTimePts_; ++i)
+            times[i] = T * (i + 1.0) / static_cast<Real>(lvTimePts_);
+
+        // Strike grid: lvStrikePts_ log-spaced points spanning
+        //   ± lvStrikeSpread_ * avgAtm * sqrt(T)  around current spot.
+        const Real S = spotQuote_->value();
+        const Real halfWidth = lvStrikeSpread_ * avgAtm * std::sqrt(T);
+        std::vector<Real> strikes(lvStrikePts_);
+        for (Size j = 0; j < lvStrikePts_; ++j) {
+            const Real u = 2.0 * j / static_cast<Real>(lvStrikePts_ - 1) - 1.0;
+            strikes[j] = S * std::exp(halfWidth * u);
+        }
+
+        return {times, strikes};
+    }
+
+    ext::shared_ptr<GeneralizedBlackScholesProcess>
+    FxVanillaBumpRisk::makeStickyProcess(const std::vector<Time>& times,
+                                          const std::vector<Real>& strikes) const {
+        auto fixedLV = buildFixedLocalVolSurface(times, strikes);
+        fixedLV->enableExtrapolation();
+
+        // Construct a GBS process using the external local vol constructor.
+        // When hasExternalLocalVol_=true, process->localVolatility() returns
+        // fixedLV directly, bypassing the Dupire formula.  Since FixedLocalVolSurface
+        // does not observe the spot quote, local vols are frozen at fixed (t,K) points
+        // even when spotQuote_ is bumped — implementing sticky-strike dynamics.
+        return ext::make_shared<GeneralizedBlackScholesProcess>(
+            Handle<Quote>(spotQuote_),
+            process_->dividendYield(),
+            process_->riskFreeRate(),
+            process_->blackVolatility(),
+            Handle<LocalVolTermStructure>(fixedLV));
+    }
+
+    FxVanillaGreeks FxVanillaBumpRisk::calculate(bool localVol, StickyType sticky) const {
         const Real S = spotQuote_->value();
         const Real ds = S * spotBump_;
         const Real dv = volBump_;
@@ -68,7 +127,6 @@ namespace QuantLib {
         for (const auto& q : atmVolQuotes_)
             sigmas.push_back(q->value());
 
-        // Helper lambdas to apply a parallel shift to all ATM quotes and restore.
         auto shiftAtms = [&](Real delta) {
             for (Size i = 0; i < atmVolQuotes_.size(); ++i)
                 atmVolQuotes_[i]->setValue(sigmas[i] + delta);
@@ -78,83 +136,190 @@ namespace QuantLib {
                 atmVolQuotes_[i]->setValue(sigmas[i]);
         };
 
-        // ── Base NPV ─────────────────────────────────────────────────────────
-        const Real V0 = option_->NPV() * notional_;
-
-        // ── Spot delta and gamma ──────────────────────────────────────────────
-        spotQuote_->setValue(S + ds);
-        const Real Vup = option_->NPV() * notional_;
-
-        spotQuote_->setValue(S - ds);
-        const Real Vdn = option_->NPV() * notional_;
-
-        spotQuote_->setValue(S);
-
-        const Real spotDelta = (Vup - Vdn) / (2.0 * ds);
-        const Real spotGamma = (Vup - 2.0 * V0 + Vdn) / (ds * ds);
-
-        // ── Forward delta/gamma ───────────────────────────────────────────────
-        // For FX:  F = S * B_f / B_d   =>   dF/dS = B_f / B_d
-        // Therefore:  Δ_fwd = Δ_spot / (B_f/B_d)   and   Γ_fwd = Γ_spot / (B_f/B_d)²
+        // Forward discount ratio: F = S * Bf/Bd  =>  dF/dS = Bf/Bd
         const Date expiry = option_->exercise()->lastDate();
-        const Time T = process_->time(expiry);
-        const Real Bd = process_->riskFreeRate()->discount(T);
-        const Real Bf = process_->dividendYield()->discount(T);
+        const Time T_exp = process_->time(expiry);
+        const Real Bd = process_->riskFreeRate()->discount(T_exp);
+        const Real Bf = process_->dividendYield()->discount(T_exp);
         const Real dFdS = Bf / Bd;
 
-        const Real fwdDelta = spotDelta / dFdS;
-        const Real fwdGamma = spotGamma / (dFdS * dFdS);
+        if (!localVol || sticky == StickyType::Delta) {
+            // ── Sticky-delta path (or BS mode) ────────────────────────────────
+            //
+            // The FX variance surface is delta-parameterised: when spot is bumped,
+            // the smile moves with it in delta space.  This is the market convention.
+            option_->setPricingEngine(makeEngine(localVol));
 
-        // ── Theta: shift evaluation date forward by one calendar day ──────────
-        const Date today = Settings::instance().evaluationDate();
-        Settings::instance().evaluationDate() = today + 1;
-        const Real Vnext = option_->NPV() * notional_;
-        Settings::instance().evaluationDate() = today;
+            // Base NPV
+            const Real V0 = option_->NPV() * notional_;
 
-        const Real theta = Vnext - V0; // per calendar day; negative for long options
+            // Spot delta and gamma
+            spotQuote_->setValue(S + ds);
+            const Real Vup = option_->NPV() * notional_;
 
-        // ── Volga: second derivative w.r.t. parallel ATM vol shift ───────────
-        shiftAtms(+dv);
-        const Real Vvp = option_->NPV() * notional_;
+            spotQuote_->setValue(S - ds);
+            const Real Vdn = option_->NPV() * notional_;
 
-        shiftAtms(-2.0 * dv);
-        const Real Vvm = option_->NPV() * notional_;
+            spotQuote_->setValue(S);
 
-        restoreAtms();
-        const Real volga = (Vvp - 2.0 * V0 + Vvm) / (dv * dv);
+            const Real spotDelta = (Vup - Vdn) / (2.0 * ds);
+            const Real spotGamma = (Vup - 2.0 * V0 + Vdn) / (ds * ds);
 
-        // ── Vanna: cross second derivative (spot × vol) ───────────────────────
-        // Centred formula: (V++ - V+- - V-+ + V--) / (4 ds dv)
-        spotQuote_->setValue(S + ds);
-        shiftAtms(+dv);
-        const Real Vpp = option_->NPV() * notional_;
+            // Forward delta/gamma
+            const Real fwdDelta = spotDelta / dFdS;
+            const Real fwdGamma = spotGamma / (dFdS * dFdS);
 
-        shiftAtms(-2.0 * dv);
-        const Real Vpm = option_->NPV() * notional_;
-        restoreAtms();
+            // Theta: shift evaluation date forward by one calendar day
+            const Date today = Settings::instance().evaluationDate();
+            Settings::instance().evaluationDate() = today + 1;
+            const Real Vnext = option_->NPV() * notional_;
+            Settings::instance().evaluationDate() = today;
+            const Real theta = Vnext - V0;
 
-        spotQuote_->setValue(S - ds);
-        shiftAtms(+dv);
-        const Real Vmp = option_->NPV() * notional_;
+            // Volga: second derivative w.r.t. parallel ATM vol shift
+            shiftAtms(+dv);
+            const Real Vvp = option_->NPV() * notional_;
 
-        shiftAtms(-2.0 * dv);
-        const Real Vmm = option_->NPV() * notional_;
-        restoreAtms();
+            shiftAtms(-2.0 * dv);
+            const Real Vvm = option_->NPV() * notional_;
 
-        spotQuote_->setValue(S); // restore spot
+            restoreAtms();
+            const Real volga = (Vvp - 2.0 * V0 + Vvm) / (dv * dv);
 
-        const Real vanna = (Vpp - Vpm - Vmp + Vmm) / (4.0 * ds * dv);
+            // Vanna: cross second derivative — (V++ - V+- - V-+ + V--) / (4 ds dv)
+            spotQuote_->setValue(S + ds);
+            shiftAtms(+dv);
+            const Real Vpp = option_->NPV() * notional_;
 
-        FxVanillaGreeks result;
-        result.npv = V0;
-        result.spotDelta = spotDelta;
-        result.fwdDelta = fwdDelta;
-        result.spotGamma = spotGamma;
-        result.fwdGamma = fwdGamma;
-        result.theta = theta;
-        result.vanna = vanna;
-        result.volga = volga;
-        return result;
+            shiftAtms(-2.0 * dv);
+            const Real Vpm = option_->NPV() * notional_;
+            restoreAtms();
+
+            spotQuote_->setValue(S - ds);
+            shiftAtms(+dv);
+            const Real Vmp = option_->NPV() * notional_;
+
+            shiftAtms(-2.0 * dv);
+            const Real Vmm = option_->NPV() * notional_;
+            restoreAtms();
+
+            spotQuote_->setValue(S);
+
+            const Real vanna = (Vpp - Vpm - Vmp + Vmm) / (4.0 * ds * dv);
+
+            FxVanillaGreeks result;
+            result.npv = V0;
+            result.spotDelta = spotDelta;
+            result.fwdDelta = fwdDelta;
+            result.spotGamma = spotGamma;
+            result.fwdGamma = fwdGamma;
+            result.theta = theta;
+            result.vanna = vanna;
+            result.volga = volga;
+            return result;
+
+        } else {
+            // ── Sticky-strike path (localVol=true only) ───────────────────────
+            //
+            // Pre-sample the Dupire local vol on a fixed (time, strike) grid and
+            // freeze it in a FixedLocalVolSurface before bumping.  Because
+            // FixedLocalVolSurface does not observe the spot quote, local vols at
+            // fixed (t,K) points are unchanged when spot is bumped — giving the
+            // model-consistent (sticky-strike) delta.
+            //
+            // Three frozen surfaces are needed:
+            //   stickyBase : sampled at base vols  (for NPV, delta, gamma, theta)
+            //   stickyVp   : sampled at vols + dv  (for vanna and volga)
+            //   stickyVm   : sampled at vols - dv  (for vanna and volga)
+
+            auto [times, strikes] = buildLvGrid();
+
+            auto stickyBase = makeStickyProcess(times, strikes);
+
+            shiftAtms(+dv);
+            auto stickyVp = makeStickyProcess(times, strikes);
+
+            shiftAtms(-2.0 * dv);
+            auto stickyVm = makeStickyProcess(times, strikes);
+
+            restoreAtms();
+
+            // Build engines once — reused across multiple spot bumps.
+            auto engBase = makeEngineFor(stickyBase, true);
+            auto engVp   = makeEngineFor(stickyVp,   true);
+            auto engVm   = makeEngineFor(stickyVm,   true);
+
+            // ── Base NPV ─────────────────────────────────────────────────────
+            option_->setPricingEngine(engBase);
+            const Real V0 = option_->NPV() * notional_;
+
+            // ── Spot delta and gamma (frozen local vol, spot bumped) ──────────
+            spotQuote_->setValue(S + ds);
+            const Real Vup = option_->NPV() * notional_;
+
+            spotQuote_->setValue(S - ds);
+            const Real Vdn = option_->NPV() * notional_;
+
+            spotQuote_->setValue(S);
+
+            const Real spotDelta = (Vup - Vdn) / (2.0 * ds);
+            const Real spotGamma = (Vup - 2.0 * V0 + Vdn) / (ds * ds);
+
+            // Forward delta/gamma
+            const Real fwdDelta = spotDelta / dFdS;
+            const Real fwdGamma = spotGamma / (dFdS * dFdS);
+
+            // ── Theta (frozen local vol, evaluation date shifted) ─────────────
+            const Date today = Settings::instance().evaluationDate();
+            Settings::instance().evaluationDate() = today + 1;
+            const Real Vnext = option_->NPV() * notional_;
+            Settings::instance().evaluationDate() = today;
+            const Real theta = Vnext - V0;
+
+            // ── Volga: second derivative w.r.t. parallel ATM vol shift ────────
+            // Price using surfaces frozen at vol±dv, then apply 3-point formula.
+            option_->setPricingEngine(engVp);
+            const Real Vvp = option_->NPV() * notional_;
+
+            option_->setPricingEngine(engVm);
+            const Real Vvm = option_->NPV() * notional_;
+
+            const Real volga = (Vvp - 2.0 * V0 + Vvm) / (dv * dv);
+
+            // ── Vanna: cross second derivative — (V++ - V+- - V-+ + V--) / (4 ds dv)
+            // Each scenario uses the surface frozen at the corresponding vol level.
+            spotQuote_->setValue(S + ds);
+            option_->setPricingEngine(engVp);
+            const Real Vpp = option_->NPV() * notional_;
+
+            option_->setPricingEngine(engVm);
+            const Real Vpm = option_->NPV() * notional_;
+
+            spotQuote_->setValue(S - ds);
+            option_->setPricingEngine(engVp);
+            const Real Vmp = option_->NPV() * notional_;
+
+            option_->setPricingEngine(engVm);
+            const Real Vmm = option_->NPV() * notional_;
+
+            spotQuote_->setValue(S);
+
+            const Real vanna = (Vpp - Vpm - Vmp + Vmm) / (4.0 * ds * dv);
+
+            // Restore base engine so the option is left in a consistent state.
+            option_->setPricingEngine(engBase);
+
+            FxVanillaGreeks result;
+            result.npv = V0;
+            result.spotDelta = spotDelta;
+            result.fwdDelta = fwdDelta;
+            result.spotGamma = spotGamma;
+            result.fwdGamma = fwdGamma;
+            result.theta = theta;
+            result.vanna = vanna;
+            result.volga = volga;
+            return result;
+        }
     }
 
     ext::shared_ptr<FixedLocalVolSurface>

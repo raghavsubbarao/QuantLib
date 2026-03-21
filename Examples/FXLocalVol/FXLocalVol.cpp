@@ -44,7 +44,17 @@
         - Vanna  (cross derivative: spot × ATM vol)
         - Volga  (second derivative: ATM vol²)
 
-    6.  Build a FixedLocalVolSurface by sampling the Dupire local vol on a
+    6.  Compare sticky-delta vs sticky-strike Greeks:
+        - Sticky-delta (StickyType::Delta, default): market convention.  The FX
+          variance surface is delta-parameterised; when spot is bumped the smile
+          re-anchors in delta space.  The resulting delta blends direct spot
+          sensitivity with the vol surface moving with spot (total delta).
+        - Sticky-strike (StickyType::Strike): model-consistent.  The Dupire local
+          vol is pre-sampled on a (t,K) grid and frozen before bumping spot, so
+          local vols at fixed strikes do not change.  Differences from sticky-delta
+          reveal the vol-of-vol adjustment implicit in the skew.
+
+    7.  Build a FixedLocalVolSurface by sampling the Dupire local vol on a
         (time, strike) grid and print a side-by-side comparison showing that
         the two surfaces agree at grid points.
 */
@@ -341,7 +351,7 @@ int main(int, char*[]) {
         printSeparator();
 
         printGreeks("Black-Scholes FD", bsGreeks);
-        printGreeks("Local vol Dupire FD", lvGreeks);
+        printGreeks("Local vol Dupire FD (sticky-delta)", lvGreeks);
 
         // Notes on units:
         std::cout << "\n  Notes:\n"
@@ -349,6 +359,54 @@ int main(int, char*[]) {
                   << "    Spot/Fwd gamma : USD PnL per 1-pip² move (second order)\n"
                   << "    Vanna          : USD PnL per 1-pip × 1-vol-point (1%) move\n"
                   << "    Volga          : USD PnL per (1-vol-point)² move\n\n";
+
+        // ──────────────────────────────────────────────────────────────────────
+        //  Sticky-delta vs sticky-strike comparison
+        //
+        //  For EURUSD with negative RR (put skew), the sticky-delta and
+        //  sticky-strike deltas differ because:
+        //
+        //  Sticky-delta: as spot rises, the surface re-anchors.  With negative
+        //  skew the call at fixed K becomes slightly OTM, moving to lower vol.
+        //  This vol decrease offsets the delta, so sticky-delta < sticky-strike.
+        //
+        //  Sticky-strike: local vols at fixed K are frozen.  The delta only
+        //  reflects direct spot sensitivity (no vol adjustment).
+        //
+        //  The difference between the two is the "skew adjustment" to delta,
+        //  sometimes called the "smile delta" correction.
+        // ──────────────────────────────────────────────────────────────────────
+
+        printSeparator();
+        std::cout << "  Sticky-delta vs Sticky-strike (Local vol Dupire FD)\n";
+        printSeparator();
+
+        // sticky-delta already computed above as lvGreeks
+        FxVanillaGreeks ssGreeks = riskCalc.calculate(/*localVol=*/true,
+                                                       FxVanillaBumpRisk::StickyType::Strike);
+
+        printGreeks("Local vol Dupire FD (sticky-delta)", lvGreeks);
+        printGreeks("Local vol Dupire FD (sticky-strike)", ssGreeks);
+
+        const int wd = 36, wdv = 12;
+        std::cout << "\n  Difference (sticky-delta minus sticky-strike):\n"
+                  << "  " << std::string(wd + wdv, '-') << "\n"
+                  << std::fixed;
+        auto diffRow = [&](const std::string& name, Real a, Real b, Real scale, int prec = 4) {
+            std::cout << "  " << std::setw(wd) << std::left << name
+                      << std::setw(wdv) << std::right << std::setprecision(prec)
+                      << (a - b) * scale << "\n";
+        };
+        diffRow("Spot delta (USD/pip)",  lvGreeks.spotDelta, ssGreeks.spotDelta, 0.0001);
+        diffRow("Fwd delta  (USD/pip)",  lvGreeks.fwdDelta,  ssGreeks.fwdDelta,  0.0001);
+        diffRow("Spot gamma (USD/pip²)", lvGreeks.spotGamma, ssGreeks.spotGamma, 1e-8);
+        diffRow("Vanna  (USD/vol-pt)",   lvGreeks.vanna,     ssGreeks.vanna,     0.01, 2);
+        diffRow("Volga  (USD/vol-pt²)",  lvGreeks.volga,     ssGreeks.volga,     1e-4, 2);
+        std::cout << "  " << std::string(wd + wdv, '-') << "\n\n"
+                  << "  A non-zero spot delta difference reflects the vol-of-vol\n"
+                  << "  adjustment from the EUR put skew (negative 25d RR):\n"
+                  << "  sticky-delta is lower because the vol surface falls as\n"
+                  << "  spot rises (the call moves to lower delta / lower vol).\n\n";
 
         // ──────────────────────────────────────────────────────────────────────
         //  6. Local vol surface: Dupire vs FixedLocalVolSurface comparison

@@ -393,6 +393,72 @@ BOOST_AUTO_TEST_CASE(testBsVsLocalVolPricing) {
         << " LV=" << lvG.npv << " relDiff=" << relDiff * 100 << "%");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Test 7: Sticky-delta vs sticky-strike deltas differ when skew is present
+//
+//  With EURUSD negative RR (put skew), bumping spot in sticky-delta mode causes
+//  the vol surface to re-anchor (the call moves toward lower implied vol as spot
+//  rises), reducing delta relative to the frozen-grid sticky-strike delta.
+//  The two modes must give different deltas for any non-zero skew.
+// ─────────────────────────────────────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(testStickyDeltaVsStickyStrike) {
+    BOOST_TEST_MESSAGE("Testing FX local vol: sticky-delta vs sticky-strike deltas differ...");
+
+    FxMarket mkt;
+    // The 3M pillar has rr25=-0.012 (negative, EUR put skew), so the two sticky
+    // modes should give noticeably different deltas.
+    auto option = mkt.makeAtmCall();
+    const Real notional = 1.0e6;
+
+    FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+                                notional,
+                                /*spotBump=*/0.001,
+                                /*volBump=*/0.001,
+                                /*tGrid=*/50, /*xGrid=*/50,
+                                /*lvTimePts=*/15, /*lvStrikePts=*/30);
+
+    FxVanillaGreeks sdG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Delta);
+    FxVanillaGreeks ssG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Strike);
+
+    // Both modes must give positive delta for a call.
+    BOOST_CHECK_MESSAGE(sdG.spotDelta > 0.0,
+        "sticky-delta call spot delta must be >0: " << sdG.spotDelta);
+    BOOST_CHECK_MESSAGE(ssG.spotDelta > 0.0,
+        "sticky-strike call spot delta must be >0: " << ssG.spotDelta);
+
+    // Both modes must give positive NPV.
+    BOOST_CHECK_MESSAGE(sdG.npv > 0.0, "sticky-delta NPV must be >0: " << sdG.npv);
+    BOOST_CHECK_MESSAGE(ssG.npv > 0.0, "sticky-strike NPV must be >0: " << ssG.npv);
+
+    // The NPVs should agree (same model, same vol state at t=0).
+    const Real npvTol = 10.0; // $10 tolerance
+    BOOST_CHECK_MESSAGE(
+        std::fabs(sdG.npv - ssG.npv) < npvTol,
+        "sticky-delta and sticky-strike NPVs should agree: "
+        << "sd=" << sdG.npv << " ss=" << ssG.npv
+        << " diff=" << std::fabs(sdG.npv - ssG.npv));
+
+    // The deltas must differ due to the skew — at least 0.01% relative difference.
+    // With rr25=-0.012, the skew adjustment to delta is typically 1-5% of delta.
+    const Real minRelDiff = 1.0e-4;
+    const Real relDiff = std::fabs(sdG.spotDelta - ssG.spotDelta)
+                         / std::fabs(sdG.spotDelta);
+    BOOST_CHECK_MESSAGE(
+        relDiff > minRelDiff,
+        "sticky-delta and sticky-strike deltas should differ with non-zero skew: "
+        << "sd=" << sdG.spotDelta << " ss=" << ssG.spotDelta
+        << " relDiff=" << relDiff * 100.0 << "%"
+        << " (min expected=" << minRelDiff * 100.0 << "%)");
+
+    // For EURUSD negative RR (put skew): as spot rises the call moves toward
+    // lower delta (lower vol on sticky-delta surface), so sticky-delta < sticky-strike.
+    BOOST_CHECK_MESSAGE(
+        sdG.spotDelta < ssG.spotDelta,
+        "with EUR put skew, sticky-delta should be < sticky-strike: "
+        << "sd=" << sdG.spotDelta << " ss=" << ssG.spotDelta);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE_END()
