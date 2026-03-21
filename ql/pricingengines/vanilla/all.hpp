@@ -41,4 +41,5 @@
 #include <ql/pricingengines/vanilla/mcvanillaengine.hpp>
 #include <ql/pricingengines/vanilla/qdfpamericanengine.hpp>
 #include <ql/pricingengines/vanilla/qdplusamericanengine.hpp>
+#include <ql/pricingengines/vanilla/fxvanillagreeks.hpp>
 
