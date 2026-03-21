@@ -469,30 +469,30 @@ namespace QuantLib {
             {
                 d = BlackDeltaCalculator(Option::Put, ssFinal.deltaType(), spt, ddom, dfor, iw).deltaFromStrike(k);
             }
-            return DeltaVolQuote(d, makeQuoteHandle(v), t, ssFinal.deltaType());
+            return Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(d, makeQuoteHandle(v), t, ssFinal.deltaType()));
         };
 
         std::vector<Handle<DeltaVolQuote>> quotes;
 
         // 10d put
         Real k_p10 = ssFinal.strikeByDelta(-0.10, Option::Put);
-        quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(interpNcp(k_p10))));
+        quotes.push_back(interpNcp(k_p10));
 
         // 25d put
         Real k_p25 = ssFinal.strikeByDelta(-0.25, Option::Put);
-        quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(interpNcp(k_p25))));
+        quotes.push_back(interpNcp(k_p25));
 
         // atm
         Real k_atm = ssFinal.atmLevel();
-        quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(interpNcp(k_atm))));
+        quotes.push_back(interpNcp(k_atm));
 
         // 25c call
         Real k_c25 = ssFinal.strikeByDelta(0.25, Option::Call);
-        quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(interpNcp(k_c25))));
+        quotes.push_back(interpNcp(k_c25));
 
         // 10c call
         Real k_c10 = ssFinal.strikeByDelta(0.10, Option::Call);
-        quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(interpNcp(k_c10))));
+        quotes.push_back(interpNcp(k_c10));
 
         // create and return the smile section
         return Handle<T>(ext::make_shared<T>(t, this->spot(), quotes,
