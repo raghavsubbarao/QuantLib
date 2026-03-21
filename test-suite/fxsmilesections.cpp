@@ -331,19 +331,19 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
     // Build DeltaVolQuote handles: ATM + 4 wing quotes (25D and 10D)
     std::vector<Handle<DeltaVolQuote>> quotes;
     quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(
-        md.v_atm->value(), DeltaVolQuote::Fwd, 1.0, DeltaVolQuote::AtmFwd)));
+        md.v_atm, DeltaVolQuote::Fwd, 1.0, DeltaVolQuote::AtmFwd)));
 
     // 25D put / 25D call
     quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(
-        -0.25, md.v_25p, 1.0, DeltaVolQuote::PaSpot)));
+        -0.25, makeQuoteHandle(md.v_25p), 1.0, DeltaVolQuote::PaSpot)));
     quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(
-        0.25, md.v_25c, 1.0, DeltaVolQuote::PaSpot)));
+        0.25, makeQuoteHandle(md.v_25c), 1.0, DeltaVolQuote::PaSpot)));
 
     // 10D put / 10D call
     quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(
-        -0.10, md.v_10p, 1.0, DeltaVolQuote::PaSpot)));
+        -0.10, makeQuoteHandle(md.v_10p), 1.0, DeltaVolQuote::PaSpot)));
     quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(
-        0.10, md.v_10c, 1.0, DeltaVolQuote::PaSpot)));
+        0.10, makeQuoteHandle(md.v_10c), 1.0, DeltaVolQuote::PaSpot)));
 
     // --- polynomial ---
     {
