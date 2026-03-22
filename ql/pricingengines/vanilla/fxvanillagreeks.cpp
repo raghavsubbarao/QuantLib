@@ -18,6 +18,7 @@
 */
 
 #include <ql/pricingengines/vanilla/fxvanillagreeks.hpp>
+#include <ql/exercise.hpp>
 #include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>
 #include <ql/termstructures/volatility/equityfx/localvolsurface.hpp>
 #include <ql/methods/finitedifferences/solvers/fdmbackwardsolver.hpp>
