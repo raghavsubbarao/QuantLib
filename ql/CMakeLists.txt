@@ -772,6 +772,7 @@ set(QL_SOURCES
     pricingengines/vanilla/mchestonhullwhiteengine.cpp
     pricingengines/vanilla/qdfpamericanengine.cpp
     pricingengines/vanilla/qdplusamericanengine.cpp
+    pricingengines/vanilla/fxvanillagreeks.cpp
     processes/batesprocess.cpp
     processes/blackscholesprocess.cpp
     processes/endeulerdiscretization.cpp
