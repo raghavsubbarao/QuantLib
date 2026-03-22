@@ -32,6 +32,7 @@
 #include <ql/pricingengines/vanilla/fdcirvanillaengine.hpp>
 #include <ql/pricingengines/vanilla/fdsabrvanillaengine.hpp>
 #include <ql/pricingengines/vanilla/fdsimplebsswingengine.hpp>
+#include <ql/pricingengines/vanilla/fxvanillagreeks.hpp>
 #include <ql/pricingengines/vanilla/mcamericanengine.hpp>
 #include <ql/pricingengines/vanilla/mcdigitalengine.hpp>
 #include <ql/pricingengines/vanilla/mceuropeanengine.hpp>
@@ -41,5 +42,4 @@
 #include <ql/pricingengines/vanilla/mcvanillaengine.hpp>
 #include <ql/pricingengines/vanilla/qdfpamericanengine.hpp>
 #include <ql/pricingengines/vanilla/qdplusamericanengine.hpp>
-#include <ql/pricingengines/vanilla/fxvanillagreeks.hpp>
 
