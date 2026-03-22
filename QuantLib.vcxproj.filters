@@ -4449,6 +4449,13 @@
     <ClInclude Include="ql\pricingengines\basket\vectorbsmprocessextractor.hpp">
       <Filter>pricingengines\basket</Filter>
     </ClInclude>
+    <ClInclude Include="ql\termstructures\volatility\equityfx\fxvariancesurface.hpp" />
+    <ClInclude Include="ql\termstructures\volatility\fxcostsmilesection.hpp" />
+    <ClInclude Include="ql\termstructures\volatility\fxsmilesectionbydelta.hpp" />
+    <ClInclude Include="ql\termstructures\volatility\fxsmilesectionbystrike.hpp" />
+    <ClInclude Include="ql\termstructures\volatility\fxsmilesection.hpp" />
+    <ClInclude Include="ql\termstructures\tradingtimetermstructure.hpp" />
+    <ClInclude Include="ql\pricingengines\vanilla\fxvanillagreeks.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ql\methods\montecarlo\brownianbridge.cpp">
@@ -7230,5 +7237,11 @@
     <ClCompile Include="ql\pricingengines\basket\vectorbsmprocessextractor.cpp">
       <Filter>pricingengines\basket</Filter>
     </ClCompile>
+    <ClCompile Include="ql\termstructures\volatility\fxcostsmilesection.cpp" />
+    <ClCompile Include="ql\termstructures\volatility\fxsmilesectionbydelta.cpp" />
+    <ClCompile Include="ql\termstructures\volatility\fxsmilesectionbystrike.cpp" />
+    <ClCompile Include="ql\termstructures\volatility\fxsmilesection.cpp" />
+    <ClCompile Include="ql\termstructures\tradingtimetermstructure.cpp" />
+    <ClCompile Include="ql\pricingengines\vanilla\fxvanillagreeks.cpp" />
   </ItemGroup>
 </Project>
