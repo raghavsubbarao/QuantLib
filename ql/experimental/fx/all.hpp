@@ -3,4 +3,8 @@
 
 #include <ql/experimental/fx/blackdeltacalculator.hpp>
 #include <ql/experimental/fx/deltavolquote.hpp>
+#include <ql/experimental/fx/fxslvpricingcontext.hpp>
+#include <ql/experimental/fx/hestoncalibrator.hpp>
+#include <ql/experimental/fx/slvleveragecalibrator.hpp>
+#include <ql/experimental/fx/stochvolcalibrator.hpp>
 
