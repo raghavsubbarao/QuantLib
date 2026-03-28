@@ -70,6 +70,7 @@ set(QL_TEST_SOURCES
     forwardrateagreement.cpp
     functions.cpp
     fxlocalvol.cpp
+    fxslvmodel.cpp
     fxsmilesections.cpp
     garch.cpp
     gaussianquadratures.cpp
