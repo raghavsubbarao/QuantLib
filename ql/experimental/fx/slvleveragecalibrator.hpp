@@ -27,6 +27,7 @@
 #include <ql/handle.hpp>
 #include <ql/models/equity/hestonmodel.hpp>
 #include <ql/models/equity/hestonslvfdmmodel.hpp>
+#include <ql/models/model.hpp>
 #include <ql/shared_ptr.hpp>
 #include <ql/termstructures/volatility/equityfx/localvoltermstructure.hpp>
 #include <ql/time/date.hpp>
@@ -62,6 +63,16 @@ namespace QuantLib {
     class SLVLeverageCalibrator {
       public:
         virtual ~SLVLeverageCalibrator() = default;
+
+        //! Inject the calibrated stochastic volatility model.
+        /*!
+            Called by \c FxSLVPricingContext after the stochastic vol calibration
+            step, before \c calibrate() is invoked.  Concrete subclasses that need
+            a specific model type (e.g. Heston) should override this and
+            dynamic-cast the argument.  The default implementation is a no-op for
+            subclasses that receive their model at construction time.
+        */
+        virtual void setStochVolModel(const ext::shared_ptr<CalibratedModel>&) {}
 
         //! Calibrate the leverage function.
         /*!
@@ -111,14 +122,16 @@ namespace QuantLib {
         //! \name Construction
         //@{
         /*!
-            \param hestonModel  calibrated Heston model
             \param params       finite-difference solver parameters
             \param mixingFactor blending parameter in [0,1]:
                                 0 = pure local vol, 1 = full SLV
             \param logging      store per-timestep density snapshots for diagnostics
+
+            The Heston model is supplied either via \c setStochVolModel() (when used
+            through \c FxSLVPricingContext) or, for standalone use, via the
+            explicit \c setHestonModel() method before calling \c calibrate().
         */
         explicit HestonSLVLeverageCalibrator(
-            Handle<HestonModel> hestonModel,
             HestonSLVFokkerPlanckFdmParams params = defaultParams(),
             Real mixingFactor = 1.0,
             bool logging = false);
@@ -129,6 +142,9 @@ namespace QuantLib {
 
         //! \name SLVLeverageCalibrator interface
         //@{
+        //! Accepts a \c HestonModel; throws if the dynamic cast fails.
+        void setStochVolModel(const ext::shared_ptr<CalibratedModel>& model) override;
+
         void calibrate(const Handle<LocalVolTermStructure>& localVol,
                        const Date& endDate,
                        const std::vector<Date>& mandatoryDates = {}) override;
@@ -136,15 +152,18 @@ namespace QuantLib {
         ext::shared_ptr<LocalVolTermStructure> leverageFunction() const override;
         //@}
 
+        //! Convenience setter for standalone use (bypasses the CalibratedModel cast).
+        void setHestonModel(const ext::shared_ptr<HestonModel>& model);
+
         //! Access the underlying FDM model (e.g. to inspect log entries).
         ext::shared_ptr<HestonSLVFDMModel> fdmModel() const;
 
       private:
-        const Handle<HestonModel> hestonModel_;
         const HestonSLVFokkerPlanckFdmParams params_;
         const Real mixingFactor_;
         const bool logging_;
 
+        ext::shared_ptr<HestonModel> hestonModel_;
         ext::shared_ptr<HestonSLVFDMModel> fdmModel_;
     };
 

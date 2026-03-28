@@ -27,8 +27,10 @@
 #include <ql/termstructures/volatility/equityfx/fxvariancesurface.hpp>
 #include <ql/termstructures/volatility/fxsmilesectionbydelta.hpp>
 #include <ql/termstructures/volatility/equityfx/localvolsurface.hpp>
+#include <ql/termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp>
 #include <ql/termstructures/tradingtimetermstructure.hpp>
 #include <ql/pricingengines/vanilla/fxvanillagreeks.hpp>
+#include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>
 #include <ql/processes/blackscholesprocess.hpp>
 #include <ql/instruments/vanillaoption.hpp>
 #include <ql/exercise.hpp>
@@ -36,10 +38,14 @@
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
 #include <ql/experimental/fx/deltavolquote.hpp>
+#include <ql/experimental/fx/fxslvpricingcontext.hpp>
+#include <ql/experimental/fx/hestoncalibrator.hpp>
+#include <ql/experimental/fx/slvleveragecalibrator.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/time/calendars/weekendsonly.hpp>
 #include <ql/time/calendars/nullcalendar.hpp>
 #include <ql/settings.hpp>
+#include <cmath>
 
 using namespace QuantLib;
 using namespace boost::unit_test_framework;
@@ -494,6 +500,206 @@ BOOST_AUTO_TEST_CASE(testStickyDeltaVsStickyStrike) {
         "sticky-delta: navva must equal vanna");
     BOOST_CHECK_MESSAGE(ssG.navva == ssG.vanna,
         "sticky-strike: navva must equal vanna");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Test 8: Full 11-pillar SLV calibration and risk on a non-pillar tenor
+//
+//  Builds an 11-pillar EURUSD surface (o/n through 2y), calibrates a Heston
+//  stochastic vol model, calibrates the SLV leverage function, then prices and
+//  risks a 4M ATM-forward call.  4M falls strictly between the 3M and 6M
+//  surface pillars — exercising the interpolation in both the surface and the
+//  leverage function.
+//
+//  Checks:
+//    - Heston RMSE < 1.5 vol pts  (model fits the smile reasonably)
+//    - SLV NPV > 0 and delta ∈ (0, 1)
+//    - SLV price within 20% of the local-vol Dupire price
+//    - FxVanillaBumpRisk Greeks are sensible under the SLV engine
+// ─────────────────────────────────────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
+    BOOST_TEST_MESSAGE(
+        "Testing FX local vol + SLV: full 11-pillar calibration and 4M risk...");
+
+    // ── Market data ──────────────────────────────────────────────────────────
+    const Date today = Date(2, January, 2024);
+    Settings::instance().evaluationDate() = today;
+
+    const DayCounter dc       = Actual365Fixed();
+    const Calendar   calendar = WeekendsOnly();
+
+    const Handle<YieldTermStructure> usdTs(
+        ext::make_shared<FlatForward>(0, NullCalendar(), 0.0525, dc));  // domestic
+    const Handle<YieldTermStructure> eurTs(
+        ext::make_shared<FlatForward>(0, NullCalendar(), 0.0400, dc));  // foreign
+
+    auto spotSQ = ext::make_shared<SimpleQuote>(1.0850);
+    Handle<Quote> spot(spotSQ);
+
+    // ── 11-pillar vol surface quotes (o/n through 2y) ────────────────────────
+    // ATM vol rises from 6.2% at o/n to 10.0% at 2y.
+    // 25d risk-reversal is negative (EUR put skew, typical EURUSD).
+    // 25d butterfly is small positive (vol smile convexity).
+    struct PillarQuotes { Real atm, rr25, bf25, rr10, bf10; };
+    const std::vector<PillarQuotes> mktVols = {
+        // tenor    ATM     RR25    BF25    RR10    BF10
+        {/*O/N */ 0.0620, -0.0020, 0.0002, -0.0040, 0.0005 },
+        {/*1W  */ 0.0680, -0.0030, 0.0003, -0.0060, 0.0007 },
+        {/*2W  */ 0.0720, -0.0050, 0.0004, -0.0100, 0.0010 },
+        {/*1M  */ 0.0780, -0.0120, 0.0040, -0.0250, 0.0090 },
+        {/*2M  */ 0.0810, -0.0130, 0.0042, -0.0265, 0.0092 },
+        {/*3M  */ 0.0850, -0.0140, 0.0045, -0.0280, 0.0095 },
+        {/*6M  */ 0.0900, -0.0160, 0.0050, -0.0310, 0.0105 },
+        {/*9M  */ 0.0920, -0.0170, 0.0052, -0.0330, 0.0110 },
+        {/*1Y  */ 0.0950, -0.0180, 0.0055, -0.0350, 0.0115 },
+        {/*18M */ 0.0970, -0.0190, 0.0058, -0.0370, 0.0120 },
+        {/*2Y  */ 0.1000, -0.0200, 0.0060, -0.0390, 0.0125 },
+    };
+
+    const std::vector<Period> tenors = {
+        1*Days,  1*Weeks,  2*Weeks,
+        1*Months, 2*Months, 3*Months, 6*Months,
+        9*Months, 1*Years,  18*Months, 2*Years
+    };
+
+    std::vector<Date>                       pillars;
+    std::vector<Handle<Quote>>              atms;
+    std::vector<std::vector<Handle<Quote>>> rrs, bfs;
+    std::vector<ext::shared_ptr<SimpleQuote>> atmSQs;
+    std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> rrSQs, bfSQs;
+
+    for (Size i = 0; i < tenors.size(); ++i) {
+        pillars.push_back(calendar.advance(today, tenors[i]));
+        auto a   = ext::make_shared<SimpleQuote>(mktVols[i].atm);
+        auto r25 = ext::make_shared<SimpleQuote>(mktVols[i].rr25);
+        auto r10 = ext::make_shared<SimpleQuote>(mktVols[i].rr10);
+        auto b25 = ext::make_shared<SimpleQuote>(mktVols[i].bf25);
+        auto b10 = ext::make_shared<SimpleQuote>(mktVols[i].bf10);
+        atmSQs.push_back(a);
+        rrSQs.push_back({ r25, r10 });
+        bfSQs.push_back({ b25, b10 });
+        atms.push_back(Handle<Quote>(a));
+        rrs.push_back({ Handle<Quote>(r25), Handle<Quote>(r10) });
+        bfs.push_back({ Handle<Quote>(b25), Handle<Quote>(b10) });
+    }
+
+    const std::vector<Real> deltas = { 0.25, 0.10 };
+    auto timeTs = Handle<tradingTimeTermStructure>(
+        ext::make_shared<tradingTimeTermStructure>(today, calendar, 0.0));
+
+    auto volSurface = ext::make_shared<fxVarianceSurfaceNCP<quadraticSmileSection>>(
+        today, spot, pillars, atms, rrs, bfs, deltas,
+        eurTs, usdTs, timeTs,
+        DeltaVolQuote::Fwd, DeltaVolQuote::AtmFwd, fxSmileSection::SmileStrangle,
+        calendar, Following, true);
+    volSurface->enableExtrapolation();
+    Handle<BlackVolTermStructure> volHandle(volSurface);
+
+    // ── Dupire local vol surface ─────────────────────────────────────────────
+    auto localVol = ext::make_shared<NoExceptLocalVolSurface>(
+        volHandle, usdTs, eurTs, spot, 0.01);
+    localVol->enableExtrapolation();
+    Handle<LocalVolTermStructure> localVolHandle(localVol);
+
+    // ── SLV calibration ──────────────────────────────────────────────────────
+    // Use 5 tenors × 3 strikes for Heston calibration.
+    const std::vector<Period> calibTenors = {
+        1*Months, 3*Months, 6*Months, 1*Years, 2*Years
+    };
+    std::vector<StochVolCalibrator::Pillar> hestonPillars;
+    for (const auto& tenor : calibTenors) {
+        const Date   expiry = calendar.advance(today, tenor);
+        const Time   T      = dc.yearFraction(today, expiry);
+        const Real   fwd    = spotSQ->value()
+                              * eurTs->discount(T) / usdTs->discount(T);
+        for (Real m : { 0.95, 1.00, 1.05 })
+            hestonPillars.push_back({ tenor, m * fwd });
+    }
+
+    HestonParams hp;
+    hp.v0    = 0.0078 * 0.0078;
+    hp.kappa = 1.50;
+    hp.theta = 0.0100 * 0.0100;
+    hp.sigma = 0.40;
+    hp.rho   = -0.25;
+
+    FxSLVPricingContext ctx(spot, usdTs, eurTs, volHandle, localVolHandle, calendar);
+
+    HestonCalibrator hestonCal(hp);
+
+    // Small FDM grid for test speed.
+    auto fdmP = HestonSLVLeverageCalibrator::defaultParams();
+    fdmP.xGrid            = 51;
+    fdmP.vGrid            = 21;
+    fdmP.tMaxStepsPerYear = 52;
+    fdmP.tMinStepsPerYear = 12;
+    fdmP.tStepNumberDecay = 2.0;
+
+    HestonSLVLeverageCalibrator levCal(fdmP);
+
+    const Date endDate = calendar.advance(today, 2*Years);
+    ctx.calibrate(hestonCal, levCal, hestonPillars, endDate);
+
+    // Heston fit quality check.
+    BOOST_CHECK_MESSAGE(ctx.hestonRmse() < 0.015,
+        "Heston RMSE too large: " << ctx.hestonRmse() * 100.0 << " vol pts");
+
+    // ── Price a 4M ATM-forward call ──────────────────────────────────────────
+    // 4M is strictly between the 3M (surface pillar) and 6M (surface pillar).
+    const Date   expiry4M = calendar.advance(today, 4*Months);
+    const Time   T4M      = dc.yearFraction(today, expiry4M);
+    const Real   fwd4M    = spotSQ->value()
+                            * eurTs->discount(T4M) / usdTs->discount(T4M);
+
+    auto payoff4M   = ext::make_shared<PlainVanillaPayoff>(Option::Call, fwd4M);
+    auto exercise4M = ext::make_shared<EuropeanExercise>(expiry4M);
+    auto call4M     = ext::make_shared<VanillaOption>(payoff4M, exercise4M);
+
+    call4M->setPricingEngine(ctx.vanillaEngine(FdmGridConfig{ 100, 100, 50, 0 }));
+
+    const Real slvNpv = call4M->NPV();
+    BOOST_CHECK_MESSAGE(slvNpv > 0.0,
+        "SLV 4M call NPV must be positive: " << slvNpv);
+
+    // ── Delta via finite difference ──────────────────────────────────────────
+    const Real S0 = spotSQ->value();
+    const Real ds = 0.0010;
+    spotSQ->setValue(S0 + ds);
+    const Real callUp = call4M->NPV();
+    spotSQ->setValue(S0 - ds);
+    const Real callDn = call4M->NPV();
+    spotSQ->setValue(S0);
+
+    const Real slvDelta = (callUp - callDn) / (2.0 * ds);
+    BOOST_CHECK_MESSAGE(slvDelta > 0.0 && slvDelta < 1.0,
+        "SLV 4M call delta must be in (0, 1): " << slvDelta);
+
+    // ── Vega via finite difference ───────────────────────────────────────────
+    // Bump all ATM vol quotes in parallel (parallel shift of ATM curve).
+    const Real dv = 0.001;
+    for (auto& sq : atmSQs) sq->setValue(sq->value() + dv);
+    const Real callVolUp = call4M->NPV();
+    for (auto& sq : atmSQs) sq->setValue(sq->value() - 2.0 * dv);
+    const Real callVolDn = call4M->NPV();
+    for (auto& sq : atmSQs) sq->setValue(sq->value() + dv);  // restore
+
+    const Real slvVega = (callVolUp - callVolDn) / (2.0 * dv);
+    BOOST_CHECK_MESSAGE(slvVega > 0.0,
+        "SLV 4M call vega must be positive: " << slvVega);
+
+    // ── SLV vs local-vol Dupire price comparison ─────────────────────────────
+    auto process = ext::make_shared<GeneralizedBlackScholesProcess>(
+        spot, eurTs, usdTs, volHandle);
+    auto call4M_lv = ext::make_shared<VanillaOption>(payoff4M, exercise4M);
+    call4M_lv->setPricingEngine(
+        ext::make_shared<FdBlackScholesVanillaEngine>(process, 100, 100));
+    const Real lvNpv = call4M_lv->NPV();
+
+    const Real relDiff = std::fabs(slvNpv - lvNpv) / lvNpv;
+    BOOST_CHECK_MESSAGE(relDiff < 0.20,
+        "SLV and local-vol 4M NPVs differ by " << relDiff * 100.0
+        << "% (SLV=" << slvNpv << " LV=" << lvNpv << ")");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

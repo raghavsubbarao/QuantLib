@@ -71,6 +71,7 @@ QL_TEST_SRCS = \
 	forwardrateagreement.cpp \
 	functions.cpp \
 	fxlocalvol.cpp \
+	fxslvmodel.cpp \
 	fxsmilesections.cpp \
 	garch.cpp \
 	gaussianquadratures.cpp \

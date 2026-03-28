@@ -67,7 +67,9 @@ namespace QuantLib {
         hestonErrors_  = hestonCal.calibrationErrors();
         hestonRmse_    = hestonCal.rmse();
 
-        // Step 2 — Calibrate the leverage function L(t,S) via Fokker-Planck PDE.
+        // Step 2 — Inject the calibrated model into the leverage calibrator, then
+        // solve the Fokker-Planck PDE for L(t,S).
+        leverageCal.setStochVolModel(hestonModel_);
         leverageCal.calibrate(localVol_, leverageEndDate, mandatoryDates);
 
         leverageFunction_ = leverageCal.leverageFunction();

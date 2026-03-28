@@ -25,12 +25,10 @@
 namespace QuantLib {
 
     HestonSLVLeverageCalibrator::HestonSLVLeverageCalibrator(
-        Handle<HestonModel> hestonModel,
         HestonSLVFokkerPlanckFdmParams params,
         Real mixingFactor,
         bool logging)
-    : hestonModel_(std::move(hestonModel)), params_(params),
-      mixingFactor_(mixingFactor), logging_(logging) {
+    : params_(params), mixingFactor_(mixingFactor), logging_(logging) {
         QL_REQUIRE(mixingFactor_ >= 0.0 && mixingFactor_ <= 1.0,
                    "HestonSLVLeverageCalibrator: mixingFactor must be in [0,1], got "
                    << mixingFactor_);
@@ -75,19 +73,35 @@ namespace QuantLib {
         };
     }
 
+    void HestonSLVLeverageCalibrator::setStochVolModel(
+        const ext::shared_ptr<CalibratedModel>& model) {
+        auto heston = ext::dynamic_pointer_cast<HestonModel>(model);
+        QL_REQUIRE(heston,
+                   "HestonSLVLeverageCalibrator::setStochVolModel: "
+                   "model must be a HestonModel");
+        hestonModel_ = heston;
+    }
+
+    void HestonSLVLeverageCalibrator::setHestonModel(
+        const ext::shared_ptr<HestonModel>& model) {
+        QL_REQUIRE(model, "HestonSLVLeverageCalibrator::setHestonModel: null model");
+        hestonModel_ = model;
+    }
+
     void HestonSLVLeverageCalibrator::calibrate(
         const Handle<LocalVolTermStructure>& localVol,
         const Date& endDate,
         const std::vector<Date>& mandatoryDates) {
 
-        QL_REQUIRE(!hestonModel_.empty(),
-                   "HestonSLVLeverageCalibrator: Heston model handle is empty");
+        QL_REQUIRE(hestonModel_,
+                   "HestonSLVLeverageCalibrator: Heston model has not been set; "
+                   "call setStochVolModel() or setHestonModel() before calibrate()");
         QL_REQUIRE(!localVol.empty(),
                    "HestonSLVLeverageCalibrator: local vol handle is empty");
 
         fdmModel_ = ext::make_shared<HestonSLVFDMModel>(
             localVol,
-            hestonModel_,
+            Handle<HestonModel>(hestonModel_),
             endDate,
             params_,
             logging_,
