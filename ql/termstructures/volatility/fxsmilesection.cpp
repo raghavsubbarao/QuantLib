@@ -347,6 +347,9 @@ namespace QuantLib {
 
         Bisection solver;
         solver.setMaxEvaluations(10000);
+        /*Real cd = normedProbability(fwd_ / 10);
+        Real c0 = normedProbability(fwd_);
+        Real cu = normedProbability(fwd_ * 10);*/
         return solver.solve([&](Rate strike) { return normProbError(strike); }, 
                                 1e-12, fwd_, fwd_ / 10., fwd_ * 10.);
     }

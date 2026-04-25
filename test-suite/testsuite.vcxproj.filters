@@ -534,6 +534,9 @@
     <ClCompile Include="fxlocalvol.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="fxslvmodel.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="paralleltestrunner.hpp">

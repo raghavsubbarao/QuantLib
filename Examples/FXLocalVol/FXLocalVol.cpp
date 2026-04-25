@@ -49,7 +49,7 @@
 
 // FX vol surface
 #include <ql/termstructures/volatility/equityfx/fxvariancesurface.hpp>
-#include <ql/termstructures/volatility/fxsmilesectionbydelta.hpp>
+#include <ql/termstructures/volatility/fxsmilesectionbystrike.hpp>
 #include <ql/termstructures/tradingtimetermstructure.hpp>
 
 // SLV calibration framework
@@ -137,7 +137,6 @@ int main(int, char*[]) {
         // ──────────────────────────────────────────────────────────────────────
         //  1. Market data
         // ──────────────────────────────────────────────────────────────────────
-
         Date today(2, January, 2024);
         Settings::instance().evaluationDate() = today;
         DayCounter dc = Actual365Fixed();
@@ -145,13 +144,10 @@ int main(int, char*[]) {
         auto spotSQ = ext::make_shared<SimpleQuote>(1.0850);
         Handle<Quote> spot(spotSQ);
 
-        Handle<YieldTermStructure> eurTs(
-            ext::make_shared<FlatForward>(0, NullCalendar(), 0.0400, dc));
-        Handle<YieldTermStructure> usdTs(
-            ext::make_shared<FlatForward>(0, NullCalendar(), 0.0525, dc));
+        Handle<YieldTermStructure> eurTs(ext::make_shared<FlatForward>(0, NullCalendar(), 0.0400, dc));
+        Handle<YieldTermStructure> usdTs(ext::make_shared<FlatForward>(0, NullCalendar(), 0.0525, dc));
 
-        Handle<tradingTimeTermStructure> timeTs(
-            ext::make_shared<tradingTimeTermStructure>(today, WeekendsOnly(), 0.0));
+        Handle<tradingTimeTermStructure> timeTs(ext::make_shared<tradingTimeTermStructure>(today, WeekendsOnly(), 0.0));
 
         DeltaVolQuote::DeltaType  deltaType = DeltaVolQuote::Fwd;
         DeltaVolQuote::AtmType    atmType   = DeltaVolQuote::AtmFwd;
@@ -159,15 +155,11 @@ int main(int, char*[]) {
 
         // Eleven pillar tenors: O/N through 2Y, generated from the reference date.
         const Calendar calendar = WeekendsOnly();
-        const std::vector<Period> tenors = {
-            1*Days,   1*Weeks,  2*Weeks,
-            1*Months, 2*Months, 3*Months,
-            6*Months, 9*Months, 1*Years,
-            18*Months, 2*Years
-        };
-        const std::vector<std::string> tenorLabels = {
-            "O/N","1W","2W","1M","2M","3M","6M","9M","1Y","18M","2Y"
-        };
+        const std::vector<Period> tenors = {1*Days, 1*Weeks, 2*Weeks,
+                                            1*Months, 2*Months, 3*Months,
+                                            6*Months, 9*Months, 1*Years,
+                                            18*Months, 2*Years};
+        const std::vector<std::string> tenorLabels = {"O/N","1W","2W","1M","2M","3M","6M","9M","1Y","18M","2Y"};
 
         std::vector<Date> pillars;
         pillars.reserve(tenors.size());
@@ -179,79 +171,71 @@ int main(int, char*[]) {
         // Negative RR = EUR put skew (standard EURUSD convention).
         // Positive BF = convexity (smile is not flat in strike space).
         struct PillarVols { Real atm, rr25, bf25, rr10, bf10; };
-        const std::vector<PillarVols> mkt = {
-            // tenor  ATM     RR25    BF25    RR10    BF10
-            { 0.0620, -0.0020, 0.0002, -0.0040, 0.0005 }, // O/N
-            { 0.0680, -0.0030, 0.0003, -0.0060, 0.0007 }, // 1W
-            { 0.0720, -0.0050, 0.0004, -0.0100, 0.0010 }, // 2W
-            { 0.0780, -0.0120, 0.0040, -0.0250, 0.0090 }, // 1M
-            { 0.0810, -0.0130, 0.0042, -0.0265, 0.0092 }, // 2M
-            { 0.0850, -0.0140, 0.0045, -0.0280, 0.0095 }, // 3M
-            { 0.0900, -0.0160, 0.0050, -0.0310, 0.0105 }, // 6M
-            { 0.0920, -0.0170, 0.0052, -0.0330, 0.0110 }, // 9M
-            { 0.0950, -0.0180, 0.0055, -0.0350, 0.0115 }, // 1Y
-            { 0.0970, -0.0190, 0.0058, -0.0370, 0.0120 }, // 18M
-            { 0.1000, -0.0200, 0.0060, -0.0390, 0.0125 }, // 2Y
-        };
+        const std::vector<PillarVols> mkt = {// ATM     RR25    BF25    RR10    BF10
+                                             { 0.0620, -0.0020, 0.0002, -0.0040, 0.0005 }, // O/N
+                                             { 0.0680, -0.0030, 0.0003, -0.0060, 0.0007 }, // 1W
+                                             { 0.0720, -0.0050, 0.0004, -0.0100, 0.0010 }, // 2W
+                                             { 0.0780, -0.0120, 0.0040, -0.0250, 0.0090 }, // 1M
+                                             { 0.0810, -0.0130, 0.0042, -0.0265, 0.0092 }, // 2M
+                                             { 0.0850, -0.0140, 0.0045, -0.0280, 0.0095 }, // 3M
+                                             { 0.0900, -0.0160, 0.0050, -0.0310, 0.0105 }, // 6M
+                                             { 0.0920, -0.0170, 0.0052, -0.0330, 0.0110 }, // 9M
+                                             { 0.0950, -0.0180, 0.0055, -0.0350, 0.0115 }, // 1Y
+                                             { 0.0970, -0.0190, 0.0058, -0.0370, 0.0120 }, // 18M
+                                             { 0.1000, -0.0200, 0.0060, -0.0390, 0.0125 }, // 2Y
+                                            };
 
         std::vector<Real> deltas = { 0.25, 0.10 };
 
-        // Build all quote handles, keeping SimpleQuote* for bumping.
+        // Build all quote handles
         std::vector<Handle<Quote>> atms;
-        std::vector<std::vector<Handle<Quote>>> rrs(pillars.size()),
-                                                 bfs(pillars.size());
-        std::vector<ext::shared_ptr<SimpleQuote>> atmSQs;
+        std::vector<std::vector<Handle<Quote>>> rrs(pillars.size()), bfs(pillars.size());
 
-        // Per-pillar RR and BF SimpleQuotes for rega/sega.
-        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> rrPillarSQs(pillars.size());
-        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> bfPillarSQs(pillars.size());
+        // Per-pillar ATM, RR and BF SimpleQuotes for bumping rega/sega
+        std::vector<ext::shared_ptr<SimpleQuote>> atmBumps;
+        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> rrBumps(pillars.size());
+        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> bfBumps(pillars.size());
         std::vector<Time> rrPillarTimes(pillars.size()), bfPillarTimes(pillars.size());
 
         for (Size i = 0; i < pillars.size(); ++i) {
-            auto atmSQ  = ext::make_shared<SimpleQuote>(mkt[i].atm);
-            auto rr25SQ = ext::make_shared<SimpleQuote>(mkt[i].rr25);
-            auto rr10SQ = ext::make_shared<SimpleQuote>(mkt[i].rr10);
-            auto bf25SQ = ext::make_shared<SimpleQuote>(mkt[i].bf25);
-            auto bf10SQ = ext::make_shared<SimpleQuote>(mkt[i].bf10);
+            auto atmBump  = ext::make_shared<SimpleQuote>(mkt[i].atm);
+            auto rr25Bump = ext::make_shared<SimpleQuote>(mkt[i].rr25);
+            auto rr10Bump = ext::make_shared<SimpleQuote>(mkt[i].rr10);
+            auto bf25Bump = ext::make_shared<SimpleQuote>(mkt[i].bf25);
+            auto bf10Bump = ext::make_shared<SimpleQuote>(mkt[i].bf10);
 
-            atmSQs.push_back(atmSQ);
-            rrPillarSQs[i] = { rr25SQ, rr10SQ };
-            bfPillarSQs[i] = { bf25SQ, bf10SQ };
+            atmBumps.push_back(atmBump);
+            rrBumps[i] = {rr25Bump, rr10Bump};
+            bfBumps[i] = {bf25Bump, bf10Bump};
 
             const Time T = dc.yearFraction(today, pillars[i]);
             rrPillarTimes[i] = bfPillarTimes[i] = T;
 
-            atms.push_back(Handle<Quote>(atmSQ));
-            rrs[i] = { Handle<Quote>(rr25SQ), Handle<Quote>(rr10SQ) };
-            bfs[i] = { Handle<Quote>(bf25SQ), Handle<Quote>(bf10SQ) };
+            atms.push_back(Handle<Quote>(atmBump));
+            rrs[i] = {Handle<Quote>(rr25Bump), Handle<Quote>(rr10Bump)};
+            bfs[i] = {Handle<Quote>(bf25Bump), Handle<Quote>(bf10Bump)};
         }
 
         // ──────────────────────────────────────────────────────────────────────
         //  2. Calibrate the FX variance surface
         // ──────────────────────────────────────────────────────────────────────
-
-        auto fxVolSurface = ext::make_shared<fxVarianceSurfaceNCP<quadraticSmileSection>>(
-            today, spot, pillars, atms, rrs, bfs, deltas,
-            eurTs, usdTs, timeTs,
-            deltaType, atmType, flyType,
-            calendar, Following, true);
+        auto fxVolSurface = ext::make_shared<fxVarianceSurfaceNCP<fxSabrSmileSection>>(today, spot, pillars, atms, rrs, bfs, deltas,
+                                                                                       eurTs, usdTs, timeTs, deltaType, atmType, flyType,
+                                                                                       calendar, Following, true);
 
         fxVolSurface->enableExtrapolation();
 
         // ──────────────────────────────────────────────────────────────────────
         //  3. Build the GeneralizedBlackScholesProcess
         // ──────────────────────────────────────────────────────────────────────
-
-        auto process = ext::make_shared<GeneralizedBlackScholesProcess>(
-            spot,
-            eurTs,  // dividendYield = foreign (EUR) rate
-            usdTs,  // riskFreeRate  = domestic (USD) rate
-            Handle<BlackVolTermStructure>(fxVolSurface));
+        auto process = ext::make_shared<GeneralizedBlackScholesProcess>(spot,
+                                                                        eurTs,  // dividendYield = foreign (EUR) rate
+                                                                        usdTs,  // riskFreeRate  = domestic (USD) rate
+                                                                        Handle<BlackVolTermStructure>(fxVolSurface));
 
         // ──────────────────────────────────────────────────────────────────────
         //  4. Define the option: 3M EUR call at ATM forward
         // ──────────────────────────────────────────────────────────────────────
-
         Date expiryDate = pillars[5]; // 3M pillar (index 5 in the 11-pillar set)
         Time T          = dc.yearFraction(today, expiryDate);
         Real Bd         = usdTs->discount(T);
@@ -262,12 +246,14 @@ int main(int, char*[]) {
         auto payoff   = ext::make_shared<PlainVanillaPayoff>(Option::Call, strike);
         auto exercise = ext::make_shared<EuropeanExercise>(expiryDate);
         auto option   = ext::make_shared<VanillaOption>(payoff, exercise);
+        Real iv = fxVolSurface->blackVol(T, strike);
 
         // ──────────────────────────────────────────────────────────────────────
         //  Print market data summary
         // ──────────────────────────────────────────────────────────────────────
 
         std::cout << std::fixed << std::setprecision(4);
+        std::cout << iv << "\n";
         std::cout << "\n  Market data:\n"
                   << "    Reference date  : " << today << "\n"
                   << "    Spot (EURUSD)   : " << spot->value() << "\n"
@@ -310,18 +296,17 @@ int main(int, char*[]) {
         // ──────────────────────────────────────────────────────────────────────
         //  5. Compute Greeks
         // ──────────────────────────────────────────────────────────────────────
-
-        FxVanillaBumpRisk riskCalc(
-            option, process, spotSQ, atmSQs,
-            rrPillarSQs, rrPillarTimes,
-            bfPillarSQs, bfPillarTimes,
-            notional,
-            /*spotBump=*/0.001,
-            /*volBump=*/0.001,
-            /*rrBump=*/0.001,
-            /*bfBump=*/0.001,
-            /*tGrid=*/100,
-            /*xGrid=*/100);
+        FxVanillaBumpRisk riskCalc(option, process, spotSQ, atmBumps,
+                                   rrBumps, rrPillarTimes,
+                                   bfBumps, bfPillarTimes,
+                                   notional,
+                                   0.001, /*spotBump=*/
+                                   0.001, /*volBump=*/
+                                   0.001, /*rrBump=*/
+                                   0.001, /*bfBump=*/
+                                   100, /*tGrid=*/
+                                   100 /*xGrid=*/
+                                   );
 
         FxVanillaGreeks bsGreeks = riskCalc.calculate(/*localVol=*/false);
         FxVanillaGreeks lvGreeks = riskCalc.calculate(/*localVol=*/true);
@@ -329,7 +314,6 @@ int main(int, char*[]) {
         // ──────────────────────────────────────────────────────────────────────
         //  Print pricing comparison
         // ──────────────────────────────────────────────────────────────────────
-
         printSeparator();
         std::cout << "  Pricing comparison  (notional = EUR 1,000,000)\n";
         printSeparator();
@@ -342,13 +326,13 @@ int main(int, char*[]) {
                   << "  " << std::string(wa + wb, '-') << "\n"
                   << "  " << std::setw(wa) << std::left << "Black-Scholes FD"
                   << std::setw(wb) << std::right << std::fixed
-                  << std::setprecision(2) << bsGreeks.npv
+                  //<< std::setprecision(2) << bsGreeks.npv
                   << "\n"
                   << "  " << std::setw(wa) << std::left << "Local vol Dupire FD"
                   << std::setw(wb) << std::right << lvGreeks.npv
                   << "\n"
                   << "  " << std::setw(wa) << std::left << "Difference"
-                  << std::setw(wb) << std::right << (lvGreeks.npv - bsGreeks.npv)
+                  //<< std::setw(wb) << std::right << (lvGreeks.npv - bsGreeks.npv)
                   << "\n";
 
         // ──────────────────────────────────────────────────────────────────────
@@ -359,7 +343,7 @@ int main(int, char*[]) {
         std::cout << "  Greeks  (notional = EUR 1,000,000)\n";
         printSeparator();
 
-        printGreeks("Black-Scholes FD (sticky-delta)", bsGreeks);
+        //printGreeks("Black-Scholes FD (sticky-delta)", bsGreeks);
         printGreeks("Local vol Dupire FD (sticky-delta)", lvGreeks);
 
         std::cout << "\n  Notes on rega/sega time-scaling:\n"
@@ -667,11 +651,11 @@ int main(int, char*[]) {
 
         // ── Vega: parallel bump of all ATM vol quotes ─────────────────────────
         const Real dVol = 0.001;  // 10 bp absolute
-        for (auto& sq : atmSQs) sq->setValue(sq->value() + dVol);
+        for (auto& sq : atmBumps) sq->setValue(sq->value() + dVol);
         const Real slvVolUp = call4M->NPV() * notional;
-        for (auto& sq : atmSQs) sq->setValue(sq->value() - 2.0 * dVol);
+        for (auto& sq : atmBumps) sq->setValue(sq->value() - 2.0 * dVol);
         const Real slvVolDn = call4M->NPV() * notional;
-        for (auto& sq : atmSQs) sq->setValue(sq->value() + dVol);  // restore
+        for (auto& sq : atmBumps) sq->setValue(sq->value() + dVol);  // restore
 
         // Scale to "per 1% (100bp) vol move"
         const Real slvVega = (slvVolUp - slvVolDn) / (2.0 * dVol) * 0.01;
