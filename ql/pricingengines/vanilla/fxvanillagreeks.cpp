@@ -35,33 +35,25 @@ namespace QuantLib {
         const Real T_1M = 1.0 / 12.0;
     }
 
-    FxVanillaBumpRisk::FxVanillaBumpRisk(
-        ext::shared_ptr<VanillaOption> option,
-        ext::shared_ptr<GeneralizedBlackScholesProcess> process,
-        ext::shared_ptr<SimpleQuote> spotQuote,
-        std::vector<ext::shared_ptr<SimpleQuote>> atmVolQuotes,
-        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> rrPillarQuotes,
-        std::vector<Time> rrPillarTimes,
-        std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> bfPillarQuotes,
-        std::vector<Time> bfPillarTimes,
-        Real notional,
-        Real spotBump,
-        Real volBump,
-        Real rrBump,
-        Real bfBump,
-        Size tGrid,
-        Size xGrid,
-        Size lvTimePts,
-        Size lvStrikePts,
-        Real lvStrikeSpread)
+    FxVanillaBumpRisk::FxVanillaBumpRisk(ext::shared_ptr<VanillaOption> option,
+                                         ext::shared_ptr<GeneralizedBlackScholesProcess> process,
+                                         ext::shared_ptr<SimpleQuote> spotQuote,
+                                         std::vector<ext::shared_ptr<SimpleQuote>> atmVolQuotes,
+                                         std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> rrPillarQuotes,
+                                         std::vector<Time> rrPillarTimes,
+                                         std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> bfPillarQuotes,
+                                         std::vector<Time> bfPillarTimes,
+                                         Real notional, Real spotBump, Real volBump,
+                                         Real rrBump, Real bfBump, Size tGrid,
+                                         Size xGrid, Size lvTimePts, Size lvStrikePts, Real lvStrikeSpread)
     : option_(std::move(option)), process_(std::move(process)),
       spotQuote_(std::move(spotQuote)), atmVolQuotes_(std::move(atmVolQuotes)),
       rrPillarQuotes_(std::move(rrPillarQuotes)), rrPillarTimes_(std::move(rrPillarTimes)),
       bfPillarQuotes_(std::move(bfPillarQuotes)), bfPillarTimes_(std::move(bfPillarTimes)),
       notional_(notional), spotBump_(spotBump), volBump_(volBump),
-      rrBump_(rrBump), bfBump_(bfBump),
-      tGrid_(tGrid), xGrid_(xGrid),
-      lvTimePts_(lvTimePts), lvStrikePts_(lvStrikePts), lvStrikeSpread_(lvStrikeSpread) {
+      rrBump_(rrBump), bfBump_(bfBump), tGrid_(tGrid), xGrid_(xGrid),
+      lvTimePts_(lvTimePts), lvStrikePts_(lvStrikePts), lvStrikeSpread_(lvStrikeSpread) 
+    {
         QL_REQUIRE(spotQuote_ != nullptr, "null spot quote");
         QL_REQUIRE(!atmVolQuotes_.empty(), "at least one ATM vol quote required");
         QL_REQUIRE(rrPillarQuotes_.size() == rrPillarTimes_.size(),
@@ -77,16 +69,14 @@ namespace QuantLib {
         QL_REQUIRE(lvStrikeSpread_ > 0.0, "lvStrikeSpread must be positive");
     }
 
-    ext::shared_ptr<PricingEngine>
-    FxVanillaBumpRisk::makeEngineFor(
-        const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc,
-        bool localVol) const {
-        return ext::make_shared<FdBlackScholesVanillaEngine>(
-            proc, tGrid_, xGrid_,
-            /*dampingSteps=*/0,
-            FdmSchemeDesc::Douglas(),
-            localVol,
-            localVol ? 0.20 : -Null<Real>());
+    ext::shared_ptr<PricingEngine> FxVanillaBumpRisk::makeEngineFor(const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc,
+                                                                    bool localVol) const 
+    {
+        return ext::make_shared<FdBlackScholesVanillaEngine>(proc, tGrid_, xGrid_,
+                                                             0, /*dampingSteps=*/
+                                                             FdmSchemeDesc::Douglas(),
+                                                             localVol,
+                                                             localVol ? 0.20 : -Null<Real>());
     }
 
     ext::shared_ptr<PricingEngine> FxVanillaBumpRisk::makeEngine(bool localVol) const {
@@ -118,17 +108,16 @@ namespace QuantLib {
         return {times, strikes};
     }
 
-    ext::shared_ptr<GeneralizedBlackScholesProcess>
-    FxVanillaBumpRisk::makeStickyProcess(const std::vector<Time>& times,
-                                          const std::vector<Real>& strikes) const {
+    ext::shared_ptr<GeneralizedBlackScholesProcess> FxVanillaBumpRisk::makeStickyProcess(const std::vector<Time>& times,
+                                                                                         const std::vector<Real>& strikes) const 
+    {
         auto fixedLV = buildFixedLocalVolSurface(times, strikes);
         fixedLV->enableExtrapolation();
-        return ext::make_shared<GeneralizedBlackScholesProcess>(
-            Handle<Quote>(spotQuote_),
-            process_->dividendYield(),
-            process_->riskFreeRate(),
-            process_->blackVolatility(),
-            Handle<LocalVolTermStructure>(fixedLV));
+        return ext::make_shared<GeneralizedBlackScholesProcess>(Handle<Quote>(spotQuote_),
+                                                                process_->dividendYield(),
+                                                                process_->riskFreeRate(),
+                                                                process_->blackVolatility(),
+                                                                Handle<LocalVolTermStructure>(fixedLV));
     }
 
     FxVanillaGreeks FxVanillaBumpRisk::calculate(bool localVol, StickyType sticky) const {
@@ -162,7 +151,6 @@ namespace QuantLib {
         }
 
         // ── Helper lambdas ────────────────────────────────────────────────────
-
         auto shiftAtms = [&](Real delta) {
             for (Size i = 0; i < atmVolQuotes_.size(); ++i)
                 atmVolQuotes_[i]->setValue(sigmas[i] + delta);
@@ -261,7 +249,7 @@ namespace QuantLib {
         };
 
         if (!localVol || sticky == StickyType::Delta) {
-            // ── Sticky-delta path (or BS mode) ────────────────────────────────
+            // ── Sticky-delta path (or BS mode) ──
             option_->setPricingEngine(makeEngine(localVol));
 
             const Real V0  = option_->NPV() * notional_;
@@ -305,7 +293,9 @@ namespace QuantLib {
             return scaleResults(V0, Vup, Vdn, Vvp, Vvm, Vpp, Vpm, Vmp, Vmm,
                                 theta_raw, rega, sega);
 
-        } else {
+        } 
+        else 
+        {
             // ── Sticky-strike path (localVol=true only) ───────────────────────
             //
             // Build three frozen local vol surfaces at base, vol+dv, vol-dv.
@@ -379,14 +369,15 @@ namespace QuantLib {
 
     ext::shared_ptr<FixedLocalVolSurface>
     FxVanillaBumpRisk::buildFixedLocalVolSurface(const std::vector<Time>& times,
-                                                  const std::vector<Real>& strikes) const {
+                                                  const std::vector<Real>& strikes) const 
+    {
         QL_REQUIRE(!times.empty(), "time grid is empty");
         QL_REQUIRE(!strikes.empty(), "strike grid is empty");
 
         LocalVolSurface lvDupire(process_->blackVolatility(),
-                                  process_->riskFreeRate(),
-                                  process_->dividendYield(),
-                                  process_->x0());
+                                 process_->riskFreeRate(),
+                                 process_->dividendYield(),
+                                 process_->x0());
         lvDupire.enableExtrapolation();
 
         auto lvMatrix = ext::make_shared<Matrix>(strikes.size(), times.size());
@@ -394,21 +385,18 @@ namespace QuantLib {
             for (Size si = 0; si < strikes.size(); ++si)
                 (*lvMatrix)[si][ti] = lvDupire.localVol(times[ti], strikes[si], true);
 
-        return ext::make_shared<FixedLocalVolSurface>(
-            process_->blackVolatility()->referenceDate(),
-            times,
-            strikes,
-            lvMatrix,
-            process_->blackVolatility()->dayCounter());
+        return ext::make_shared<FixedLocalVolSurface>(process_->blackVolatility()->referenceDate(),
+                                                      times, strikes, lvMatrix,
+                                                      process_->blackVolatility()->dayCounter());
     }
 
     void FxVanillaBumpRisk::printLocalVolComparison(const std::vector<Time>& times,
                                                      const std::vector<Real>& strikes,
                                                      std::ostream& out) const {
         LocalVolSurface lvDupire(process_->blackVolatility(),
-                                  process_->riskFreeRate(),
-                                  process_->dividendYield(),
-                                  process_->x0());
+                                 process_->riskFreeRate(),
+                                 process_->dividendYield(),
+                                 process_->x0());
         lvDupire.enableExtrapolation();
 
         auto fixedLV = buildFixedLocalVolSurface(times, strikes);

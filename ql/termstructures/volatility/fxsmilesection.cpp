@@ -145,6 +145,20 @@ namespace QuantLib {
             // Copy the immutable input quotes into the mutable workspace so that
             // calibrate() always reads from quotes_ regardless of which path we are on.
             quotes_ = quotesInput_;
+
+            // initialParams() in subclasses (e.g. fxSabrSmileSection) reads atm_->value()
+            // to seed the optimisation.  atm_ is normally set by calculateAtm() *after*
+            // calibrate(), so it is still empty here.  Provide a rough initial guess —
+            // the average of all input quote vols — so that the handle is never empty
+            // when calibrate() runs.  calculateAtm() below will overwrite atm_ with the
+            // proper value derived from the fitted smile.
+            if (atm_.empty()) {
+                Real sumVol = 0.0;
+                for (const auto& q : quotesInput_)
+                    sumVol += q->value();
+                atm_ = makeQuoteHandle(quotesInput_.empty() ? 0.1 : sumVol / static_cast<Real>(quotesInput_.size()));
+            }
+
             calibrate();
 
             // When calibrating from delta-vol quotes the atm is not known a priori,
