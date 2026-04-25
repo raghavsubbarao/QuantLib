@@ -308,8 +308,8 @@ int main(int, char*[]) {
                                    100 /*xGrid=*/
                                    );
 
-        FxVanillaGreeks bsGreeks = riskCalc.calculate(/*localVol=*/false);
         FxVanillaGreeks lvGreeks = riskCalc.calculate(/*localVol=*/true);
+        FxVanillaGreeks bsGreeks = riskCalc.calculate(/*localVol=*/false);
 
         // ──────────────────────────────────────────────────────────────────────
         //  Print pricing comparison
@@ -426,11 +426,10 @@ int main(int, char*[]) {
         //     negative Dupire value that arises from numerical differentiation
         //     near surface edges, replacing it with a small fallback.
         // ──────────────────────────────────────────────────────────────────────
-
-        auto localVolSurface = ext::make_shared<NoExceptLocalVolSurface>(
-            Handle<BlackVolTermStructure>(fxVolSurface),
-            usdTs, eurTs, spot,
-            /*illegalLocalVolOverwrite=*/0.01);
+        auto localVolSurface = ext::make_shared<NoExceptLocalVolSurface>(Handle<BlackVolTermStructure>(fxVolSurface),
+                                                                         usdTs, eurTs, spot,
+                                                                         0.01  /*illegalLocalVolOverwrite=*/
+                                                                         );
         localVolSurface->enableExtrapolation();
         Handle<LocalVolTermStructure> localVolHandle(localVolSurface);
 
@@ -442,7 +441,6 @@ int main(int, char*[]) {
         //  The surface is queried at these absolute strikes to build the
         //  HestonModelHelper instruments.
         // ──────────────────────────────────────────────────────────────────────
-
         printSeparator();
         std::cout << "  PART B — Stochastic Local Volatility (SLV)\n";
         printSeparator();
@@ -455,8 +453,7 @@ int main(int, char*[]) {
         for (const auto& tenor : calibTenors) {
             const Date   expiry = calendar.advance(today, tenor);
             const Time   Tc     = dc.yearFraction(today, expiry);
-            const Real   fwdC   = spotSQ->value()
-                                  * eurTs->discount(Tc) / usdTs->discount(Tc);
+            const Real   fwdC   = spotSQ->value() * eurTs->discount(Tc) / usdTs->discount(Tc);
             for (Real m : { 0.95, 1.00, 1.05 })
                 hestonPillars.push_back({ tenor, m * fwdC });
         }
@@ -477,8 +474,7 @@ int main(int, char*[]) {
         // and is the factory for pricing engines.
         Handle<BlackVolTermStructure> volHandle(fxVolSurface);
 
-        FxSLVPricingContext slvCtx(
-            spot, usdTs, eurTs, volHandle, localVolHandle, calendar);
+        FxSLVPricingContext slvCtx(spot, usdTs, eurTs, volHandle, localVolHandle, calendar);
 
         HestonCalibrator hestonCal(hp);
 
@@ -497,7 +493,6 @@ int main(int, char*[]) {
         slvCtx.calibrate(hestonCal, levCal, hestonPillars, slvEndDate);
 
         // ── Print Heston calibration results ────────────────────────────────
-
         const auto heston = slvCtx.hestonModel();
 
         std::cout << "\n  Calibrated Heston parameters:\n"
@@ -513,8 +508,7 @@ int main(int, char*[]) {
                   << "  (" << std::setprecision(2)
                   << std::sqrt(heston->v0()) * 100.0 << "% initial vol)\n";
 
-        const Real fellerRatio = 2.0 * heston->kappa() * heston->theta()
-                               / (heston->sigma() * heston->sigma());
+        const Real fellerRatio = 2.0 * heston->kappa() * heston->theta() / (heston->sigma() * heston->sigma());
         std::cout << std::setprecision(4)
                   << "    Feller ratio 2kθ/σ²          : " << fellerRatio
                   << (fellerRatio > 1.0 ? "  (satisfied)\n" : "  (VIOLATED)\n");

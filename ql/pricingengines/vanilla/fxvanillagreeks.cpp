@@ -78,7 +78,8 @@ namespace QuantLib {
                                                              0, /*dampingSteps=*/
                                                              FdmSchemeDesc::Douglas(),
                                                              localVol,
-                                                             localVol ? 0.20 : -Null<Real>());
+                                                             0.20 /*localVol ? 0.20 : -Null<Real>()*/ /*illegalLocalVolOverwrite*/
+                                                             );
     }
 
     ext::shared_ptr<PricingEngine> FxVanillaBumpRisk::makeEngine(bool localVol) const {
