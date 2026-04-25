@@ -26,6 +26,7 @@
 #include <ql/settings.hpp>
 #include <cmath>
 #include <iomanip>
+#include <sstream>
 #include <utility>
 
 namespace QuantLib {
@@ -413,6 +414,30 @@ namespace QuantLib {
                                           0.20);
         lvDupire.enableExtrapolation();
 
+        // Throwing version used only to identify which cells fall back.
+        LocalVolSurface lvDupireStrict(process_->blackVolatility(),
+                                        process_->riskFreeRate(),
+                                        process_->dividendYield(),
+                                        process_->x0());
+        lvDupireStrict.enableExtrapolation();
+
+        const Size nT = times.size();
+        const Size nK = strikes.size();
+
+        // Build fallback map: fallback[si][ti] == true where Dupire would throw.
+        std::vector<std::vector<bool>> fallback(nK, std::vector<bool>(nT, false));
+        Size nFallback = 0;
+        for (Size si = 0; si < nK; ++si) {
+            for (Size ti = 0; ti < nT; ++ti) {
+                try {
+                    lvDupireStrict.localVol(times[ti], strikes[si], true);
+                } catch (Error&) {
+                    fallback[si][ti] = true;
+                    ++nFallback;
+                }
+            }
+        }
+
         auto fixedLV = buildFixedLocalVolSurface(times, strikes);
         fixedLV->enableExtrapolation();
 
@@ -421,23 +446,51 @@ namespace QuantLib {
         const int wk = 8;
 
         out << "\n--- Local vol surface: Dupire (D) vs FixedLocalVolSurface (F) ---\n";
+        out << "(* on D row = Dupire fallback; local vol capped at 20%)\n";
         out << std::setw(wk) << "K\\t";
         for (Time t : times)
             out << std::setw(wt) << std::fixed << std::setprecision(2) << t;
-        out << "\n" << std::string(wk + wt * times.size(), '-') << "\n";
+        out << "\n" << std::string(wk + wt * nT, '-') << "\n";
 
-        for (Real K : strikes) {
+        for (Size si = 0; si < nK; ++si) {
+            const Real K = strikes[si];
             out << std::setw(wk - 1) << std::fixed << std::setprecision(4) << K << "D";
-            for (Time t : times)
-                out << std::setw(wv) << std::fixed << std::setprecision(2)
-                    << lvDupire.localVol(t, K, true) * 100.0;
+            for (Size ti = 0; ti < nT; ++ti) {
+                std::ostringstream cell;
+                cell << std::fixed << std::setprecision(2)
+                     << lvDupire.localVol(times[ti], K, true) * 100.0;
+                if (fallback[si][ti])
+                    cell << "*";
+                out << std::setw(wv) << cell.str();
+            }
             out << "\n";
 
             out << std::setw(wk - 1) << std::fixed << std::setprecision(4) << K << "F";
-            for (Time t : times)
+            for (Size ti = 0; ti < nT; ++ti)
                 out << std::setw(wv) << std::fixed << std::setprecision(2)
-                    << fixedLV->localVol(t, K, true) * 100.0;
+                    << fixedLV->localVol(times[ti], K, true) * 100.0;
             out << "\n\n";
+        }
+
+        // Fallback summary map.
+        if (nFallback > 0) {
+            out << "\n--- Dupire fallback map (* = capped) ---\n";
+            out << std::setw(wk) << "K\\t";
+            for (Time t : times)
+                out << std::setw(4) << std::fixed << std::setprecision(2) << t;
+            out << "\n" << std::string(wk + 4 * nT, '-') << "\n";
+            for (Size si = 0; si < nK; ++si) {
+                out << std::setw(wk - 1) << std::fixed << std::setprecision(4) << strikes[si] << " ";
+                for (Size ti = 0; ti < nT; ++ti)
+                    out << std::setw(4) << (fallback[si][ti] ? " *" : " .");
+                out << "\n";
+            }
+            out << "\nFallback triggered at " << nFallback << " / "
+                << nT * nK << " cells ("
+                << std::fixed << std::setprecision(1)
+                << 100.0 * nFallback / static_cast<Real>(nT * nK) << "%).\n";
+        } else {
+            out << "\nNo Dupire fallbacks on this grid.\n";
         }
     }
 
