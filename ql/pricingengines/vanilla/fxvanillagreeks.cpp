@@ -21,7 +21,7 @@
 #include <ql/pricingengines/vanilla/fxvanillagreeks.hpp>
 #include <ql/exercise.hpp>
 #include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>
-#include <ql/termstructures/volatility/equityfx/localvolsurface.hpp>
+#include <ql/termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp>
 #include <ql/methods/finitedifferences/solvers/fdmbackwardsolver.hpp>
 #include <ql/settings.hpp>
 #include <cmath>
@@ -383,10 +383,11 @@ namespace QuantLib {
         QL_REQUIRE(!times.empty(), "time grid is empty");
         QL_REQUIRE(!strikes.empty(), "strike grid is empty");
 
-        LocalVolSurface lvDupire(process_->blackVolatility(),
-                                  process_->riskFreeRate(),
-                                  process_->dividendYield(),
-                                  process_->x0());
+        NoExceptLocalVolSurface lvDupire(process_->blackVolatility(),
+                                          process_->riskFreeRate(),
+                                          process_->dividendYield(),
+                                          process_->x0(),
+                                          0.20);
         lvDupire.enableExtrapolation();
 
         auto lvMatrix = ext::make_shared<Matrix>(strikes.size(), times.size());
@@ -405,10 +406,11 @@ namespace QuantLib {
     void FxVanillaBumpRisk::printLocalVolComparison(const std::vector<Time>& times,
                                                      const std::vector<Real>& strikes,
                                                      std::ostream& out) const {
-        LocalVolSurface lvDupire(process_->blackVolatility(),
-                                  process_->riskFreeRate(),
-                                  process_->dividendYield(),
-                                  process_->x0());
+        NoExceptLocalVolSurface lvDupire(process_->blackVolatility(),
+                                          process_->riskFreeRate(),
+                                          process_->dividendYield(),
+                                          process_->x0(),
+                                          0.20);
         lvDupire.enableExtrapolation();
 
         auto fixedLV = buildFixedLocalVolSurface(times, strikes);
