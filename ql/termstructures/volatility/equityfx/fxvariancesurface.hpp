@@ -191,9 +191,15 @@ namespace QuantLib {
     Real fxVarianceSurface<T>::blackVarianceImpl(Time t, Real strike) const {
         Real tau = timeTs_->tradingTime(t);
 
-        // near-zero trading time — return zero variance
-        if (tau < (1. / (365 * 8)))
-            return 0.0;
+        // Near-zero trading time: extrapolate linearly using the first-pillar ATM vol.
+        // Returning hard-zero here would cause the Dupire time-derivative (computed
+        // via a finite-difference step dt=0.0001 real years whose trading-time also
+        // falls below this threshold) to evaluate to zero, making LocalVolSurface
+        // return vol=0 and breaking the Concentrating1dMesher in HestonSLVFDMModel.
+        if (tau < (1. / (365 * 8))) {
+            const Real vol0 = smileSections_.front().atm()->value();
+            return vol0 * vol0 * t;
+        }
 
         // check the cache for an interpolated smile at this trading time
         long key = tauKey(tau);
