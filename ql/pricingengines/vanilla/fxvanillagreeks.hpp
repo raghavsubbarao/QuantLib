@@ -80,7 +80,10 @@ namespace QuantLib {
         standard FX option risk metrics using symmetric finite differences.
 
         Two pricing modes are supported (selected at call time):
-        - <b>Black-Scholes FD</b> (\c localVol=false)
+        - <b>Analytical Black-Scholes</b> (\c localVol=false): the implied vol is
+          looked up from the FX variance surface at the option's (T, K) via
+          interpolation; all Greeks are computed with the Black-Scholes formula.
+          No finite-difference grid is used and no Dupire computation occurs.
         - <b>Local-vol Dupire FD</b> (\c localVol=true)
 
         When \c localVol=true, the \c StickyType parameter controls how the
@@ -182,6 +185,7 @@ namespace QuantLib {
                       bool localVol) const;
 
         ext::shared_ptr<PricingEngine> makeEngine(bool localVol) const;
+        ext::shared_ptr<PricingEngine> makeAnalyticEngine() const;
 
         std::pair<std::vector<Time>, std::vector<Real>> buildLvGrid() const;
 

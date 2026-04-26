@@ -20,8 +20,8 @@
 #include <ql/exercise.hpp>
 #include <ql/pricingengines/vanilla/fxvanillagreeks.hpp>
 #include <ql/exercise.hpp>
+#include <ql/pricingengines/vanilla/analyticeuropeanengine.hpp>
 #include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>
-//#include <ql/termstructures/volatility/equityfx/localvolsurface.hpp>
 #include <ql/termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp>
 #include <ql/methods/finitedifferences/solvers/fdmbackwardsolver.hpp>
 #include <ql/settings.hpp>
@@ -84,6 +84,10 @@ namespace QuantLib {
 
     ext::shared_ptr<PricingEngine> FxVanillaBumpRisk::makeEngine(bool localVol) const {
         return makeEngineFor(process_, localVol);
+    }
+
+    ext::shared_ptr<PricingEngine> FxVanillaBumpRisk::makeAnalyticEngine() const {
+        return ext::make_shared<AnalyticEuropeanEngine>(process_);
     }
 
     std::pair<std::vector<Time>, std::vector<Real>> FxVanillaBumpRisk::buildLvGrid() const {
@@ -252,8 +256,14 @@ namespace QuantLib {
         };
 
         if (!localVol || sticky == StickyType::Delta) {
-            // ── Sticky-delta path (or BS mode) ──
-            option_->setPricingEngine(makeEngine(localVol));
+            // ── BS analytic path (localVol=false) or sticky-delta local vol ──
+            // localVol=false: analytical Black-Scholes, using the implied vol
+            // interpolated from the FX variance surface at the option's (T, K).
+            // localVol=true + sticky-delta: FD engine with Dupire local vol.
+            if (!localVol)
+                option_->setPricingEngine(makeAnalyticEngine());
+            else
+                option_->setPricingEngine(makeEngine(true));
 
             const Real V0  = option_->NPV() * notional_;
 
