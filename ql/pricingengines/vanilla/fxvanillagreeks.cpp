@@ -78,7 +78,7 @@ namespace QuantLib {
                                                              0, /*dampingSteps=*/
                                                              FdmSchemeDesc::Douglas(),
                                                              localVol,
-                                                             0.20 /*localVol ? 0.20 : -Null<Real>()*/ /*illegalLocalVolOverwrite*/
+                                                             localVol ? 0.20 : -Null<Real>() /*illegalLocalVolOverwrite*/
                                                              );
     }
 

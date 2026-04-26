@@ -326,24 +326,23 @@ int main(int, char*[]) {
                   << "  " << std::string(wa + wb, '-') << "\n"
                   << "  " << std::setw(wa) << std::left << "Black-Scholes FD"
                   << std::setw(wb) << std::right << std::fixed
-                  //<< std::setprecision(2) << bsGreeks.npv
+                  << std::setprecision(2) << bsGreeks.npv
                   << "\n"
                   << "  " << std::setw(wa) << std::left << "Local vol Dupire FD"
                   << std::setw(wb) << std::right << lvGreeks.npv
                   << "\n"
                   << "  " << std::setw(wa) << std::left << "Difference"
-                  //<< std::setw(wb) << std::right << (lvGreeks.npv - bsGreeks.npv)
+                  << std::setw(wb) << std::right << (lvGreeks.npv - bsGreeks.npv)
                   << "\n";
 
         // ──────────────────────────────────────────────────────────────────────
         //  Print Greeks
         // ──────────────────────────────────────────────────────────────────────
-
         printSeparator();
         std::cout << "  Greeks  (notional = EUR 1,000,000)\n";
         printSeparator();
 
-        //printGreeks("Black-Scholes FD (sticky-delta)", bsGreeks);
+        printGreeks("Black-Scholes FD (sticky-delta)", bsGreeks);
         printGreeks("Local vol Dupire FD (sticky-delta)", lvGreeks);
 
         std::cout << "\n  Notes on rega/sega time-scaling:\n"
@@ -356,7 +355,6 @@ int main(int, char*[]) {
         // ──────────────────────────────────────────────────────────────────────
         //  Sticky-delta vs sticky-strike comparison
         // ──────────────────────────────────────────────────────────────────────
-
         printSeparator();
         std::cout << "  Sticky-delta vs Sticky-strike (Local vol Dupire FD)\n";
         printSeparator();
@@ -390,7 +388,6 @@ int main(int, char*[]) {
         // ──────────────────────────────────────────────────────────────────────
         //  6. Local vol surface: Dupire vs FixedLocalVolSurface comparison
         // ──────────────────────────────────────────────────────────────────────
-
         printSeparator();
         std::cout << "  Local vol surface comparison\n";
         printSeparator();
@@ -445,9 +442,7 @@ int main(int, char*[]) {
         std::cout << "  PART B — Stochastic Local Volatility (SLV)\n";
         printSeparator();
 
-        const std::vector<Period> calibTenors = {
-            1*Months, 3*Months, 6*Months, 1*Years, 2*Years
-        };
+        const std::vector<Period> calibTenors = {1*Months, 3*Months, 6*Months, 1*Years, 2*Years};
 
         std::vector<StochVolCalibrator::Pillar> hestonPillars;
         for (const auto& tenor : calibTenors) {
@@ -547,7 +542,6 @@ int main(int, char*[]) {
         //  The result is stored as a FixedLocalVolSurface on the FDM grid.
         //  Calibration happens inside slvCtx.calibrate() above.
         // ──────────────────────────────────────────────────────────────────────
-
         std::cout << "\n  Leverage function calibrated on ["
                   << today << ", " << slvEndDate << "].\n";
 
@@ -592,7 +586,6 @@ int main(int, char*[]) {
         //  shifted evaluation date, which is expensive.  For intraday risk
         //  management it is common to use the local-vol theta as a proxy.
         // ──────────────────────────────────────────────────────────────────────
-
         printSeparator();
         std::cout << "  4M EUR call  —  non-pillar tenor (between 3M and 6M pillars)\n";
         printSeparator();
@@ -614,11 +607,9 @@ int main(int, char*[]) {
                   << std::fixed << std::setprecision(0) << notional << "\n";
 
         // ── Local vol baseline price ─────────────────────────────────────────
-        auto gbsProcess4M = ext::make_shared<GeneralizedBlackScholesProcess>(
-            spot, eurTs, usdTs, volHandle);
+        auto gbsProcess4M = ext::make_shared<GeneralizedBlackScholesProcess>(spot, eurTs, usdTs, volHandle);
         auto call4M_lv = ext::make_shared<VanillaOption>(payoff4M, exercise4M);
-        call4M_lv->setPricingEngine(
-            ext::make_shared<FdBlackScholesVanillaEngine>(gbsProcess4M, 100, 100));
+        call4M_lv->setPricingEngine(ext::make_shared<FdBlackScholesVanillaEngine>(gbsProcess4M, 100, 100));
         const Real lvNpv4M = call4M_lv->NPV() * notional;
 
         // ── SLV price ────────────────────────────────────────────────────────
@@ -640,8 +631,7 @@ int main(int, char*[]) {
         // Scale to "per 1% spot move"
         const Real pctS      = 0.01 * S0;
         const Real slvDelta  = (slvUp - slvDn)  / (2.0 * dS) * pctS;
-        const Real slvGamma  = (slvUp - 2.0 * slvNpv4M + slvDn)
-                               / (dS * dS) * pctS * pctS;
+        const Real slvGamma  = (slvUp - 2.0 * slvNpv4M + slvDn) / (dS * dS) * pctS * pctS;
 
         // ── Vega: parallel bump of all ATM vol quotes ─────────────────────────
         const Real dVol = 0.001;  // 10 bp absolute
