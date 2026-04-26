@@ -455,10 +455,10 @@ int main(int, char*[]) {
 
         // Initial Heston parameter guess consistent with observed EURUSD vols.
         HestonParams hp;
-        hp.v0    = 0.0078 * 0.0078;  // ≈ (7.8% 1M ATM vol)²
+        hp.v0    = 0.078 * 0.078;   // ≈ (7.8% 1M ATM vol)²
         hp.kappa = 1.50;
-        hp.theta = 0.0100 * 0.0100;  // ≈ (10% long-run vol)²
-        hp.sigma = 0.40;
+        hp.theta = 0.10 * 0.10;     // ≈ (10% long-run vol)²
+        hp.sigma = 0.15;
         hp.rho   = -0.25;
 
         std::cout << "\n  Calibrating Heston model to "

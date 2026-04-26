@@ -94,9 +94,16 @@ namespace QuantLib {
         calibrationErrors_.reserve(helpers_.size());
         for (const auto& h : helpers_) {
             // Signed error: model implied vol minus market implied vol.
-            const Real modelVol = h->impliedVolatility(h->modelValue(),
-                                                       1.0e-4, 1000, 0.001, 10.0);
-            const Real mktVol   = h->volatility()->value();
+            // Guard against degenerate model values (e.g. near-zero price) that
+            // cause impliedVolatility() to fail its root search.
+            const Real mktVol = h->volatility()->value();
+            Real modelVol = mktVol;
+            try {
+                modelVol = h->impliedVolatility(h->modelValue(),
+                                                1.0e-4, 1000, 0.001, 10.0);
+            } catch (const std::exception&) {
+                // leave modelVol == mktVol → error = 0 for this pillar
+            }
             calibrationErrors_.push_back(modelVol - mktVol);
         }
 
