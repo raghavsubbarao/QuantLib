@@ -836,6 +836,10 @@ set(QL_SOURCES
     termstructures/volatility/equityfx/localvolsurface.cpp
     termstructures/volatility/equityfx/localvoltermstructure.cpp
     termstructures/volatility/flatsmilesection.cpp
+    termstructures/volatility/fxcostsmilesection.cpp
+    termstructures/volatility/fxsmilesection.cpp
+    termstructures/volatility/fxsmilesectionbydelta.cpp
+    termstructures/volatility/fxsmilesectionbystrike.cpp
     termstructures/volatility/gaussian1dsmilesection.cpp
     termstructures/volatility/inflation/constantcpivolatility.cpp
     termstructures/volatility/inflation/cpivolatilitystructure.cpp
@@ -2090,6 +2094,10 @@ set(QL_HEADERS
     termstructures/volatility/equityfx/localvoltermstructure.hpp
     termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp
     termstructures/volatility/flatsmilesection.hpp
+    termstructures/volatility/fxcostsmilesection.hpp
+    termstructures/volatility/fxsmilesection.hpp
+    termstructures/volatility/fxsmilesectionbydelta.hpp
+    termstructures/volatility/fxsmilesectionbystrike.hpp
     termstructures/volatility/gaussian1dsmilesection.hpp
     termstructures/volatility/inflation/constantcpivolatility.hpp
     termstructures/volatility/inflation/cpivolatilitystructure.hpp

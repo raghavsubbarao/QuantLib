@@ -11,6 +11,10 @@ this_include_HEADERS = \
     atmadjustedsmilesection.hpp \
     atmsmilesection.hpp \
     flatsmilesection.hpp \
+    fxcostsmilesection.hpp \
+    fxsmilesection.hpp \
+    fxsmilesectionbydelta.hpp \
+    fxsmilesectionbystrike.hpp \
     gaussian1dsmilesection.hpp \
     interpolatedsmilesection.hpp \
     kahalesmilesection.hpp \
@@ -28,6 +32,10 @@ cpp_files = \
     atmadjustedsmilesection.cpp \
     atmsmilesection.cpp \
     flatsmilesection.cpp \
+    fxcostsmilesection.cpp \
+    fxsmilesection.cpp \
+    fxsmilesectionbydelta.cpp \
+    fxsmilesectionbystrike.cpp \
     gaussian1dsmilesection.cpp \
     kahalesmilesection.cpp \
     sabr.cpp \
