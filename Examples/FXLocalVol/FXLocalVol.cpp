@@ -609,7 +609,11 @@ int main(int, char*[]) {
         // ── Local vol baseline price ─────────────────────────────────────────
         auto gbsProcess4M = ext::make_shared<GeneralizedBlackScholesProcess>(spot, eurTs, usdTs, volHandle);
         auto call4M_lv = ext::make_shared<VanillaOption>(payoff4M, exercise4M);
-        call4M_lv->setPricingEngine(ext::make_shared<FdBlackScholesVanillaEngine>(gbsProcess4M, 100, 100));
+        call4M_lv->setPricingEngine(MakeFdBlackScholesVanillaEngine(gbsProcess4M)
+                                        .withTGrid(100)
+                                        .withXGrid(100)
+                                        .withLocalVol(true)
+                                        .withIllegalLocalVolOverwrite(0.01));
         const Real lvNpv4M = call4M_lv->NPV() * notional;
 
         // ── SLV price ────────────────────────────────────────────────────────
