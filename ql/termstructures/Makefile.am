@@ -14,12 +14,14 @@ this_include_HEADERS = \
 	interpolatedcurve.hpp \
 	iterativebootstrap.hpp \
 	localbootstrap.hpp \
+	tradingtimetermstructure.hpp \
 	voltermstructure.hpp \
 	yieldtermstructure.hpp
 
 cpp_files = \
 	defaulttermstructure.cpp \
 	inflationtermstructure.cpp \
+	tradingtimetermstructure.cpp \
 	voltermstructure.cpp \
 	yieldtermstructure.cpp
 
