@@ -363,33 +363,39 @@ namespace QuantLib {
                                                  Time tau,
                                                  const std::vector<Real>& params) const
     {
-        // Solve f(rho) = 0 for total vol rho = sigma*sqrt(tau) at log-moneyness x = ln(F/K).
+        // Solve f(rho) = 0 for total vol rho = sigma*sqrt(tau) at log-moneyness x = ln(F/K),
+        // where the cost equation with d(rho) = c * rho^alpha dynamics is:
         //
-        // The cost equation with d(rho) = c * rho^alpha dynamics is:
-        //
-        //   f(rho) = p0 + (2*p1 - s*p2)*rho^(1+a) - 2*p2*x*rho^(a-1)
-        //          + p3*x^2*rho^(2a-2) - (p3/4)*rho^(2+2a)  =  0
+        //   p0 + (2*p1 - s*p2)*rho^(1+a) - 2*p2*x*rho^(a-1)
+        //      + p3*x^2*rho^(2a-2) - (p3/4)*rho^(2+2a)  =  0
         //
         // where  s = -1 (standard, d- in vanna term) or +1 (premium-adjusted, d+ in vanna term).
         // p = [Cgamma, Ctheta, Ceta, Comega] normalised so that p0 = 1.
+        //
+        // Since 0 <= a <= 1, the most negative exponent above is (2a-2). Multiplying
+        // throughout by rho^(2-2a) clears every negative power, giving the equivalent
+        // (same positive roots) but numerically safer equation g(rho) = 0:
+        //
+        //   g(rho) = p0*rho^(2-2a) + (2*p1 - s*p2)*rho^(3-a)
+        //          - 2*p2*x*rho^(1-a) + p3*x^2 - (p3/4)*rho^4
 
         Real x = std::log(fwd / strike);
         Real a = alpha_;
         Real s = premiumAdjust() ? 1.0 : -1.0;
 
         auto f = [&](Real rho) -> Real {
-            return params[0]
-                 + (2.0 * params[1] - s * params[2]) * std::pow(rho, 1.0 + a)
-                 - 2.0 * params[2] * x * std::pow(rho, a - 1.0)
-                 + params[3] * x * x * std::pow(rho, 2.0 * a - 2.0)
-                 - (params[3] / 4.0) * std::pow(rho, 2.0 + 2.0 * a);
+            return params[0] * std::pow(rho, 2.0 - 2.0 * a)
+                 + (2.0 * params[1] - s * params[2]) * std::pow(rho, 3.0 - a)
+                 - 2.0 * params[2] * x * std::pow(rho, 1.0 - a)
+                 + params[3] * x * x
+                 - (params[3] / 4.0) * std::pow(rho, 4.0);
         };
 
         auto df = [&](Real rho) -> Real {
-            return (2.0 * params[1] - s * params[2]) * (1.0 + a) * std::pow(rho, a)
-                 - 2.0 * params[2] * x * (a - 1.0) * std::pow(rho, a - 2.0)
-                 + params[3] * x * x * (2.0 * a - 2.0) * std::pow(rho, 2.0 * a - 3.0)
-                 - (params[3] / 4.0) * (2.0 + 2.0 * a) * std::pow(rho, 1.0 + 2.0 * a);
+            return params[0] * (2.0 - 2.0 * a) * std::pow(rho, 1.0 - 2.0 * a)
+                 + (2.0 * params[1] - s * params[2]) * (3.0 - a) * std::pow(rho, 2.0 - a)
+                 - 2.0 * params[2] * x * (1.0 - a) * std::pow(rho, -a)
+                 - params[3] * std::pow(rho, 3.0);
         };
 
         // Start from ATM total vol.
