@@ -328,8 +328,7 @@ namespace QuantLib {
                 k = BlackDeltaCalculator(ot, deltaType(), spot()->value(), ddom_, dfor_, w)
                         .strikeFromDelta(quotes_[i]->delta());
             } else {
-                k = BlackDeltaCalculator(Option::Type::Call, deltaType(), spot()->value(), ddom_,
-                                         dfor_, w)
+                k = BlackDeltaCalculator(Option::Type::Call, deltaType(), spot()->value(), ddom_, dfor_, w)
                         .atmStrike(quotes_[i]->atmType());
             }
 
@@ -337,7 +336,12 @@ namespace QuantLib {
 
             ts.push_back(1.0 * wt);
             ts.push_back(2.0 * std::pow(w, 1.0 + alpha_) * wt);
-            ts.push_back(-2.0 * dp(k, w) * std::pow(w, alpha_) * wt);
+            if (premiumAdjust()) {
+                ts.push_back(-2.0 * dp(k, w) * std::pow(w, alpha_) * wt);
+            } else {
+                ts.push_back(-2.0 * dm(k, w) * std::pow(w, alpha_) * wt);
+            }
+            
             ts.push_back(dp(k, w) * dm(k, w) * std::pow(w, 2.0 * alpha_) * wt);
         }
 
@@ -378,18 +382,18 @@ namespace QuantLib {
         Real s = premiumAdjust() ? 1.0 : -1.0;
 
         auto f = [&](Real rho) -> Real {
-            return params[0]
-                 + (2.0 * params[1] - s * params[2]) * std::pow(rho, 1.0 + a)
-                 - 2.0 * params[2] * x * std::pow(rho, a - 1.0)
-                 + params[3] * x * x * std::pow(rho, 2.0 * a - 2.0)
-                 - (params[3] / 4.0) * std::pow(rho, 2.0 + 2.0 * a);
+            return params[3] * x * x
+                 - 2.0 * params[2] * x * std::pow(rho, 1.0 - a)
+                 + params[0] * std::pow(rho, 2.0 - 2.0 * a)
+                 + (2.0 * params[1] - s  * params[2]) * std::pow(rho, 3.0 - a)
+                 - (params[3] / 4.0) * std::pow(rho, 4.0);
         };
 
         auto df = [&](Real rho) -> Real {
-            return (2.0 * params[1] - s * params[2]) * (1.0 + a) * std::pow(rho, a)
-                 - 2.0 * params[2] * x * (a - 1.0) * std::pow(rho, a - 2.0)
-                 + params[3] * x * x * (2.0 * a - 2.0) * std::pow(rho, 2.0 * a - 3.0)
-                 - (params[3] / 4.0) * (2.0 + 2.0 * a) * std::pow(rho, 1.0 + 2.0 * a);
+            return 2.0 * params[2] * x * (a - 1.0) * std::pow(rho, -a)
+                 + 2.0 * params[0] * (1.0 - a) * std::pow(rho, 1.0 - 2.0 * a) 
+                 + (2.0 * params[1] - s * params[2]) * (3.0 - a) * std::pow(rho, 2.0 - a)
+                 - params[3] * std::pow(rho, 3.0);
         };
 
         // Start from ATM total vol.
