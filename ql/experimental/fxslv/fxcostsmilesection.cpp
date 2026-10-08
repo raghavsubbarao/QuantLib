@@ -22,7 +22,7 @@
 #include <ql/math/matrix.hpp>
 #include <ql/math/matrixutilities/svd.hpp>
 #include <ql/quotes/simplequote.hpp>
-#include <ql/termstructures/volatility/fxcostsmilesection.hpp>
+#include <ql/experimental/fxslv/fxcostsmilesection.hpp>
 
 namespace QuantLib {
 

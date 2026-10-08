@@ -3,12 +3,12 @@
 
 #include <ql/termstructures/volatility/equityfx/blackvoltermstructure.hpp>
 #include <ql/termstructures/yieldtermstructure.hpp>
-#include <ql/termstructures/tradingtimetermstructure.hpp>
+#include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
 #include <ql/time/calendars/weekendsonly.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/math/interpolation.hpp>
-#include <ql/termstructures/volatility/fxsmilesection.hpp>
-#include <ql/termstructures/volatility/fxcostsmilesection.hpp>
+#include <ql/experimental/fxslv/fxsmilesection.hpp>
+#include <ql/experimental/fxslv/fxcostsmilesection.hpp>
 #include <ql/quote.hpp>
 #include <map>
 

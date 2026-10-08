@@ -3,7 +3,7 @@
 #include <ql/math/optimization/levenbergmarquardt.hpp>
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/quotes/simplequote.hpp>
-#include <ql/termstructures/volatility/fxsmilesectionbydelta.hpp>
+#include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
 
 namespace QuantLib {
 

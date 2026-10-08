@@ -37,7 +37,6 @@ this_include_HEADERS = \
     fdsabrvanillaengine.hpp \
 	fdsimplebsswingengine.hpp \
 	fdvanillaengine.hpp \
-    fxvanillagreeks.hpp \
     mcamericanengine.hpp \
     mcdigitalengine.hpp \
     mceuropeanengine.hpp \
@@ -46,7 +45,7 @@ this_include_HEADERS = \
     mchestonhullwhiteengine.hpp \
     mcvanillaengine.hpp \
     qdfpamericanengine.hpp \
-    qdplusamericanengine.hpp \
+    qdplusamericanengine.hpp
 
 cpp_files = \
     analyticbsmhullwhiteengine.cpp \
@@ -79,12 +78,11 @@ cpp_files = \
 	fdcirvanillaengine.cpp \
 	fdsabrvanillaengine.cpp \
 	fdsimplebsswingengine.cpp \
-    fxvanillagreeks.cpp \
     mcamericanengine.cpp \
     mcdigitalengine.cpp \
     mchestonhullwhiteengine.cpp \
     qdfpamericanengine.cpp \
-    qdplusamericanengine.cpp \
+    qdplusamericanengine.cpp
 
 if UNITY_BUILD
 

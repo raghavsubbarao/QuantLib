@@ -2,7 +2,7 @@
 #define quantlib_axl_fx_smile_section_delta_hpp
 
 #include <ql/math/array.hpp>
-#include <ql/termstructures/volatility/fxsmilesection.hpp>
+#include <ql/experimental/fxslv/fxsmilesection.hpp>
 
 namespace QuantLib {
 

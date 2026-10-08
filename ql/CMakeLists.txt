@@ -164,9 +164,15 @@ set(QL_SOURCES
     experimental/forward/analytichestonforwardeuropeanengine.cpp
     experimental/fx/blackdeltacalculator.cpp
     experimental/fx/deltavolquote.cpp
-    experimental/fx/fxslvpricingcontext.cpp
-    experimental/fx/hestoncalibrator.cpp
-    experimental/fx/slvleveragecalibrator.cpp
+    experimental/fxslv/fxcostsmilesection.cpp
+    experimental/fxslv/fxslvpricingcontext.cpp
+    experimental/fxslv/fxsmilesection.cpp
+    experimental/fxslv/fxsmilesectionbydelta.cpp
+    experimental/fxslv/fxsmilesectionbystrike.cpp
+    experimental/fxslv/fxvanillagreeks.cpp
+    experimental/fxslv/hestoncalibrator.cpp
+    experimental/fxslv/slvleveragecalibrator.cpp
+    experimental/fxslv/tradingtimetermstructure.cpp
     experimental/inflation/cpicapfloorengines.cpp
     experimental/inflation/cpicapfloortermpricesurface.cpp
     experimental/inflation/yoycapfloortermpricesurface.cpp
@@ -775,7 +781,6 @@ set(QL_SOURCES
     pricingengines/vanilla/mchestonhullwhiteengine.cpp
     pricingengines/vanilla/qdfpamericanengine.cpp
     pricingengines/vanilla/qdplusamericanengine.cpp
-    pricingengines/vanilla/fxvanillagreeks.cpp
     processes/batesprocess.cpp
     processes/blackscholesprocess.cpp
     processes/endeulerdiscretization.cpp
@@ -836,10 +841,6 @@ set(QL_SOURCES
     termstructures/volatility/equityfx/localvolsurface.cpp
     termstructures/volatility/equityfx/localvoltermstructure.cpp
     termstructures/volatility/flatsmilesection.cpp
-    termstructures/volatility/fxcostsmilesection.cpp
-    termstructures/volatility/fxsmilesection.cpp
-    termstructures/volatility/fxsmilesectionbydelta.cpp
-    termstructures/volatility/fxsmilesectionbystrike.cpp
     termstructures/volatility/gaussian1dsmilesection.cpp
     termstructures/volatility/inflation/constantcpivolatility.cpp
     termstructures/volatility/inflation/cpivolatilitystructure.cpp
@@ -1157,10 +1158,17 @@ set(QL_HEADERS
     experimental/forward/analytichestonforwardeuropeanengine.hpp
     experimental/fx/blackdeltacalculator.hpp
     experimental/fx/deltavolquote.hpp
-    experimental/fx/fxslvpricingcontext.hpp
-    experimental/fx/hestoncalibrator.hpp
-    experimental/fx/slvleveragecalibrator.hpp
-    experimental/fx/stochvolcalibrator.hpp
+    experimental/fxslv/fxcostsmilesection.hpp
+    experimental/fxslv/fxslvpricingcontext.hpp
+    experimental/fxslv/fxsmilesection.hpp
+    experimental/fxslv/fxsmilesectionbydelta.hpp
+    experimental/fxslv/fxsmilesectionbystrike.hpp
+    experimental/fxslv/fxvanillagreeks.hpp
+    experimental/fxslv/fxvariancesurface.hpp
+    experimental/fxslv/hestoncalibrator.hpp
+    experimental/fxslv/slvleveragecalibrator.hpp
+    experimental/fxslv/stochvolcalibrator.hpp
+    experimental/fxslv/tradingtimetermstructure.hpp
     experimental/inflation/cpicapfloorengines.hpp
     experimental/inflation/cpicapfloortermpricesurface.hpp
     experimental/inflation/genericindexes.hpp
@@ -2094,10 +2102,6 @@ set(QL_HEADERS
     termstructures/volatility/equityfx/localvoltermstructure.hpp
     termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp
     termstructures/volatility/flatsmilesection.hpp
-    termstructures/volatility/fxcostsmilesection.hpp
-    termstructures/volatility/fxsmilesection.hpp
-    termstructures/volatility/fxsmilesectionbydelta.hpp
-    termstructures/volatility/fxsmilesectionbystrike.hpp
     termstructures/volatility/gaussian1dsmilesection.hpp
     termstructures/volatility/inflation/constantcpivolatility.hpp
     termstructures/volatility/inflation/cpivolatilitystructure.hpp
@@ -2266,6 +2270,7 @@ set(QL_GENERATED_HEADERS
     ${PROJECT_BINARY_DIR}/ql/experimental/finitedifferences/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/forward/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/fx/all.hpp
+    ${PROJECT_BINARY_DIR}/ql/experimental/fxslv/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/inflation/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/lattices/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/math/all.hpp

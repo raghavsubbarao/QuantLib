@@ -24,12 +24,12 @@
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
 
-#include <ql/termstructures/volatility/equityfx/fxvariancesurface.hpp>
-#include <ql/termstructures/volatility/fxsmilesectionbydelta.hpp>
+#include <ql/experimental/fxslv/fxvariancesurface.hpp>
+#include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
 #include <ql/termstructures/volatility/equityfx/localvolsurface.hpp>
 #include <ql/termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp>
-#include <ql/termstructures/tradingtimetermstructure.hpp>
-#include <ql/pricingengines/vanilla/fxvanillagreeks.hpp>
+#include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
+#include <ql/experimental/fxslv/fxvanillagreeks.hpp>
 #include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>
 #include <ql/processes/blackscholesprocess.hpp>
 #include <ql/instruments/vanillaoption.hpp>
@@ -38,9 +38,9 @@
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
 #include <ql/experimental/fx/deltavolquote.hpp>
-#include <ql/experimental/fx/fxslvpricingcontext.hpp>
-#include <ql/experimental/fx/hestoncalibrator.hpp>
-#include <ql/experimental/fx/slvleveragecalibrator.hpp>
+#include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
+#include <ql/experimental/fxslv/hestoncalibrator.hpp>
+#include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/time/calendars/weekendsonly.hpp>
 #include <ql/time/calendars/nullcalendar.hpp>

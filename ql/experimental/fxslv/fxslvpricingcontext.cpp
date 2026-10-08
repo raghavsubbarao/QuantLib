@@ -17,7 +17,7 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include <ql/experimental/fx/fxslvpricingcontext.hpp>
+#include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
 #include <ql/pricingengines/barrier/fdhestonbarrierengine.hpp>
 #include <ql/pricingengines/barrier/fdhestondoublebarrierengine.hpp>
 #include <ql/pricingengines/vanilla/fdhestonvanillaengine.hpp>

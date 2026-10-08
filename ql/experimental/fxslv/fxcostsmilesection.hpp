@@ -27,7 +27,7 @@
 #include <ql/math/array.hpp>
 #include <ql/math/polynomialmathfunction.hpp>
 #include <ql/math/quadratic.hpp>
-#include <ql/termstructures/volatility/fxsmilesectionbystrike.hpp>
+#include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
 
 namespace QuantLib {
 

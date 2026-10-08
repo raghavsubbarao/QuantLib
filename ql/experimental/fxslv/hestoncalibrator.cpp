@@ -17,7 +17,7 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include <ql/experimental/fx/hestoncalibrator.hpp>
+#include <ql/experimental/fxslv/hestoncalibrator.hpp>
 #include <ql/math/optimization/levenbergmarquardt.hpp>
 #include <ql/processes/hestonprocess.hpp>
 #include <ql/quotes/simplequote.hpp>

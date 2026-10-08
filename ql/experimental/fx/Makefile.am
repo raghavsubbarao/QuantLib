@@ -5,18 +5,11 @@ this_includedir=${includedir}/${subdir}
 this_include_HEADERS = \
     all.hpp \
     blackdeltacalculator.hpp \
-    deltavolquote.hpp \
-    fxslvpricingcontext.hpp \
-    hestoncalibrator.hpp \
-    slvleveragecalibrator.hpp \
-    stochvolcalibrator.hpp
+    deltavolquote.hpp
 
 cpp_files = \
     blackdeltacalculator.cpp \
-    deltavolquote.cpp \
-    fxslvpricingcontext.cpp \
-    hestoncalibrator.cpp \
-    slvleveragecalibrator.cpp
+    deltavolquote.cpp
 
 if UNITY_BUILD
 

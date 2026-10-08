@@ -5,7 +5,7 @@
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/volatility/sabr.hpp>
-#include <ql/termstructures/volatility/fxsmilesectionbystrike.hpp>
+#include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
 
 namespace QuantLib {
 

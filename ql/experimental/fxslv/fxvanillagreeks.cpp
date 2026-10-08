@@ -18,7 +18,7 @@
 */
 
 #include <ql/exercise.hpp>
-#include <ql/pricingengines/vanilla/fxvanillagreeks.hpp>
+#include <ql/experimental/fxslv/fxvanillagreeks.hpp>
 #include <ql/exercise.hpp>
 #include <ql/pricingengines/vanilla/analyticeuropeanengine.hpp>
 #include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>

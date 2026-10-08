@@ -24,7 +24,7 @@
 #ifndef quantlib_heston_calibrator_hpp
 #define quantlib_heston_calibrator_hpp
 
-#include <ql/experimental/fx/stochvolcalibrator.hpp>
+#include <ql/experimental/fxslv/stochvolcalibrator.hpp>
 #include <ql/math/optimization/endcriteria.hpp>
 #include <ql/models/calibrationhelper.hpp>
 #include <ql/models/equity/hestonmodel.hpp>

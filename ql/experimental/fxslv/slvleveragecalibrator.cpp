@@ -17,7 +17,7 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include <ql/experimental/fx/slvleveragecalibrator.hpp>
+#include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
 #include <ql/methods/finitedifferences/operators/fdmsquarerootfwdop.hpp>
 #include <ql/methods/finitedifferences/solvers/fdmbackwardsolver.hpp>
 #include <ql/methods/finitedifferences/utilities/fdmhestongreensfct.hpp>

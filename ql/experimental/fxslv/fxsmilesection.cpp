@@ -1,5 +1,5 @@
 #include <ql/math/solvers1d/brent.hpp>
-#include <ql/termstructures/volatility/fxsmilesection.hpp>
+#include <ql/experimental/fxslv/fxsmilesection.hpp>
 
 namespace QuantLib {
 

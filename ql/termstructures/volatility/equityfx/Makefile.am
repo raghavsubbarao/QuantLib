@@ -11,7 +11,6 @@ this_include_HEADERS = \
     blackvariancecurve.hpp \
     blackvariancesurface.hpp \
     blackvoltermstructure.hpp \
-    fxvariancesurface.hpp \
     fixedlocalvolsurface.hpp \
     gridmodellocalvolsurface.hpp \
     hestonblackvolsurface.hpp \
