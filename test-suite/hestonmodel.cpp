@@ -11,21 +11,22 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include "preconditions.hpp"
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
-#include <ql/experimental/exoticoptions/analyticpdfhestonengine.hpp>
+#include <algorithm>
 #include <ql/instruments/barrieroption.hpp>
 #include <ql/instruments/vanillaoption.hpp>
 #include <ql/math/functional.hpp>
 #include <ql/math/integrals/gausslobattointegral.hpp>
+#include <ql/math/integrals/expsinhintegral.hpp>
+#include <ql/math/integrals/tanhsinhintegral.hpp>
 #include <ql/math/optimization/differentialevolution.hpp>
 #include <ql/math/optimization/levenbergmarquardt.hpp>
 #include <ql/math/randomnumbers/rngtraits.hpp>
@@ -39,6 +40,7 @@
 #include <ql/pricingengines/blackformula.hpp>
 #include <ql/pricingengines/vanilla/analyticdividendeuropeanengine.hpp>
 #include <ql/pricingengines/vanilla/analytichestonengine.hpp>
+#include <ql/pricingengines/vanilla/analyticpdfhestonengine.hpp>
 #include <ql/pricingengines/vanilla/analyticptdhestonengine.hpp>
 #include <ql/pricingengines/vanilla/coshestonengine.hpp>
 #include <ql/pricingengines/vanilla/exponentialfittinghestonengine.hpp>
@@ -588,7 +590,7 @@ BOOST_AUTO_TEST_CASE(testMcVsCached) {
     }
 }
 
-BOOST_AUTO_TEST_CASE(testFdBarrierVsCached, *precondition(if_speed(Fast))) {
+BOOST_AUTO_TEST_CASE(testFdBarrierVsCached) {
     BOOST_TEST_MESSAGE("Testing FD barrier Heston engine against cached values...");
 
     DayCounter dc = Actual360();
@@ -785,7 +787,7 @@ BOOST_AUTO_TEST_CASE(testFdAmerican) {
     }
 }
 
-BOOST_AUTO_TEST_CASE(testKahlJaeckelCase, *precondition(if_speed(Fast))) {
+BOOST_AUTO_TEST_CASE(testKahlJaeckelCase) {
     BOOST_TEST_MESSAGE(
           "Testing MC and FD Heston engines for the Kahl-Jaeckel example...");
 
@@ -825,7 +827,7 @@ BOOST_AUTO_TEST_CASE(testKahlJaeckelCase, *precondition(if_speed(Fast))) {
         { HestonProcess::NonCentralChiSquareVariance, 10,
           "NonCentralChiSquareVariance" },
         { HestonProcess::QuadraticExponentialMartingale, 100,
-          "QuadraticExponentialMartingale" },
+          "QuadraticExponentialMartingale" }
     };
 
     const Real tolerance = 0.2;
@@ -860,21 +862,33 @@ BOOST_AUTO_TEST_CASE(testKahlJaeckelCase, *precondition(if_speed(Fast))) {
         }
     }
 
-    option.setPricingEngine(
-        MakeMCEuropeanHestonEngine<LowDiscrepancy>(
-            ext::make_shared<HestonProcess>(
+    const HestonProcessDiscretizationDesc qmcDescriptions[] = {
+        { HestonProcess::BroadieKayaExactSchemeLaguerre, 1,
+          "BroadieKayaExactSchemeLaguerre" },
+        { HestonProcess::BroadieKayaExactSchemeTrapezoidal, 1,
+          "BroadieKayaExactSchemeTrapezoidal" },
+        { HestonProcess::BroadieKayaExactSchemeLobatto, 1,
+          "BroadieKayaExactSchemeLobatto" },
+    };
+    
+    for (const auto& description : qmcDescriptions) {
+        option.setPricingEngine(
+            MakeMCEuropeanHestonEngine<LowDiscrepancy>(
+                ext::make_shared<HestonProcess>(
                     riskFreeTS, dividendTS, s0, v0, kappa, theta, sigma, rho,
-                    HestonProcess::BroadieKayaExactSchemeLaguerre))
-        .withSteps(1)
-        .withSamples(1023));
+                    description.discretization))
+            .withSteps(description.nSteps)
+            .withSamples(1023)
+        );
 
-    Real calculated = option.NPV();
-    if (std::fabs(calculated - expected) > 0.5*tolerance) {
-        BOOST_ERROR("Failed to reproduce cached price with MC engine"
-                    << "\n    discretization: BroadieKayaExactSchemeLobatto"
-                    << "\n    calculated:     " << calculated
-                    << "\n    expected:       " << expected
-                    << "\n    tolerance:      " << tolerance);
+        Real calculated = option.NPV();
+        if (std::fabs(calculated - expected) > 0.5*tolerance) {
+            BOOST_ERROR("Failed to reproduce cached price with MC engine"
+                        << "\n    discretization: " << description.name
+                        << "\n    calculated:     " << calculated
+                        << "\n    expected:       " << expected
+                        << "\n    tolerance:      " << 0.5*tolerance);
+        }
     }
 
 
@@ -887,7 +901,7 @@ BOOST_AUTO_TEST_CASE(testKahlJaeckelCase, *precondition(if_speed(Fast))) {
     option.setPricingEngine(
         ext::make_shared<FdHestonVanillaEngine>(hestonModel, 200, 401, 101));
 
-    calculated = option.NPV();
+    Real calculated = option.NPV();
     Real error = std::fabs(calculated - expected);
     if (error > 5.0e-2) {
         BOOST_FAIL("failed to reproduce cached price with FD engine"
@@ -937,7 +951,7 @@ BOOST_AUTO_TEST_CASE(testKahlJaeckelCase, *precondition(if_speed(Fast))) {
     }
 }
 
-BOOST_AUTO_TEST_CASE(testDifferentIntegrals, *precondition(if_speed(Fast))) {
+BOOST_AUTO_TEST_CASE(testDifferentIntegrals) {
     BOOST_TEST_MESSAGE(
        "Testing different numerical Heston integration algorithms...");
 
@@ -1046,9 +1060,12 @@ BOOST_AUTO_TEST_CASE(testDifferentIntegrals, *precondition(if_speed(Fast))) {
                 }
             }
         }
-        const Real maxDiff = std::max(std::max(
-            std::max(maxLaguerreDiff,maxLegendreDiff),
-                                     maxChebyshevDiff), maxChebyshev2ndDiff);
+        const Real maxDiff = std::max({
+                maxLaguerreDiff,
+                maxLegendreDiff,
+                maxChebyshevDiff,
+                maxChebyshev2ndDiff
+            });
 
         const Real tr = tol[iter - params.begin()];
         if (maxDiff > tr) {
@@ -1782,6 +1799,14 @@ BOOST_AUTO_TEST_CASE(testAllIntegrationMethods) {
         "exp-sinh integration with angled contour shift integral");
 #endif
 
+#ifdef QL_BOOST_HAS_TANH_SINH
+    // Angled contour shift integral with tanhSinh
+    reportOnIntegrationMethodTest(option, model,
+        AnalyticHestonEngine::Integration::tanhSinh(),
+        AnalyticHestonEngine::AngledContour,
+        true, expected, 1e-8, Null<Size>(),
+        "tanh-sinh integration with angled contour shift integral");
+#endif
 }
 
 BOOST_AUTO_TEST_CASE(testCosHestonCumulants) {
@@ -3346,6 +3371,40 @@ BOOST_AUTO_TEST_CASE(testOptimalAlphaKmax) {
     alphaStar = AnalyticHestonEngine::OptimalAlpha(T, engine.get())
             .alphaGreaterZero(strike).first;
     QL_CHECK_SMALL(alphaStar - 0.28006, 1e-4);
+}
+
+BOOST_AUTO_TEST_CASE(testHestonBlackVolSurfaceAtmLevel) {
+    BOOST_TEST_MESSAGE("Testing atmLevel on HestonBlackVolSurface...");
+
+    const Date today(4, March, 2026);
+    Settings::instance().evaluationDate() = today;
+    const DayCounter dc = Actual365Fixed();
+
+    const Real s0 = 100.0;
+    const Rate r = 0.05, q = 0.02;
+
+    const Handle<Quote> spot(ext::make_shared<SimpleQuote>(s0));
+    const Handle<YieldTermStructure> rTS(flatRate(today, r, dc));
+    const Handle<YieldTermStructure> qTS(flatRate(today, q, dc));
+
+    const auto process = ext::make_shared<HestonProcess>(
+        rTS, qTS, spot, 0.04, 1.0, 0.04, 0.3, -0.5);
+    const auto model = ext::make_shared<HestonModel>(process);
+    const Handle<HestonModel> modelH(model);
+    const HestonBlackVolSurface surface(modelH);
+
+    const Real tol = 1e-12;
+    for (Time t : { 0.25, 1.0, 5.0 }) {
+        const Real expected = s0 * qTS->discount(t) / rTS->discount(t);
+        const Real calculated = surface.atmLevel(t);
+        if (std::fabs(calculated - expected) > tol)
+            BOOST_FAIL("HestonBlackVolSurface::atmLevel mismatch"
+                       << "\n   t:          " << t
+                       << "\n   calculated: " << calculated
+                       << "\n   expected:   " << expected
+                       << "\n   diff:       " << calculated - expected
+                       << "\n   tolerance:  " << tol);
+    }
 }
 BOOST_AUTO_TEST_SUITE_END()
 

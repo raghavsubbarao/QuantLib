@@ -2,6 +2,7 @@
 /* Add the files to be included into Makefile.am instead. */
 
 #include <ql/cashflows/averagebmacoupon.hpp>
+#include <ql/cashflows/blackovernightindexedcouponpricer.hpp>
 #include <ql/cashflows/capflooredcoupon.hpp>
 #include <ql/cashflows/capflooredinflationcoupon.hpp>
 #include <ql/cashflows/cashflows.hpp>
@@ -32,6 +33,7 @@
 #include <ql/cashflows/rateaveraging.hpp>
 #include <ql/cashflows/replication.hpp>
 #include <ql/cashflows/simplecashflow.hpp>
+#include <ql/cashflows/stubiborcoupon.hpp>
 #include <ql/cashflows/timebasket.hpp>
 #include <ql/cashflows/yoyinflationcoupon.hpp>
 #include <ql/cashflows/zeroinflationcashflow.hpp>

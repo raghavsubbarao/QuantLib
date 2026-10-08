@@ -11,7 +11,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -337,6 +337,23 @@ BOOST_AUTO_TEST_CASE(testDiscreteIntegrals) {
             << "discrete Trapezoid integration failed: "
             << "\n    calculated: " << calculatedTrapezoid
             << "\n    expected:   " << expectedTrapezoid);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testDiscreteIntegralsWithFewPoints) {
+    BOOST_TEST_MESSAGE("Testing discrete integrals on degenerate grids...");
+
+    // With fewer than two nodes there is no interval to integrate, but the
+    // unsigned loop bounds (n-1, n-2) used to wrap around to SIZE_MAX and
+    // read past the arrays (e.g. a single-point Simpson rule indexing x[2]).
+    for (Size n=0; n < 2; ++n) {
+        Array x(n), f(n);
+        for (Size i=0; i < n; ++i) {
+            x[i] = Real(i);
+            f[i] = 1.0;
+        }
+        BOOST_CHECK_EQUAL(DiscreteTrapezoidIntegral()(x, f), 0.0);
+        BOOST_CHECK_EQUAL(DiscreteSimpsonIntegral()(x, f), 0.0);
     }
 }
 

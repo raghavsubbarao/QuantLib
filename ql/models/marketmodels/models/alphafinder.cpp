@@ -10,7 +10,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -354,7 +354,7 @@ Real AlphaFinder::computeLinearPart(Real alpha) {
         Real bilimit = alpha0;
 
         if (bottomValue > targetVariance && topValue > targetVariance) {
-            // see if if ok at some intermediate point by stepping through
+            // see if ok at some intermediate point by stepping through
             Integer i=1;
             while ( i < steps && topValue> targetVariance) {
                 topAlpha = alpha0 + (alphaMax-alpha0)*(i+0.0)/(steps+0.0);
@@ -367,7 +367,7 @@ Real AlphaFinder::computeLinearPart(Real alpha) {
         }
 
         if (bottomValue > targetVariance && topValue > targetVariance) {
-            // see if if ok at some intermediate point by stepping through
+            // see if ok at some intermediate point by stepping through
             Integer i=1;
             while ( i < steps && topValue> targetVariance) {
                 bottomAlpha = alpha0 + (alphaMin-alpha0)*(i+0.0)/(steps+0.0);

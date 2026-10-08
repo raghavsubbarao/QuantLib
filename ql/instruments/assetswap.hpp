@@ -12,7 +12,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -69,21 +69,6 @@ namespace QuantLib {
                   Real gearing = 1.0,
                   Real nonParRepayment = Null<Real>(),
                   Date dealMaturity = Date());
-
-        /*! \deprecated Use the other overload.
-                        Deprecated in version 1.37.
-        */
-        [[deprecated("Use the other overload")]]
-        AssetSwap(bool parAssetSwap,
-                  ext::shared_ptr<Bond> bond,
-                  Real bondCleanPrice,
-                  Real nonParRepayment,
-                  Real gearing,
-                  const ext::shared_ptr<IborIndex>& iborIndex,
-                  Spread spread = 0.0,
-                  const DayCounter& floatingDayCount = DayCounter(),
-                  Date dealMaturity = Date(),
-                  bool payBondCoupon = false);
 
         // results
         Spread fairSpread() const;

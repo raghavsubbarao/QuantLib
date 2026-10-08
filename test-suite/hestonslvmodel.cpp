@@ -11,17 +11,15 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include "preconditions.hpp"
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
-#include <ql/experimental/exoticoptions/analyticpdfhestonengine.hpp>
 #include <ql/instruments/barrieroption.hpp>
 #include <ql/instruments/doublebarrieroption.hpp>
 #include <ql/instruments/forwardvanillaoption.hpp>
@@ -70,6 +68,7 @@
 #include <ql/pricingengines/forward/forwardengine.hpp>
 #include <ql/pricingengines/vanilla/analyticeuropeanengine.hpp>
 #include <ql/pricingengines/vanilla/analytichestonengine.hpp>
+#include <ql/pricingengines/vanilla/analyticpdfhestonengine.hpp>
 #include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>
 #include <ql/pricingengines/vanilla/fdhestonvanillaengine.hpp>
 #include <ql/pricingengines/vanilla/mceuropeanhestonengine.hpp>
@@ -703,7 +702,7 @@ ext::shared_ptr<LocalVolTermStructure> getFixedLocalVolFromHeston(
                                                  ext::make_shared<Matrix>(nStrikes, timeGrid->size()-1));
     for (Size i=1; i < timeGrid->size(); ++i) {
         const Time t = timeGrid->at(i);
-        const ext::shared_ptr<std::vector<Real> > strikeSlice = strikes[i-1];
+        const ext::shared_ptr<std::vector<Real> >& strikeSlice = strikes[i-1];
 
         for (Size j=0; j < nStrikes; ++j) {
             const Real s = (*strikeSlice)[j];
@@ -1138,7 +1137,7 @@ BOOST_AUTO_TEST_CASE(testSquareRootFokkerPlanckFwdEquation) {
     }
 }
 
-BOOST_AUTO_TEST_CASE(testHestonFokkerPlanckFwdEquation, *precondition(if_speed(Slow))) {
+BOOST_AUTO_TEST_CASE(testHestonFokkerPlanckFwdEquation) {
     BOOST_TEST_MESSAGE("Testing Fokker-Planck forward equation "
                        "for the Heston process...");
 
@@ -1194,7 +1193,7 @@ BOOST_AUTO_TEST_CASE(testHestonFokkerPlanckFwdEquation, *precondition(if_speed(S
     }
 }
 
-BOOST_AUTO_TEST_CASE(testHestonFokkerPlanckFwdEquationLogLVLeverage, *precondition(if_speed(Fast))) {
+BOOST_AUTO_TEST_CASE(testHestonFokkerPlanckFwdEquationLogLVLeverage) {
     BOOST_TEST_MESSAGE("Testing Fokker-Planck forward equation "
                        "for the Heston process Log Transformation with leverage LV limiting case...");
 
@@ -1360,7 +1359,7 @@ BOOST_AUTO_TEST_CASE(testHestonFokkerPlanckFwdEquationLogLVLeverage, *preconditi
     }
 }
 
-BOOST_AUTO_TEST_CASE(testBlackScholesFokkerPlanckFwdEquationLocalVol, *precondition(if_speed(Fast))) {
+BOOST_AUTO_TEST_CASE(testBlackScholesFokkerPlanckFwdEquationLocalVol) {
     BOOST_TEST_MESSAGE(
             "Testing Fokker-Planck forward equation for BS Local Vol process...");
 
@@ -1857,7 +1856,7 @@ BOOST_AUTO_TEST_CASE(testBarrierPricingViaHestonLocalVol) {
 //    }
 //}
 
-BOOST_AUTO_TEST_CASE(testMonteCarloVsFdmPricing, *precondition(if_speed(Fast))) {
+BOOST_AUTO_TEST_CASE(testMonteCarloVsFdmPricing) {
     BOOST_TEST_MESSAGE(
         "Testing Monte-Carlo vs FDM Pricing for "
         "Heston SLV models...");
@@ -1962,7 +1961,7 @@ BOOST_AUTO_TEST_CASE(testMonteCarloVsFdmPricing, *precondition(if_speed(Fast))) 
     }
 }
 
-BOOST_AUTO_TEST_CASE(testMonteCarloCalibration, *precondition(if_speed(Fast))) {
+BOOST_AUTO_TEST_CASE(testMonteCarloCalibration) {
     BOOST_TEST_MESSAGE(
         "Testing Monte-Carlo Calibration...");
 
@@ -2256,7 +2255,7 @@ BOOST_AUTO_TEST_CASE(testMonteCarloCalibration, *precondition(if_speed(Fast))) {
 //    }
 //}
 
-BOOST_AUTO_TEST_CASE(testMoustacheGraph, *precondition(if_speed(Fast))) {
+BOOST_AUTO_TEST_CASE(testMoustacheGraph) {
     BOOST_TEST_MESSAGE(
         "Testing double no touch pricing with SLV and mixing...");
 

@@ -11,11 +11,14 @@
 #include <ql/pricingengines/vanilla/analytich1hwengine.hpp>
 #include <ql/pricingengines/vanilla/analytichestonengine.hpp>
 #include <ql/pricingengines/vanilla/analytichestonhullwhiteengine.hpp>
+#include <ql/pricingengines/vanilla/analyticpdfhestonengine.hpp>
 #include <ql/pricingengines/vanilla/analyticptdhestonengine.hpp>
+#include <ql/pricingengines/vanilla/analyticroughhestonengine.hpp>
 #include <ql/pricingengines/vanilla/baroneadesiwhaleyengine.hpp>
 #include <ql/pricingengines/vanilla/batesengine.hpp>
 #include <ql/pricingengines/vanilla/binomialengine.hpp>
 #include <ql/pricingengines/vanilla/bjerksundstenslandengine.hpp>
+#include <ql/pricingengines/vanilla/cashdividendeuropeanengine.hpp>
 #include <ql/pricingengines/vanilla/coshestonengine.hpp>
 #include <ql/pricingengines/vanilla/discretizedvanillaoption.hpp>
 #include <ql/pricingengines/vanilla/exponentialfittinghestonengine.hpp>

@@ -5,10 +5,12 @@
 #include <ql/termstructures/bootstraphelper.hpp>
 #include <ql/termstructures/defaulttermstructure.hpp>
 #include <ql/termstructures/globalbootstrap.hpp>
+#include <ql/termstructures/globalbootstrapvars.hpp>
 #include <ql/termstructures/inflationtermstructure.hpp>
 #include <ql/termstructures/interpolatedcurve.hpp>
 #include <ql/termstructures/iterativebootstrap.hpp>
 #include <ql/termstructures/localbootstrap.hpp>
+#include <ql/termstructures/multicurve.hpp>
 #include <ql/termstructures/voltermstructure.hpp>
 #include <ql/termstructures/yieldtermstructure.hpp>
 

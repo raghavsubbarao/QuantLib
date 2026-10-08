@@ -10,7 +10,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -26,6 +26,7 @@
 
 #include <ql/methods/montecarlo/sample.hpp>
 #include <cstdint>
+#include <utility>
 
 namespace QuantLib {
 
@@ -57,8 +58,8 @@ namespace QuantLib {
       public:
         typedef Sample<Real> sample_type;
 
-        explicit ZigguratGaussianRng(const RNG& uint64Generator)
-        : uint64Generator_(uint64Generator) {}
+        explicit ZigguratGaussianRng(RNG  uint64Generator)
+        : uint64Generator_(std::move(uint64Generator)) {}
 
         //! returns a sample from a Gaussian distribution
         sample_type next() const { return {nextReal(), 1.0}; }
@@ -103,7 +104,14 @@ namespace QuantLib {
                 // compute a random number in the tail by hand
                 return zeroCase(u);
             }
-            if (normF(i + 1) + (normF(i) - normF(i + 1) * uint64Generator_.nextReal()) < pdf(x)) {
+            // Marsaglia-Tsang wedge acceptance: draw uniformly on the interval
+            // between normF(i) and normF(i + 1) and accept if it lands under
+            // the density. Kept in named locals so the inequality reads as the
+            // formula does.
+            const Real fi = normF(i);
+            const Real fiPlus1 = normF(i + 1);
+            const Real w = uint64Generator_.nextReal();
+            if (fiPlus1 + (fi - fiPlus1) * w < pdf(x)) {
                 return x;
             }
         }

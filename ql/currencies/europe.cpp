@@ -11,7 +11,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -142,6 +142,15 @@ namespace QuantLib {
     LVLCurrency::LVLCurrency() {
         static auto lvlData = ext::make_shared<Data>("Latvian lat", "LVL", 428, "Ls", "", 100, Rounding());
         data_ = lvlData;
+    }
+
+    // Macedonian denar
+    /* The ISO three-letter code is MKD; the numeric code is 807.
+       It is divided in 100 deni.
+    */
+    MKDCurrency::MKDCurrency() {
+        static auto mkdData = ext::make_shared<Data>("Macedonian denar", "MKD", 807, "den", "", 100, Rounding());
+        data_ = mkdData;
     }
 
     // Norwegian krone

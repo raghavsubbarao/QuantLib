@@ -10,7 +10,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -117,6 +117,7 @@ BOOST_AUTO_TEST_CASE(testFlatExtrapolation) {
 
     std::vector<ext::shared_ptr<BondHelper> > helpers;
 
+    helpers.reserve(bonds.size());
     for (Size i = 0; i < bonds.size(); ++i) {
         helpers.push_back(ext::make_shared<BondHelper>(
             Handle<Quote>(ext::make_shared<SimpleQuote>(quotes[i])), bonds[i]));
@@ -163,16 +164,22 @@ BOOST_AUTO_TEST_CASE(testFlatExtrapolation) {
         bond->setPricingEngine(engine2);
         modelPrices2.emplace_back(bond->cleanPrice(), Bond::Price::Clean);
     }
+
     BOOST_CHECK_EQUAL(curve1->fitResults().errorCode(), EndCriteria::MaxIterations);
-    BOOST_CHECK_EQUAL(curve2->fitResults().errorCode(), EndCriteria::MaxIterations);
+
+    // Unfortunately, the error code for curve2 depends on the
+    // floating-point flags used during compilation so we can't have a
+    // corresponding check. We can check that the costs for the two
+    // fits are similar, though:
+
+    Real cost1 = std::sqrt(curve1->fitResults().minimumCostValue());
+    Real cost2 = std::sqrt(curve2->fitResults().minimumCostValue());
+    BOOST_CHECK_SMALL(cost1 - cost2, 1e-3);
 
     // the resulting cost values are similar for both approaches
     // i.e. the fit has a similar quality, I get for example:
     // fitted curve cost1 = 0.0921232
     // fitted curve cost2 = 0.0919438
-
-    // Real cost1 = std::sqrt(curve1->fitResults().minimumCostValue());
-    // Real cost2 = std::sqrt(curve2->fitResults().minimumCostValue());
 
     // It turns out that the model yields are quite close for model1 and model2 while the curve
     // yields are hugely different: for model1 the yields are completely off (>> 100%) while for
