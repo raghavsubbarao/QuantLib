@@ -72,7 +72,7 @@
 // Market data primitives
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
-#include <ql/experimental/fx/deltavolquote.hpp>
+#include <ql/quotes/deltavolquote.hpp>
 
 // Time
 #include <ql/time/daycounters/actual365fixed.hpp>

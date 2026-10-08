@@ -49,7 +49,7 @@
 #include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
 #include <ql/experimental/fxslv/fxcostsmilesection.hpp>
-#include <ql/experimental/fx/deltavolquote.hpp>
+#include <ql/quotes/deltavolquote.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>

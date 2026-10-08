@@ -1,8 +1,8 @@
 #ifndef quantlib_axl_fx_smile_section_hpp
 #define quantlib_axl_fx_smile_section_hpp
 
-#include <ql/experimental/fx/blackdeltacalculator.hpp>
-#include <ql/experimental/fx/deltavolquote.hpp>
+#include <ql/pricingengines/blackdeltacalculator.hpp>
+#include <ql/quotes/deltavolquote.hpp>
 #include <ql/patterns/lazyobject.hpp>
 #include <ql/pricingengines/blackcalculator.hpp>
 #include <ql/quote.hpp>

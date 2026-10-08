@@ -37,7 +37,7 @@
 #include <ql/instruments/payoffs.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
-#include <ql/experimental/fx/deltavolquote.hpp>
+#include <ql/quotes/deltavolquote.hpp>
 #include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
 #include <ql/experimental/fxslv/hestoncalibrator.hpp>
 #include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
