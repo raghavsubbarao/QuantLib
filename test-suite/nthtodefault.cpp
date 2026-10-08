@@ -10,14 +10,13 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include "preconditions.hpp"
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
 #include <ql/currencies/europe.hpp>
@@ -96,7 +95,7 @@ hwDatumDist hwDataDist[] = {
 };
 
 
-BOOST_AUTO_TEST_CASE(testGauss, *precondition(if_speed(Slow))) {
+BOOST_AUTO_TEST_CASE(testGauss) {
     BOOST_TEST_MESSAGE("Testing nth-to-default against Hull-White values "
                        "with Gaussian copula...");
 
@@ -177,6 +176,7 @@ BOOST_AUTO_TEST_CASE(testGauss, *precondition(if_speed(Slow))) {
 
     // Set up pool and basket
     std::vector<std::string> namesIds;
+    namesIds.reserve(names);
     for(Size i=0; i<names; i++)
         namesIds.push_back(std::string("Name") + std::to_string(i));
 
@@ -222,8 +222,6 @@ BOOST_AUTO_TEST_CASE(testGauss, *precondition(if_speed(Slow))) {
         simpleQuote->setValue (hwCorrelation[j]);
         for (Size i = 0; i < ntd.size(); i++) {
             QL_REQUIRE(ntd[i].rank() == hwData[i].rank, "rank does not match");
-            QL_REQUIRE(std::size(hwCorrelation) == std::size(hwData[i].spread),
-                       "vector length does not match");
             diff = 1e4 * ntd[i].fairPremium() - hwData[i].spread[j];
             maxDiff = std::max(maxDiff, fabs (diff));
             BOOST_CHECK_MESSAGE (fabs(diff/hwData[i].spread[j]) < relTolerance
@@ -233,7 +231,7 @@ BOOST_AUTO_TEST_CASE(testGauss, *precondition(if_speed(Slow))) {
         }
     }
 }
-BOOST_AUTO_TEST_CASE(testStudent, *precondition(if_speed(Slow))) {
+BOOST_AUTO_TEST_CASE(testStudent) {
 
     BOOST_TEST_MESSAGE("Testing nth-to-default against Hull-White values "
                        "with Student copula...");
@@ -300,6 +298,7 @@ BOOST_AUTO_TEST_CASE(testStudent, *precondition(if_speed(Slow))) {
 
     // Set up pool and basket
     std::vector<std::string> namesIds;
+    namesIds.reserve(names);
     for(Size i=0; i<names; i++)
         namesIds.push_back(std::string("Name") + std::to_string(i));
 

@@ -10,7 +10,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -21,6 +21,8 @@
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
 #include <ql/cashflows/iborcoupon.hpp>
+#include <ql/cashflows/couponpricer.hpp>
+#include <ql/experimental/termstructures/basisswapratehelpers.hpp>
 #include <ql/indexes/bmaindex.hpp>
 #include <ql/indexes/ibor/estr.hpp>
 #include <ql/indexes/ibor/euribor.hpp>
@@ -37,13 +39,20 @@
 #include <ql/math/interpolations/loginterpolation.hpp>
 #include <ql/pricingengines/bond/discountingbondengine.hpp>
 #include <ql/pricingengines/swap/discountingswapengine.hpp>
+#include <ql/quotes/futuresconvadjustmentquote.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/globalbootstrap.hpp>
+#include <ql/termstructures/globalbootstrapvars.hpp>
+#include <ql/termstructures/localbootstrap.hpp>
+#include <ql/termstructures/multicurve.hpp>
 #include <ql/termstructures/yield/bondhelpers.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
 #include <ql/termstructures/yield/oisratehelper.hpp>
+#include <ql/termstructures/yield/piecewisespreadyieldcurve.hpp>
 #include <ql/termstructures/yield/piecewiseyieldcurve.hpp>
 #include <ql/termstructures/yield/ratehelpers.hpp>
+#include <ql/termstructures/yield/zerospreadedtermstructure.hpp>
+#include <ql/termstructures/volatility/optionlet/constantoptionletvol.hpp>
 #include <ql/time/asx.hpp>
 #include <ql/time/calendars/canada.hpp>
 #include <ql/time/calendars/japan.hpp>
@@ -60,7 +69,7 @@
 #include <map>
 #include <string>
 #include <utility>
-#include <vector>
+#include <vector>  
 
 using namespace QuantLib;
 using namespace boost::unit_test_framework;
@@ -372,7 +381,8 @@ void testCurveConsistency(CommonVars& vars,
     for (Size i=0; i<vars.swaps; i++) {
         Period tenor = swapData[i].n*swapData[i].units;
 
-        VanillaSwap swap = MakeVanillaSwap(tenor, euribor6m, 0.0)
+        VanillaSwap swap = MakeVanillaSwap(tenor, euribor6m)
+            .withFixedRate(0.0)
             .withEffectiveDate(vars.settlement)
             .withFixedLegDayCount(vars.fixedLegDayCounter)
             .withFixedLegTenor(Period(vars.fixedLegFrequency))
@@ -897,7 +907,8 @@ BOOST_AUTO_TEST_CASE(testLiborFixing) {
     for (Size i=0; i<vars.swaps; i++) {
         Period tenor = swapData[i].n*swapData[i].units;
 
-        VanillaSwap swap = MakeVanillaSwap(tenor, index, 0.0)
+        VanillaSwap swap = MakeVanillaSwap(tenor, index)
+            .withFixedRate(0.0)
             .withEffectiveDate(vars.settlement)
             .withFixedLegDayCount(vars.fixedLegDayCounter)
             .withFixedLegTenor(Period(vars.fixedLegFrequency))
@@ -930,7 +941,8 @@ BOOST_AUTO_TEST_CASE(testLiborFixing) {
     for (Size i=0; i<vars.swaps; i++) {
         Period tenor = swapData[i].n*swapData[i].units;
 
-        VanillaSwap swap = MakeVanillaSwap(tenor, index, 0.0)
+        VanillaSwap swap = MakeVanillaSwap(tenor, index)
+            .withFixedRate(0.0)
             .withEffectiveDate(vars.settlement)
             .withFixedLegDayCount(vars.fixedLegDayCounter)
             .withFixedLegTenor(Period(vars.fixedLegFrequency))
@@ -998,7 +1010,8 @@ BOOST_AUTO_TEST_CASE(testJpyLibor) {
     for (Size i=0; i<vars.swaps; i++) {
         Period tenor = swapData[i].n*swapData[i].units;
 
-        VanillaSwap swap = MakeVanillaSwap(tenor, jpylibor6m, 0.0)
+        VanillaSwap swap = MakeVanillaSwap(tenor, jpylibor6m)
+            .withFixedRate(0.0)
             .withEffectiveDate(vars.settlement)
             .withFixedLegDayCount(vars.fixedLegDayCounter)
             .withFixedLegTenor(Period(vars.fixedLegFrequency))
@@ -1063,11 +1076,17 @@ BOOST_AUTO_TEST_CASE(testDefaultInstantiation) {
 
     CommonVars vars;
 
+    class SplineLogCubic : public LogCubic {
+      public:
+        SplineLogCubic()
+        : LogCubic(CubicInterpolation::Spline, false,
+                   CubicInterpolation::SecondDerivative, 0.0,
+                   CubicInterpolation::SecondDerivative, 0.0) {}
+    };
+
     // no actual tests at runtime; this tests that all these instantiations compile
-    PiecewiseYieldCurve<Discount, Linear> linear(vars.settlement, vars.instruments, Actual360());
     PiecewiseYieldCurve<Discount, LogLinear> log_linear(vars.settlement, vars.instruments, Actual360());
-    PiecewiseYieldCurve<Discount, Cubic> cubic(vars.settlement, vars.instruments, Actual360());
-    PiecewiseYieldCurve<Discount, DefaultLogCubic> log_cubic(vars.settlement, vars.instruments, Actual360());
+    PiecewiseYieldCurve<Discount, SplineLogCubic> log_cubic(vars.settlement, vars.instruments, Actual360());
     PiecewiseYieldCurve<Discount, MonotonicLogCubic> monotonic_log_cubic(vars.settlement, vars.instruments, Actual360());
     PiecewiseYieldCurve<Discount, KrugerLog> kruger_log_cubic(vars.settlement, vars.instruments, Actual360());
     PiecewiseYieldCurve<ForwardRate, BackwardFlat> backward(vars.settlement, vars.instruments, Actual360());
@@ -1170,7 +1189,8 @@ BOOST_AUTO_TEST_CASE(testBadPreviousCurve, *precondition(usingAtParCoupons())) {
     for (auto& i : data) {
         Period tenor = i.n * i.units;
 
-        VanillaSwap swap = MakeVanillaSwap(tenor, index, 0.0)
+        VanillaSwap swap = MakeVanillaSwap(tenor, index)
+            .withFixedRate(0.0)
             .withFixedLegDayCount(Thirty360(Thirty360::BondBasis))
             .withFixedLegTenor(Period(1, Months))
             .withFixedLegConvention(Unadjusted);
@@ -1276,6 +1296,7 @@ struct additionalDates {
         Calendar cal = TARGET();
         Date settl = cal.advance(today, 2 * Days);
         std::vector<Date> dates;
+        dates.reserve(5);
         for (Size i = 0; i < 5; ++i)
             dates.push_back(cal.advance(settl, (1 + i) * Months));
         // Add dates before the referenceDate and not in sorted order.
@@ -1341,6 +1362,7 @@ BOOST_AUTO_TEST_CASE(testGlobalBootstrap, *precondition(usingAtParCoupons())) {
     std::vector<ext::shared_ptr<BootstrapHelper<YieldTermStructure> > > additionalHelpers;
 
     // set up the additional rate helpers we need in the cost function
+    additionalHelpers.reserve(7);
     for (Size i = 0; i < 7; ++i) {
         additionalHelpers.push_back(
             ext::make_shared<FraRateHelper>(-0.004, (12 + i) * Months, index));
@@ -1466,6 +1488,499 @@ BOOST_AUTO_TEST_CASE(testGlobalBootstrapPenalty, *precondition(usingAtParCoupons
     }
 }
 
+BOOST_AUTO_TEST_CASE(testGlobalBootstrapVariables) {
+
+    // Use fixed evaluationDate to make the test stable. It works for any date,
+    // but the tolerance varies and also depends on usingAtParCoupons().
+    CommonVars vars(Date(25, Sep, 2019));
+
+    // First, build the curve without futures.
+    typedef PiecewiseYieldCurve<Discount, LogLinear, GlobalBootstrap> Curve;
+    auto curve = ext::make_shared<Curve>(
+        vars.settlement, vars.instruments, Actual365Fixed(), LogLinear());
+
+    // Now build the curve with futures adjusted to the same level as swaps.
+    // Remove the first swap from helpers so it does not create a pillar.
+    auto helpers = vars.instruments;
+    auto firstSwap = helpers[vars.deposits];
+    helpers.erase(helpers.begin() + vars.deposits);
+
+    auto euribor3m = ext::make_shared<Euribor3M>();
+    Date immDate = vars.today;
+    // We will optimize vol as an additional variable during bootstrapping.
+    auto vol = ext::make_shared<SimpleQuote>();
+    auto mr = makeQuoteHandle(0.03);
+    for (Size i = 0; i < vars.immFuts; i++) {
+        Handle<Quote> r(vars.immFutPrices[i]);
+        immDate = IMM::nextDate(immDate);
+        // if the fixing is before today, jump forward by one future maturity
+        if (euribor3m->fixingDate(immDate) < vars.today)
+            immDate = IMM::nextDate(immDate);
+        auto convAdj = ext::make_shared<FuturesConvAdjustmentQuote>(
+            euribor3m, immDate, r, Handle<Quote>(vol), mr);
+        // Pass registerAsObserver = false so that FuturesRateHelpers do not
+        // depend on convAdj quotes. Otherwise, the curve will be invalidated
+        // every time we change the vol quote during optimization, which will
+        // break bootstrapping.
+        bool registerAsObserver = false;
+        helpers.push_back(ext::make_shared<FuturesRateHelper>(
+            r, immDate, euribor3m, Handle<Quote>(convAdj, registerAsObserver),
+            Futures::IMM));
+    }
+
+    auto penalties = [&]() { return Array{1e4 * firstSwap->quoteError()}; };
+
+    auto curveFutures = ext::make_shared<Curve>(
+        vars.settlement, helpers, Actual365Fixed(), LogLinear(),
+        Curve::bootstrap_type(
+            {firstSwap}, nullptr, penalties, 1e-12, nullptr, nullptr,
+            ext::make_shared<SimpleQuoteVariables>(
+                std::vector<ext::shared_ptr<SimpleQuote>>{vol},
+                std::vector<Real>{1.0}, std::vector<Real>{0.0})));
+
+    // Check that the pillars are not the same.
+    BOOST_CHECK(curve->dates() != curveFutures->dates());
+
+    // Check that all deposit and swap rates are the same in both curves.
+    for (const auto& helper : vars.instruments) {
+        QL_CHECK_CLOSE(curve->discount(helper->pillarDate()),
+                          curveFutures->discount(helper->pillarDate()),
+                          1e-6);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testGlobalBootstrapInitialGuessFn, *precondition(usingAtParCoupons())) {
+
+    CommonVars vars(Date(25, Sep, 2019));
+
+    // Create a setup that is sensitive to the initial guess.
+    auto calendar = Euribor6M().fixingCalendar();
+    std::vector<Date> pillarDates = {Date(1, Oct, 2019)};
+    for (Size i = 0; i < 8; ++i) {
+        pillarDates.push_back(calendar.adjust(pillarDates.back() + 45));
+    }
+    for (const auto& helper : vars.instruments) {
+        if (helper->pillarDate() > pillarDates.back())
+            pillarDates.push_back(helper->pillarDate());
+    }
+
+    auto penalties = [&](const std::vector<Time>& times, const std::vector<Real>& data) {
+        const Size nInst = vars.instruments.size();
+        Array errors(nInst + times.size() - 2);
+        // instruments errors
+        std::transform(
+            vars.instruments.begin(), vars.instruments.end(), errors.begin(),
+            [](const ext::shared_ptr<RateHelper>& h) { return h->quoteError(); });
+        // gradient penalties
+        Array rates(data.size() - 1);
+        for (Size i = 0; i < times.size() - 1; ++i) {
+            rates[i] = (data[i] / data[i+1] - 1.0) / (times[i+1] - times[i]);
+        }
+        for (Size i = 0; i < times.size() - 2; ++i) {
+            errors[nInst + i] = 1e-2 * (rates[i+1] - rates[i]) / (times[i+1] - times[i]);
+        }
+        return errors;
+    };
+
+    int initialGuessCalls = 0;
+    auto initialGuessFn = [&](const std::vector<Time>& times, const std::vector<Real>& data) {
+        initialGuessCalls++;
+        return Array(times.size() - 1, 1.0);
+    };
+
+    typedef PiecewiseYieldCurve<Discount, LogLinear, GlobalBootstrap> Curve;
+    auto curve = ext::make_shared<Curve>(
+        vars.settlement, std::vector<ext::shared_ptr<RateHelper>>(), Actual365Fixed(),
+        Curve::bootstrap_type(vars.instruments, [&]() { return pillarDates; }, penalties,
+                              1e-12, nullptr, nullptr, nullptr, {}, initialGuessFn));
+
+    static const Date expectedDates[] = {
+        Date(27, Sep, 2019), Date(1, Oct, 2019), Date(15, Nov, 2019), Date(30, Dec, 2019),
+        Date(13, Feb, 2020), Date(30, Mar, 2020), Date(14, May, 2020), Date(29, Jun, 2020),
+        Date(13, Aug, 2020), Date(28, Sep, 2020), Date(27, Sep, 2021), Date(27, Sep, 2022),
+        Date(27, Sep, 2023), Date(27, Sep, 2024), Date(29, Sep, 2025), Date(28, Sep, 2026),
+        Date(27, Sep, 2027), Date(27, Sep, 2028), Date(27, Sep, 2029), Date(29, Sep, 2031),
+        Date(27, Sep, 2034), Date(27, Sep, 2039), Date(27, Sep, 2044), Date(27, Sep, 2049)
+    };
+    static const DiscountFactor expectedDFs[] = {
+        1.0,                0.9994923431162580, 0.9938069118457880, 0.9882401711181712,
+        0.9828381250775845, 0.9774079566030049, 0.9721182498392723, 0.9667951580943512,
+        0.9617336341824015, 0.9564548068987965, 0.9135007024272714, 0.8698607442445871,
+        0.8266650007699866, 0.7829682196126155, 0.7399209887960153, 0.6973589159124343,
+        0.6565792747227167, 0.6180250998622848, 0.5818438569698231, 0.5127051907762759,
+        0.4218543471337612, 0.3050840671400172, 0.2225943633033588, 0.165544906093695
+    };
+
+    auto nodes = curve->nodes();
+    BOOST_REQUIRE_EQUAL(nodes.size(), std::size(expectedDates));
+    for (Size i = 0; i < nodes.size(); ++i) {
+        BOOST_CHECK_EQUAL(nodes[i].first, expectedDates[i]);
+        QL_CHECK_SMALL(nodes[i].second - expectedDFs[i], 1e-10);
+    }
+    BOOST_CHECK_EQUAL(initialGuessCalls, 1);
+}
+
+BOOST_AUTO_TEST_CASE(testMultiCurveTwoPiecewiseYieldCurves) {
+
+    BOOST_TEST_MESSAGE("Testing multicurve bootstrap with two piecewise yield curves...");
+
+    CommonVars vars(Date(23, Oct, 2025));
+
+    constexpr auto accuracy = 1E-10;
+
+    Handle<YieldTermStructure> discountCurve(
+        ext::make_shared<FlatForward>(vars.settlement, 0.02, Actual360()));
+
+    RelinkableHandle<YieldTermStructure> intcurve3m, intcurve6m;
+
+    auto euribor3m = ext::make_shared<Euribor3M>(intcurve3m);
+    auto euribor6m = ext::make_shared<Euribor6M>(intcurve6m);
+
+    std::vector<ext::shared_ptr<RateHelper>> helpers3m, helpers6m;
+
+    Handle<Quote> q(ext::make_shared<SimpleQuote>(0.03));
+    Handle<Quote> b(ext::make_shared<SimpleQuote>(0.0020));
+
+    for (Size i = 1; i <= 9; ++i) {
+        helpers3m.push_back(ext::make_shared<FraRateHelper>(
+            q, (Natural)i, (Natural)(i + 3), euribor3m->fixingDays(), euribor3m->fixingCalendar(),
+            euribor3m->businessDayConvention(), euribor3m->endOfMonth(), euribor3m->dayCounter(),
+            Pillar::LastRelevantDate));
+    }
+
+    for (Size i = 2; i <= 10; ++i) {
+        helpers3m.push_back(ext::make_shared<IborIborBasisSwapRateHelper>(
+            b, i * Years, euribor3m->fixingDays(), euribor3m->fixingCalendar(),
+            euribor3m->businessDayConvention(), euribor3m->endOfMonth(), euribor3m, euribor6m,
+            discountCurve, true));
+    }
+
+    for (Size i = 1; i <= 3; ++i) {
+        helpers6m.push_back(ext::make_shared<IborIborBasisSwapRateHelper>(
+            b, (i * 6) * Months, euribor3m->fixingDays(), euribor3m->fixingCalendar(),
+            euribor3m->businessDayConvention(), euribor3m->endOfMonth(), euribor3m, euribor6m,
+            discountCurve, false));
+    }
+
+    for (Size i = 2; i <= 10; ++i) {
+        helpers6m.push_back(ext::make_shared<SwapRateHelper>(
+            q, i * Years, euribor6m->fixingCalendar(), Annual, Following,
+            Thirty360(Thirty360::BondBasis), euribor6m, Handle<Quote>(), 0 * Days, discountCurve));
+    }
+
+    using CurveType = PiecewiseYieldCurve<Discount, LogLinear, GlobalBootstrap>;
+
+    ext::shared_ptr<YieldTermStructure> ptr3m = ext::make_shared<CurveType>(
+        vars.today, helpers3m, Actual360(), LogLinear(), GlobalBootstrap<CurveType>(accuracy));
+    ext::shared_ptr<YieldTermStructure> ptr6m = ext::make_shared<CurveType>(
+        vars.today, helpers6m, Actual360(), LogLinear(), GlobalBootstrap<CurveType>(accuracy));
+
+    auto multiCurve = ext::make_shared<MultiCurve>(accuracy);
+
+    auto curve3m = multiCurve->addBootstrappedCurve(intcurve3m, std::move(ptr3m));
+    auto curve6m = multiCurve->addBootstrappedCurve(intcurve6m, std::move(ptr6m));
+
+    // check instrument npvs
+
+    constexpr auto tolerance = 1E-10;
+
+    for (Size i = 1; i <= 9; ++i) {
+        Date start = euribor3m->fixingCalendar().advance(
+            euribor3m->fixingCalendar().advance(vars.today, euribor3m->fixingDays(), Days), i,
+            Months, euribor3m->businessDayConvention(), euribor3m->endOfMonth());
+        ForwardRateAgreement fra(euribor3m, start, Position::Long, q->value(), 1.0, curve3m);
+        QL_CHECK_CLOSE(fra.forwardRate().rate(), q->value(), tolerance);
+    }
+
+    for (Size i = 2; i <= 10; ++i) {
+        Date start = euribor3m->fixingCalendar().advance(vars.today, euribor3m->fixingDays(), Days);
+        Date maturity = euribor3m->fixingCalendar().advance(start, i * Years,
+                                                            euribor3m->businessDayConvention());
+        Schedule baseSchedule = MakeSchedule()
+                                   .from(start)
+                                   .to(maturity)
+                                   .withTenor(3 * Months)
+                                   .withCalendar(euribor3m->fixingCalendar())
+                                   .withConvention(euribor3m->businessDayConvention())
+                                   .endOfMonth(euribor3m->endOfMonth())
+                                   .forwards();
+        Schedule otherSchedule = MakeSchedule()
+                                     .from(start)
+                                     .to(maturity)
+                                     .withTenor(6 * Months)
+                                     .withCalendar(euribor6m->fixingCalendar())
+                                     .withConvention(euribor6m->businessDayConvention())
+                                     .endOfMonth(euribor6m->endOfMonth())
+                                     .forwards();
+        Leg baseLeg = IborLeg(baseSchedule, euribor3m).withSpreads(b->value()).withNotionals(1.0);
+        Leg otherLeg = IborLeg(otherSchedule, euribor6m).withNotionals(1.0);
+        Swap swap(baseLeg, otherLeg);
+        swap.setPricingEngine(ext::make_shared<DiscountingSwapEngine>(discountCurve));
+        QL_CHECK_SMALL(swap.NPV(), tolerance);
+    }
+
+    for (Size i = 1; i <= 3; ++i) {
+        Date start = euribor3m->fixingCalendar().advance(vars.today, euribor3m->fixingDays(), Days);
+        Date maturity = euribor3m->fixingCalendar().advance(start, (i * 6) * Months,
+                                                            euribor3m->businessDayConvention());
+        Schedule baseSchedule = MakeSchedule()
+                                   .from(start)
+                                   .to(maturity)
+                                   .withTenor(3 * Months)
+                                   .withCalendar(euribor3m->fixingCalendar())
+                                   .withConvention(euribor3m->businessDayConvention())
+                                   .endOfMonth(euribor3m->endOfMonth())
+                                   .forwards();
+        Schedule otherSchedule = MakeSchedule()
+                                     .from(start)
+                                     .to(maturity)
+                                     .withTenor(6 * Months)
+                                     .withCalendar(euribor6m->fixingCalendar())
+                                     .withConvention(euribor6m->businessDayConvention())
+                                     .endOfMonth(euribor6m->endOfMonth())
+                                     .forwards();
+        Leg baseLeg = IborLeg(baseSchedule, euribor3m).withSpreads(b->value()).withNotionals(1.0);
+        Leg otherLeg = IborLeg(otherSchedule, euribor6m).withNotionals(1.0);
+        Swap swap(baseLeg, otherLeg);
+        swap.setPricingEngine(ext::make_shared<DiscountingSwapEngine>(discountCurve));
+        QL_CHECK_SMALL(swap.NPV(), tolerance);
+    }
+
+    for (Size i = 2; i <= 10; ++i) {
+        VanillaSwap swap = MakeVanillaSwap(i * Years, euribor6m)
+                               .withFixedRate(q->value())
+                               .withSettlementDays(euribor6m->fixingDays())
+                               .withFixedLegDayCount(Thirty360(Thirty360::BondBasis))
+                               .withFixedLegTenor(1 * Years)
+                               .withFixedLegConvention(Following)
+                               .withFixedLegTerminationDateConvention(Following);
+        swap.setPricingEngine(ext::make_shared<DiscountingSwapEngine>(discountCurve));
+        QL_CHECK_SMALL(swap.NPV(), tolerance);
+    }
+
+}
+
+BOOST_AUTO_TEST_CASE(testMultiCurvePiecewiseYieldCurveAndSpreadedCurve) {
+
+    BOOST_TEST_MESSAGE("Testing multicurve bootstrap with piecewise yield curve and spreaded curve...");
+
+    CommonVars vars(Date(23, Oct, 2025));
+
+    constexpr auto accuracy = 1E-10;
+
+    RelinkableHandle<YieldTermStructure> intcurveois;
+    RelinkableHandle<YieldTermStructure> intcurve3m;
+
+    auto euribor3m = ext::make_shared<Euribor3M>(intcurve3m);
+
+    std::vector<ext::shared_ptr<RateHelper>> helpers3m;
+
+    Handle<Quote> q(ext::make_shared<SimpleQuote>(0.03));
+    Handle<Quote> b(ext::make_shared<SimpleQuote>(-0.01));
+
+    for (Size i = 1; i <= 10; ++i) {
+        helpers3m.push_back(ext::make_shared<SwapRateHelper>(
+            q, i * Years, euribor3m->fixingCalendar(), Annual, Following,
+            Thirty360(Thirty360::BondBasis), euribor3m, Handle<Quote>(), 0 * Days, intcurveois));
+    }
+
+    using CurveType = PiecewiseYieldCurve<Discount, LogLinear, GlobalBootstrap>;
+
+    auto multiCurve = ext::make_shared<MultiCurve>(accuracy);
+
+    ext::shared_ptr<YieldTermStructure> ptr3m = ext::make_shared<CurveType>(
+        vars.today, helpers3m, Actual360(), LogLinear(), GlobalBootstrap<CurveType>(accuracy));
+    auto curve3m = multiCurve->addBootstrappedCurve(intcurve3m, std::move(ptr3m));
+
+    ext::shared_ptr<YieldTermStructure> ptrois =
+        ext::make_shared<ZeroSpreadedTermStructure>(intcurve3m, b);
+    auto curveois = multiCurve->addNonBootstrappedCurve(intcurveois, std::move(ptrois));
+
+    // check spread ois 3m
+
+    constexpr auto tolerance = 1E-10;
+
+    QL_CHECK_CLOSE(curveois->zeroRate(1.0, Continuous).rate() - curve3m->zeroRate(1.0, Continuous).rate(),
+                      b->value(), tolerance);
+
+    // check instrument npvs
+
+    for (Size i = 1; i <= 10; ++i) {
+        VanillaSwap swap = MakeVanillaSwap(i * Years, euribor3m)
+                               .withFixedRate(q->value())
+                               .withSettlementDays(euribor3m->fixingDays())
+                               .withFixedLegDayCount(Thirty360(Thirty360::BondBasis))
+                               .withFixedLegTenor(1 * Years)
+                               .withFixedLegConvention(Following)
+                               .withFixedLegTerminationDateConvention(Following);
+        swap.setPricingEngine(ext::make_shared<DiscountingSwapEngine>(curveois));
+        QL_CHECK_SMALL(swap.NPV(), tolerance);
+    }
+
+}
+
+BOOST_AUTO_TEST_CASE(testGlobalBootstrapInstrumentWeights) {
+
+    CommonVars vars(Date(23, Oct, 2025));
+
+    std::vector<ext::shared_ptr<RateHelper>> helpers;
+    auto euribor6m = ext::make_shared<Euribor6M>();
+
+    // build a curve with overdetermined helper set
+
+    helpers.push_back(ext::make_shared<DepositRateHelper>(
+        0.01, 6 * Months, 2, TARGET(), ModifiedFollowing, true, Actual360()));
+    helpers.push_back(ext::make_shared<DepositRateHelper>(
+        0.02, 6 * Months, 2, TARGET(), ModifiedFollowing, true, Actual360()));
+
+    using CurveType = PiecewiseYieldCurve<Discount, LogLinear, GlobalBootstrap>;
+
+    // curve1 uses traditional helpers with weights w1 and w2
+
+    Real w1 = 0.1, w2 = 0.9;
+
+    auto curve1 = ext::make_shared<CurveType>(
+        vars.today, helpers, Actual360(), LogLinear(),
+        GlobalBootstrap<CurveType>(1E-10, nullptr, nullptr, {w1, w2}));
+
+    // curve2 uses custom dates and penalties using the same weights
+
+    auto addDates = [&helpers]() {
+        return std::vector<Date>{helpers[0]->pillarDate(), helpers[1]->pillarDate()};
+    };
+    auto addPenalties = [&helpers, w1, w2]() {
+        return Array{w1 * helpers[0]->quoteError(), w2 * helpers[1]->quoteError()};
+    };
+
+    auto curve2 = ext::make_shared<CurveType>(
+        vars.today, std::vector<ext::shared_ptr<RateHelper>>{}, Actual360(), LogLinear(),
+        GlobalBootstrap<CurveType>(helpers, addDates, addPenalties, 1E-10));
+
+    // check that both approaches result in the same curve
+
+    QL_CHECK_CLOSE(curve1->discount(0.3), curve2->discount(0.3), 1E-13);
+}
+
+template <template<class C> class Bootstrap>
+void testPiecewiseSpreadYieldCurveImpl() {
+    // Use fixed evaluationDate to make the test stable. When usingAtParCoupons() == false
+    // the dates don't always align between the 3M and 6M indexes, but most of the test is
+    // still valid.
+    CommonVars vars(Date(23, Sep, 2019));
+    Actual365Fixed dc;
+
+    // First, build the base curve. We can use any bootstrapping and interpolation.
+    typedef PiecewiseYieldCurve<Discount, LogLinear> BaseCurve;
+    Handle<YieldTermStructure> baseCurve(ext::make_shared<BaseCurve>(
+        vars.settlement, vars.instruments, dc, LogLinear()));
+    baseCurve->enableExtrapolation();
+
+    // Now build the curve with fewer benchmarks as a spread to the base.
+    Datum swapData[] = {
+        {  1, Years, 4.44 },
+        {  3, Years, 4.55 },
+        {  6, Years, 4.81 },
+        {  9, Years, 5.01 },
+        { 15, Years, 5.25 },
+        { 30, Years, 5.36 }
+    };
+
+    std::vector<ext::shared_ptr<RateHelper>> helpers;
+    auto euribor3m = ext::make_shared<Euribor3M>();
+    for (const auto& datum : swapData) {
+        helpers.push_back(ext::make_shared<SwapRateHelper>(
+            datum.rate / 100.0, datum.n * datum.units, vars.calendar,
+            vars.fixedLegFrequency, vars.fixedLegConvention, vars.fixedLegDayCounter,
+            euribor3m));
+    }
+
+    // We rely on LogLinear interpolation to check the curve's shape.
+    typedef PiecewiseSpreadYieldCurve<Discount, LogLinear, Bootstrap> Curve;
+    auto curve = ext::make_shared<Curve>(baseCurve, helpers, LogLinear());
+    curve->enableExtrapolation();
+    Handle<YieldTermStructure> curveHandle(curve);
+
+    // Check that we reprice the swaps.
+    const Real tolerance = 1.0e-9;
+    euribor3m = ext::make_shared<Euribor3M>(curveHandle);
+    for (const auto& datum : swapData) {
+        VanillaSwap swap = MakeVanillaSwap(datum.n * datum.units, euribor3m)
+            .withFixedRate(0.0)
+            .withEffectiveDate(vars.settlement)
+            .withFixedLegDayCount(vars.fixedLegDayCounter)
+            .withFixedLegTenor(Period(vars.fixedLegFrequency))
+            .withFixedLegConvention(vars.fixedLegConvention)
+            .withFixedLegTerminationDateConvention(vars.fixedLegConvention);
+
+        Rate expectedRate = datum.rate / 100.0,
+            estimatedRate = swap.fairRate();
+        Spread error = std::fabs(expectedRate - estimatedRate);
+        if (error > tolerance) {
+            BOOST_ERROR(datum.n << " year(s) swap:\n"
+                        << std::setprecision(8)
+                        << "\n estimated rate: " << io::rate(estimatedRate)
+                        << "\n expected rate:  " << io::rate(expectedRate)
+                        << "\n error:          " << io::rate(error)
+                        << "\n tolerance:      " << io::rate(tolerance));
+        }
+    }
+
+    // Check that the curve has shape between pillars.
+    auto prev = vars.settlement;
+    for (const auto& helper : helpers) {
+        Date pillar = helper->pillarDate();
+        Rate rate1 = curve->forwardRate(prev, pillar, dc, Continuous).rate();
+        Rate rate2 = curve->forwardRate(prev, prev + (pillar - prev) / 2, dc, Continuous).rate();
+        BOOST_CHECK_GT(std::fabs(rate1 - rate2), 1e-4);
+        prev = pillar;
+    }
+
+    // Check that extrapolation preserves constant spread.
+    Date maxDate = curve->maxDate();
+    BOOST_CHECK_EQUAL(maxDate, baseCurve->maxDate());
+    Rate rate1 = curve->forwardRate(maxDate - 1*Years, maxDate, dc, Continuous).rate();
+    Rate rate2 = curve->forwardRate(maxDate, maxDate + 1*Years, dc, Continuous).rate();
+    Rate baseRate1 = baseCurve->forwardRate(maxDate - 1*Years, maxDate, dc, Continuous).rate();
+    Rate baseRate2 = baseCurve->forwardRate(maxDate, maxDate + 1*Years, dc, Continuous).rate();
+    QL_CHECK_CLOSE(rate1 - baseRate1, rate2 - baseRate2, 1e-9);
+
+    // Check accessors.
+    BOOST_CHECK_EQUAL(curve->dates().size(), helpers.size() + 1);
+    BOOST_CHECK_EQUAL(curve->times().size(), helpers.size() + 1);
+    BOOST_CHECK_EQUAL(curve->data().size(), helpers.size() + 1);
+    const auto nodes = curve->nodes();
+    BOOST_CHECK_EQUAL(nodes.size(), helpers.size() + 1);
+
+    BOOST_CHECK_EQUAL(curve->dates()[0], vars.settlement);
+    BOOST_CHECK_EQUAL(curve->times()[0], 0.0);
+    BOOST_CHECK_EQUAL(curve->data()[0], 1.0);
+    BOOST_CHECK(nodes[0] == std::make_pair(vars.settlement, Real(1)));
+    for (Size i = 0; i < helpers.size(); ++i) {
+        BOOST_CHECK_EQUAL(curve->dates()[i+1], helpers[i]->pillarDate());
+        BOOST_CHECK_EQUAL(curve->times()[i+1], curve->timeFromReference(helpers[i]->pillarDate()));
+        BOOST_CHECK(nodes[i+1] == std::make_pair(curve->dates()[i+1], curve->data()[i+1]));
+    }
+
+    // Check that we can rebuild the curve from raw data.
+    auto rawCurve = ext::make_shared<SpreadDiscountCurve>(
+        curve->baseCurve(), curve->dates(), curve->data());
+    rawCurve->enableExtrapolation();
+
+    const Integer maxSwapYears = (std::end(swapData)-1)->n;
+    for (Integer i = 0; i < maxSwapYears + 3; ++i) {
+        Date d = vars.settlement + i*Years;
+        QL_CHECK_CLOSE(curve->discount(d), rawCurve->discount(d), 1e-9);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testPiecewiseSpreadYieldCurve) {
+
+    BOOST_TEST_MESSAGE("Testing PiecewiseSpreadYieldCurve...");
+
+    testPiecewiseSpreadYieldCurveImpl<IterativeBootstrap>();
+    testPiecewiseSpreadYieldCurveImpl<GlobalBootstrap>();
+}
+
 /* This test attempts to build an ARS collateralised in USD curve as of 25 Sep 2019. Using the default 
    IterativeBootstrap with no retries, the yield curve building fails. Allowing retries, it expands the min and max 
    bounds and passes.
@@ -1534,16 +2049,20 @@ BOOST_AUTO_TEST_CASE(testIterativeBootstrapRetries) {
     };
 
     // Create the FX swap rate helpers for the ARS in USD curve.
-    vector<ext::shared_ptr<RateHelper> > instruments;
+    vector<ext::shared_ptr<RateHelper>> instruments, datedInstruments;
+    Calendar calendar = UnitedStates(UnitedStates::GovernmentBond);
+    Date startDate = calendar.advance(calendar.adjust(asof), 2*Days);
     for (auto & arsFwdPoint : arsFwdPoints) {
         Handle<Quote> arsFwd(ext::make_shared<SimpleQuote>(arsFwdPoint.second));
         instruments.push_back(ext::make_shared<FxSwapRateHelper>(arsFwd, arsSpot, arsFwdPoint.first, 2,
-            UnitedStates(UnitedStates::GovernmentBond), Following, false, true, usdYts));
+            calendar, Following, false, true, usdYts));
+        datedInstruments.push_back(ext::make_shared<FxSwapRateHelper>(arsFwd, arsSpot, startDate,
+            calendar.advance(startDate, arsFwdPoint.first), true, usdYts));
     }
 
     // Create the ARS in USD curve with the default IterativeBootstrap.
     typedef PiecewiseYieldCurve<Discount, LogLinear, IterativeBootstrap> LLDFCurve;
-    ext::shared_ptr<YieldTermStructure> arsYts = ext::make_shared<LLDFCurve>(asof, instruments, tsDayCounter);
+    auto arsYts = ext::make_shared<LLDFCurve>(asof, instruments, tsDayCounter);
 
     // USD/ARS spot date. The date on which we check the ARS discount curve.
     Date spotDate(27, Sep, 2019);
@@ -1570,6 +2089,13 @@ BOOST_AUTO_TEST_CASE(testIterativeBootstrapRetries) {
     Real calcFwd = (spotDfArs * arsSpot->value() / oneYearDfArs) / (spotDfUsd / oneYearDfUsd);
     Real expFwd = arsSpot->value() + arsFwdPoints.at(1 * Years);
     QL_CHECK_SMALL(calcFwd - expFwd, 1e-10);
+
+    // Check that datedInstruments give the same result.
+    auto datedArsYts = ext::make_shared<LLDFCurve>(asof, datedInstruments, tsDayCounter, ib);
+    BOOST_CHECK(arsYts->dates() == datedArsYts->dates());
+    for (const auto date : arsYts->dates()) {
+        QL_CHECK_CLOSE(arsYts->discount(date), datedArsYts->discount(date), 1e-6);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(testCustomFuturesHelpers) {
@@ -1661,6 +2187,98 @@ BOOST_AUTO_TEST_CASE(testSwapHelpersWithOnceFrequency) {
 }
 
 
+BOOST_AUTO_TEST_CASE(testDepositForDates) {
+    BOOST_TEST_MESSAGE("Testing DepositRateHelper with custom fixingDate...");
+
+    CommonVars vars;
+
+    std::vector<ext::shared_ptr<RateHelper>> helpers;
+    const Date fixingDate = TARGET().adjust(vars.today);
+    for (Size i = 0; i < vars.deposits; i++) {
+        Handle<Quote> r(vars.rates[i]);
+        helpers.push_back(ext::make_shared<DepositRateHelper>(
+            r, fixingDate, ext::make_shared<Euribor>(depositData[i].n*depositData[i].units)));
+    }
+
+    auto curve = ext::make_shared<PiecewiseYieldCurve<ZeroYield, Linear>>(
+                                       vars.settlement, helpers, Actual365Fixed());
+    Handle<YieldTermStructure> h(curve);
+
+    const Real tolerance = 1.0e-9;
+    for (Size i = 0; i < vars.deposits; i++) {
+        Euribor index(depositData[i].n*depositData[i].units, h);
+        Rate expectedRate  = depositData[i].rate/100,
+            estimatedRate = index.fixing(vars.today);
+        if (std::fabs(expectedRate-estimatedRate) > tolerance) {
+            BOOST_ERROR(depositData[i].n << " "
+                        << (depositData[i].units == Weeks ? "week(s)" : "month(s)")
+                        << " deposit:"
+                        << std::setprecision(8)
+                        << "\n    estimated rate: " << io::rate(estimatedRate)
+                        << "\n    expected rate:  " << io::rate(expectedRate));
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testFraForDates) {
+    BOOST_TEST_MESSAGE("Testing FraRateHelper with custom dates...");
+
+    CommonVars vars;
+
+    std::vector<ext::shared_ptr<RateHelper>> helpers;
+    auto euribor6m = ext::make_shared<Euribor6M>();
+    for (Size i = 0; i < vars.fras; i++) {
+        Handle<Quote> r(vars.fraRates[i]);
+        Date startDate =
+            vars.calendar.advance(vars.settlement,
+                                  fraData[i].n,
+                                  fraData[i].units,
+                                  euribor6m->businessDayConvention(),
+                                  euribor6m->endOfMonth());
+        Date endDate =
+            vars.calendar.advance(vars.settlement,
+                                  fraData[i].n + 3,
+                                  fraData[i].units,
+                                  euribor6m->businessDayConvention(),
+                                  euribor6m->endOfMonth());
+        helpers.push_back(ext::make_shared<FraRateHelper>(
+            r, startDate, endDate, euribor6m, Pillar::LastRelevantDate, Date(), false));
+    }
+
+    auto curve = ext::make_shared<PiecewiseYieldCurve<ZeroYield, Linear>>(
+                                       vars.settlement, helpers, Actual365Fixed());
+    Handle<YieldTermStructure> h(curve);
+    euribor6m = ext::make_shared<Euribor6M>(h);
+
+    const Real tolerance = 1.0e-9;
+    for (Size i = 0; i < vars.fras; i++) {
+        Date start =
+            vars.calendar.advance(vars.settlement,
+                                  fraData[i].n,
+                                  fraData[i].units,
+                                  euribor6m->businessDayConvention(),
+                                  euribor6m->endOfMonth());
+        Date end =
+            vars.calendar.advance(vars.settlement,
+                                  fraData[i].n + 3,
+                                  fraData[i].units,
+                                  euribor6m->businessDayConvention(),
+                                  euribor6m->endOfMonth());
+        BOOST_REQUIRE(fraData[i].units == Months);
+
+        ForwardRateAgreement fra(euribor6m, start, end, Position::Long,
+                                 fraData[i].rate/100, 100.0);
+        Rate expectedRate = fraData[i].rate/100,
+            estimatedRate = fra.forwardRate();
+        if (std::fabs(expectedRate-estimatedRate) > tolerance) {
+            BOOST_ERROR(io::ordinal(i+1) << " FRA failure:" <<
+                        std::setprecision(8) <<
+                        "\n  estimated rate: " << io::rate(estimatedRate) <<
+                        "\n  expected rate:  " << io::rate(expectedRate));
+        }
+    }
+}
+
 BOOST_AUTO_TEST_CASE(testDatedSwapHelpers) {
     BOOST_TEST_MESSAGE("Testing dated swap rate helpers...");
 
@@ -1701,7 +2319,8 @@ BOOST_AUTO_TEST_CASE(testDatedSwapHelpers) {
     euribor6m = ext::make_shared<Euribor6M>(h);
 
     for (auto [start, end, q] : swapData) {
-        VanillaSwap swap = MakeVanillaSwap(Period(), euribor6m, 0.0)
+        VanillaSwap swap = MakeVanillaSwap(Period(), euribor6m)
+            .withFixedRate(0.0)
             .withEffectiveDate(start)
             .withTerminationDate(end)
             .withFixedLegDayCount(fixedLegDayCounter)
@@ -1722,6 +2341,158 @@ BOOST_AUTO_TEST_CASE(testDatedSwapHelpers) {
                         << "\n    tolerance:      " << io::rate(tolerance));
         }
     }
+}
+
+BOOST_AUTO_TEST_CASE(testSwapRateHelperWithCouponPricer) {
+    BOOST_TEST_MESSAGE("Testing SwapRateHelper with a custom coupon pricer...");
+
+    // Test for issue #1817: a coupon pricer (e.g. a BlackIborCouponPricer
+    // carrying a volatility surface for timing/convexity adjustments) can be
+    // attached to the floating leg of the swap built internally by
+    // SwapRateHelper, so that the curve is bootstrapped with the same pricing
+    // methodology that is later used to value swaps.
+
+    Date today(15, June, 2020);
+    Settings::instance().evaluationDate() = today;
+
+    Datum swapData[] = {
+        {2, Years, 0.015}, {5, Years, 0.020}, {10, Years, 0.025}, {20, Years, 0.030}};
+
+    Handle<OptionletVolatilityStructure> vol(ext::make_shared<ConstantOptionletVolatility>(
+        today, TARGET(), Following, 0.20, Actual365Fixed()));
+    auto pricer = ext::make_shared<BlackIborCouponPricer>(vol);
+
+    RelinkableHandle<YieldTermStructure> curveHandle;
+    auto index = ext::make_shared<Euribor6M>(curveHandle);
+
+    std::vector<ext::shared_ptr<SwapRateHelper>> helpers;
+    for (auto& d : swapData) {
+        helpers.push_back(ext::make_shared<SwapRateHelper>(
+            d.rate, Period(d.n, d.units), TARGET(), Annual, ModifiedFollowing,
+            Thirty360(Thirty360::BondBasis), index, Handle<Quote>(), 0 * Days,
+            Handle<YieldTermStructure>(), Null<Natural>(), Pillar::LastRelevantDate, Date(), false,
+            std::nullopt, std::nullopt, pricer));
+    }
+
+    // the supplied pricer must be attached to every coupon of the floating leg
+    // of the swap the helper builds internally
+    for (const auto& helper : helpers) {
+        for (const auto& cf : helper->swap()->floatingLeg()) {
+            auto coupon = ext::dynamic_pointer_cast<FloatingRateCoupon>(cf);
+            BOOST_REQUIRE(coupon);
+            BOOST_CHECK_MESSAGE(coupon->pricer() == pricer,
+                                "the coupon pricer was not attached to the floating leg of the "
+                                "rate helper's internal swap");
+        }
+    }
+
+    // bootstrap and check self-consistency: a swap priced at its market rate
+    // with the same coupon pricer must be at par on the resulting curve
+    std::vector<ext::shared_ptr<RateHelper>> rateHelpers(helpers.begin(), helpers.end());
+    curveHandle.linkTo(ext::make_shared<PiecewiseYieldCurve<Discount, LogLinear>>(
+        today, rateHelpers, Actual365Fixed()));
+
+    Real tolerance = 1.0e-6;
+    for (auto& d : swapData) {
+        // built to match the helper's internal swap, priced with the same pricer
+        ext::shared_ptr<VanillaSwap> swap =
+            MakeVanillaSwap(Period(d.n, d.units), index)
+                .withFixedRate(d.rate)
+                .withForwardStart(0 * Days)
+                .withDiscountingTermStructure(curveHandle)
+                .withFixedLegDayCount(Thirty360(Thirty360::BondBasis))
+                .withFixedLegTenor(Period(Annual))
+                .withFixedLegConvention(ModifiedFollowing)
+                .withFixedLegTerminationDateConvention(ModifiedFollowing)
+                .withFixedLegCalendar(TARGET())
+                .withFixedLegEndOfMonth(false)
+                .withFloatingLegCalendar(TARGET())
+                .withFloatingLegEndOfMonth(false);
+        setCouponPricer(swap->floatingLeg(), pricer);
+
+        Real npv = swap->NPV();
+        if (std::fabs(npv) > tolerance)
+            BOOST_ERROR("swap priced with the bootstrapping coupon pricer is not "
+                        "at par:"
+                        << std::setprecision(12) << "\n    tenor:     " << Period(d.n, d.units)
+                        << "\n    NPV:       " << npv << "\n    tolerance: " << tolerance);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testHelperDatesFromNonBusinessEvaluationDate) {
+
+    BOOST_TEST_MESSAGE("Testing that rate-helper dates are calculated from "
+                       "the actual evaluation date when the latter is not a "
+                       "business day...");
+
+    // Saturday
+    Date today(20, June, 2026);
+    Settings::instance().evaluationDate() = today;
+
+    auto euribor6m = ext::make_shared<Euribor6M>();
+    Calendar calendar = euribor6m->fixingCalendar();
+    // fixing days are counted from the actual evaluation date,
+    // not from the next business day
+    Date expectedSpot = calendar.advance(today, euribor6m->fixingDays() * Days);
+
+    auto depo = ext::make_shared<DepositRateHelper>(
+        0.03, 6 * Months, euribor6m->fixingDays(), calendar,
+        euribor6m->businessDayConvention(), euribor6m->endOfMonth(),
+        euribor6m->dayCounter());
+    if (depo->earliestDate() != expectedSpot)
+        BOOST_ERROR("deposit helper earliest date not calculated from the "
+                    "actual evaluation date:\n"
+                    "    expected: " << expectedSpot << "\n"
+                    "    obtained: " << depo->earliestDate());
+
+    auto fra = ext::make_shared<FraRateHelper>(0.03, 3, euribor6m);
+    Date expectedFraStart =
+        calendar.advance(expectedSpot, 3 * Months,
+                         euribor6m->businessDayConvention(),
+                         euribor6m->endOfMonth());
+    if (fra->earliestDate() != expectedFraStart)
+        BOOST_ERROR("FRA helper earliest date not calculated from the "
+                    "actual evaluation date:\n"
+                    "    expected: " << expectedFraStart << "\n"
+                    "    obtained: " << fra->earliestDate());
+
+    Calendar bmaCalendar = JointCalendar(BMAIndex().fixingCalendar(),
+                                         USDLibor(3 * Months).fixingCalendar());
+    auto bmaHelper = ext::make_shared<BMASwapRateHelper>(
+        Handle<Quote>(ext::make_shared<SimpleQuote>(0.75)),
+        5 * Years, 3, bmaCalendar, Period(Quarterly), Following, Actual360(),
+        ext::make_shared<BMAIndex>(), ext::make_shared<USDLibor>(3 * Months));
+    Date expectedBmaStart = bmaCalendar.advance(today, 3 * Days, Following);
+    if (bmaHelper->earliestDate() != expectedBmaStart)
+        BOOST_ERROR("BMA helper earliest date not calculated from the "
+                    "actual evaluation date:\n"
+                    "    expected: " << expectedBmaStart << "\n"
+                    "    obtained: " << bmaHelper->earliestDate());
+}
+
+BOOST_AUTO_TEST_CASE(testBmaHelperSwap) {
+
+    BOOST_TEST_MESSAGE("Testing the swap underlying a BMA swap-rate helper...");
+
+    Date today(15, January, 2024);
+    Settings::instance().evaluationDate() = today;
+
+    Calendar bmaCalendar = JointCalendar(BMAIndex().fixingCalendar(),
+                                         USDLibor(3 * Months).fixingCalendar());
+    auto bmaIndex = ext::make_shared<BMAIndex>();
+    auto helper = ext::make_shared<BMASwapRateHelper>(
+        Handle<Quote>(ext::make_shared<SimpleQuote>(0.75)),
+        5 * Years, 2, bmaCalendar, Period(Quarterly), Following, Actual360(),
+        bmaIndex, ext::make_shared<USDLibor>(3 * Months));
+
+    auto swap = helper->swap();
+    BOOST_REQUIRE(swap);
+    BOOST_CHECK_EQUAL(swap->startDate(), helper->earliestDate());
+    BOOST_CHECK_EQUAL(swap->bmaLeg().size(), 20U);
+
+    Settings::instance().evaluationDate() = bmaCalendar.advance(today, 1 * Months);
+    BOOST_CHECK(helper->swap() != swap);
+    BOOST_CHECK_EQUAL(helper->swap()->startDate(), helper->earliestDate());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -12,7 +12,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -69,26 +69,6 @@ namespace QuantLib {
                             Period(1, Months),
                             EURCurrency(),
                             ts) {}
-
-        QL_DEPRECATED_DISABLE_WARNING
-
-        /*! \deprecated Use the overload without the interpolated parameter.
-                        Deprecated in version 1.38.
-        */
-        [[deprecated("Use the overload without the interpolated parameter")]]
-        explicit YYEUHICP(
-            bool interpolated,
-            const Handle<YoYInflationTermStructure>& ts = {})
-        : YoYInflationIndex("YY_HICP",
-                            EURegion(),
-                            false,
-                            interpolated,
-                            Monthly,
-                            Period(1, Months),
-                            EURCurrency(),
-                            ts) {}
-
-        QL_DEPRECATED_ENABLE_WARNING
     };
 
     //! Quoted year-on-year EU HICPXT
@@ -102,26 +82,6 @@ namespace QuantLib {
                             Period(1, Months),
                             EURCurrency(),
                             ts) {}
-
-        QL_DEPRECATED_DISABLE_WARNING
-
-        /*! \deprecated Use the overload without the interpolated parameter.
-                        Deprecated in version 1.38.
-        */
-        [[deprecated("Use the overload without the interpolated parameter")]]
-        explicit YYEUHICPXT(
-            bool interpolated,
-            const Handle<YoYInflationTermStructure>& ts = {})
-        : YoYInflationIndex("YY_HICPXT",
-                            EURegion(),
-                            false,
-                            interpolated,
-                            Monthly,
-                            Period(1, Months),
-                            EURCurrency(),
-                            ts) {}
-
-        QL_DEPRECATED_ENABLE_WARNING
     };
 
 }

@@ -10,7 +10,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -23,6 +23,7 @@
 #include <ql/indexes/indexmanager.hpp>
 #include <ql/instruments/payoffs.hpp>
 #include <ql/exercise.hpp>
+#include <ql/instruments/barriertype.hpp>
 #include <ql/termstructures/yieldtermstructure.hpp>
 #include <ql/termstructures/volatility/equityfx/blackvoltermstructure.hpp>
 #include <ql/quote.hpp>
@@ -66,6 +67,7 @@ namespace QuantLib {
 
     std::string payoffTypeToString(const ext::shared_ptr<Payoff>&);
     std::string exerciseTypeToString(const ext::shared_ptr<Exercise>&);
+    std::string barrierTypeToString(Barrier::Type type);
 
 
     ext::shared_ptr<YieldTermStructure>

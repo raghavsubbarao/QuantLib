@@ -1,5 +1,5 @@
 # Process this file with autoconf to produce a configure script.
-AC_INIT([QuantLib], [1.38-dev],
+AC_INIT([QuantLib], [1.44-rc],
         [quantlib-dev@lists.sourceforge.net],
         [QuantLib])
 AC_PREREQ(2.62)
@@ -21,7 +21,7 @@ QuantLib is free software: you can redistribute it and/or modify it
 under the terms of the QuantLib license.  You should have received a
 copy of the license along with this program; if not, please email
 <quantlib-dev@lists.sf.net>. The license is also available online at
-<http://quantlib.org/license.shtml>.
+<https://www.quantlib.org/license.shtml>.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -272,36 +272,6 @@ if test "$ql_faster_lazy_objects" = "yes" ; then
 fi
 AC_MSG_RESULT([$ql_faster_lazy_objects])
 
-AC_MSG_CHECKING([whether to enable std::any instead of boost::any])
-AC_ARG_ENABLE([std-any],
-              AS_HELP_STRING([--enable-std-any],
-                             [If enabled, std::any and related classes and
-                              functions will be used instead of boost::any.
-                              If disabled (the default) the Boost facilities
-                              will be used.]),
-              [ql_use_std_any=$enableval],
-              [ql_use_std_any=no])
-if test "$ql_use_std_any" = "yes" ; then
-   AC_DEFINE([QL_USE_STD_ANY],[1],
-             [Define this if you want to use std::any.])
-fi
-AC_MSG_RESULT([$ql_use_std_any])
-
-AC_MSG_CHECKING([whether to enable std::optional instead of boost::optional])
-AC_ARG_ENABLE([std-optional],
-              AS_HELP_STRING([--enable-std-optional],
-                             [If enabled, std::optional and related
-                              classes and functions will be used instead
-                              of boost::optional. If disabled (the default)
-                              the Boost facilities will be used.]),
-              [ql_use_std_optional=$enableval],
-              [ql_use_std_optional=no])
-if test "$ql_use_std_optional" = "yes" ; then
-   AC_DEFINE([QL_USE_STD_OPTIONAL],[1],
-             [Define this if you want to use std::optional.])
-fi
-AC_MSG_RESULT([$ql_use_std_optional])
-
 AC_MSG_CHECKING([whether to enable standard smart pointers])
 AC_ARG_ENABLE([std-pointers],
               AS_HELP_STRING([--enable-std-pointers],
@@ -311,7 +281,8 @@ AC_ARG_ENABLE([std-pointers],
                               If disabled (the default) the Boost facilities
                               will be used.
                               Note that std::shared_ptr does not check
-                              access and can cause segmentation faults.]),
+                              access and will cause a segmentation fault
+                              if you access a null pointer.]),
               [ql_use_std_pointers=$enableval],
               [ql_use_std_pointers=no])
 if test "$ql_use_std_pointers" = "yes" ; then
@@ -323,17 +294,12 @@ AC_MSG_RESULT([$ql_use_std_pointers])
 AC_MSG_CHECKING([whether to enable available std classes])
 AC_ARG_ENABLE([std-classes],
               AS_HELP_STRING([--enable-std-classes],
-                             [This is a shortcut for --enable-std-pointers
-                              --enable-std-function --enable-std-tuple.
+                             [This is a shortcut for --enable-std-pointers.
                               If enabled, this supersedes any --disable
                               option passed for the above.]),
               [ql_use_std_classes=$enableval],
               [ql_use_std_classes=no])
 if test "$ql_use_std_classes" = "yes" ; then
-   AC_DEFINE([QL_USE_STD_ANY],[1],
-             [Define this if you want to use std::any.])
-   AC_DEFINE([QL_USE_STD_OPTIONAL],[1],
-             [Define this if you want to use std::optional.])
    AC_DEFINE([QL_USE_STD_SHARED_PTR],[1],
              [Define this if you want to use standard smart pointers.])
 fi
@@ -467,6 +433,7 @@ AC_CONFIG_FILES([
     ql/experimental/finitedifferences/Makefile
     ql/experimental/forward/Makefile
     ql/experimental/fx/Makefile
+    ql/experimental/fxslv/Makefile
     ql/experimental/inflation/Makefile
     ql/experimental/lattices/Makefile
     ql/experimental/math/Makefile
@@ -541,6 +508,7 @@ AC_CONFIG_FILES([
     ql/pricingengines/credit/Makefile
     ql/pricingengines/exotic/Makefile
     ql/pricingengines/forward/Makefile
+    ql/pricingengines/futures/Makefile
     ql/pricingengines/inflation/Makefile
     ql/pricingengines/lookback/Makefile
     ql/pricingengines/quanto/Makefile

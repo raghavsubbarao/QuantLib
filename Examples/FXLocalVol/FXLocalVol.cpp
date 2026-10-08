@@ -48,19 +48,19 @@
 #endif
 
 // FX vol surface
-#include <ql/termstructures/volatility/equityfx/fxvariancesurface.hpp>
-#include <ql/termstructures/volatility/fxsmilesectionbystrike.hpp>
-#include <ql/termstructures/tradingtimetermstructure.hpp>
+#include <ql/experimental/fxslv/fxvariancesurface.hpp>
+#include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
+#include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
 
 // SLV calibration framework
-#include <ql/experimental/fx/fxslvpricingcontext.hpp>
-#include <ql/experimental/fx/hestoncalibrator.hpp>
-#include <ql/experimental/fx/slvleveragecalibrator.hpp>
+#include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
+#include <ql/experimental/fxslv/hestoncalibrator.hpp>
+#include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
 
 // Process and pricing
 #include <ql/processes/blackscholesprocess.hpp>
 #include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>
-#include <ql/pricingengines/vanilla/fxvanillagreeks.hpp>
+#include <ql/experimental/fxslv/fxvanillagreeks.hpp>
 #include <ql/pricingengines/vanilla/analyticeuropeanengine.hpp>
 #include <ql/termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp>
 
@@ -72,7 +72,7 @@
 // Market data primitives
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
-#include <ql/experimental/fx/deltavolquote.hpp>
+#include <ql/quotes/deltavolquote.hpp>
 
 // Time
 #include <ql/time/daycounters/actual365fixed.hpp>

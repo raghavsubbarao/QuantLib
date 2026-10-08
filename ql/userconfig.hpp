@@ -11,7 +11,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -119,26 +119,11 @@
 #    define QL_FASTER_LAZY_OBJECTS
 #endif
 
-/* If defined, `std::any` and related classes and functions will be
-   used instead of `boost::any`. If undefined, the Boost facilities
-   will be used.
-*/
-#ifndef QL_USE_STD_ANY
-//#    define QL_USE_STD_ANY
-#endif
-
-/* If defined, `std::optional` and related classes and functions will
-   be used instead of `boost::optional`. If undefined, the Boost
-   facilities will be used.
-*/
-#ifndef QL_USE_STD_OPTIONAL
-//#    define QL_USE_STD_OPTIONAL
-#endif
-
 /* If defined, `std::shared_ptr` and related classes and functions
    will used instead of `boost::shared_ptr`. If undefined, the Boost
    facilities will be used. Note that `std::shared_ptr` does not check
-   access and can cause segmentation faults.
+   access and will cause a segmentation fault if you access a null
+   pointer.
 */
 #ifndef QL_USE_STD_SHARED_PTR
 //#    define QL_USE_STD_SHARED_PTR

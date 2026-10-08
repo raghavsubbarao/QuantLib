@@ -11,7 +11,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -35,6 +35,8 @@ namespace QuantLib {
       averagingMethod_(averagingMethod) {
         QL_REQUIRE(overnightIndex_, "null overnight index");
         registerWith(overnightIndex_);
+        registerWith(convexityAdjustment_);
+        registerWith(Settings::instance().evaluationDate());
     }
 
     Real OvernightIndexFuture::averagedRate() const {
@@ -105,8 +107,9 @@ namespace QuantLib {
                 Real r = history[today];
                 if (r != Null<Real>()) {
                     Date tomorrow = calendar.advance(today, 1, Days);
-                    prod *= 1 + r * dayCounter.yearFraction(today, tomorrow);
-                    forwardDiscountStart = tomorrow;
+                    Date accrualEnd = std::min(tomorrow, maturityDate_);
+                    prod *= 1 + r * dayCounter.yearFraction(today, accrualEnd);
+                    forwardDiscountStart = accrualEnd;
                 }
             }
         }
@@ -122,10 +125,8 @@ namespace QuantLib {
         switch (averagingMethod_) {
           case RateAveraging::Simple:
             return averagedRate();
-            break;
           case RateAveraging::Compound:
             return compoundedRate();
-            break;
           default:
               QL_FAIL("unknown compounding convention (" << Integer(averagingMethod_) << ")");
         }

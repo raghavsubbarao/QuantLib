@@ -12,13 +12,14 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
+#include <algorithm>
 #include <ql/math/comparison.hpp>
 #include <ql/math/matrixutilities/choleskydecomposition.hpp>
 #include <ql/math/matrixutilities/pseudosqrt.hpp>
@@ -323,10 +324,12 @@ namespace QuantLib {
                 Y = projectToUnitDiagonalMatrix(X);
 
                 // convergence test
-                if (std::max(normInf(X-lastX)/normInf(X),
-                        std::max(normInf(Y-lastY)/normInf(Y),
-                                normInf(Y-X)/normInf(Y)))
-                        <= tolerance)
+                if (std::max({
+                            normInf(X-lastX)/normInf(X),
+                            normInf(Y-lastY)/normInf(Y),
+                            normInf(Y-X)/normInf(Y)
+                        })
+                    <= tolerance)
                 {
                     break;
                 }

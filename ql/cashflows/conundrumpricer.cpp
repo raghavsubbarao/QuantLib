@@ -10,7 +10,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
 
  This program is distributed in the hope that it will be useful, but
@@ -24,7 +24,6 @@
 
 #include <ql/cashflows/cmscoupon.hpp>
 #include <ql/cashflows/conundrumpricer.hpp>
-#include <ql/functional.hpp>
 #include <ql/indexes/interestrateindex.hpp>
 #include <ql/indexes/swapindex.hpp>
 #include <ql/instruments/vanillaswap.hpp>
@@ -36,6 +35,7 @@
 #include <ql/termstructures/volatility/smilesection.hpp>
 #include <ql/termstructures/yieldtermstructure.hpp>
 #include <ql/time/schedule.hpp>
+#include <functional>
 #include <utility>
 
 namespace QuantLib {
@@ -664,7 +664,7 @@ namespace QuantLib {
         accruals_.reserve(n);
         for (Size i=0; i<n; ++i) {
             ext::shared_ptr<Coupon> cpn =
-                ext::dynamic_pointer_cast<Coupon>(fixedLeg[i]);
+                coupon_cast(fixedLeg[i]);
             accruals_.push_back(cpn->accrualPeriod());
         }
     }
@@ -765,7 +765,7 @@ namespace QuantLib {
         swapPaymentDiscounts_.reserve(n);
         for(Size i=0; i<n; ++i) {
             ext::shared_ptr<Coupon> cpn =
-                ext::dynamic_pointer_cast<Coupon>(fixedLeg[i]);
+                coupon_cast(fixedLeg[i]);
             accruals_.push_back(cpn->accrualPeriod());
             const Date paymentDate(cpn->date());
             const Real swapPaymentTime(dc.yearFraction(rateCurve->referenceDate(), paymentDate));

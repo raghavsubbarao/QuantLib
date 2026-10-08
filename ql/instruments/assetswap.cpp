@@ -12,7 +12,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -32,20 +32,6 @@
 using std::vector;
 
 namespace QuantLib {
-
-    AssetSwap::AssetSwap(bool parSwap,
-                         ext::shared_ptr<Bond> bond,
-                         Real bondCleanPrice,
-                         Real nonParRepayment,
-                         Real gearing,
-                         const ext::shared_ptr<IborIndex>& iborIndex,
-                         Spread spread,
-                         const DayCounter& floatingDayCounter,
-                         Date dealMaturity,
-                         bool payBondCoupon)
-    : AssetSwap(payBondCoupon, std::move(bond), bondCleanPrice, iborIndex, spread,
-                Schedule(), floatingDayCounter, parSwap, gearing,
-                nonParRepayment, dealMaturity) {}
 
     AssetSwap::AssetSwap(bool payBondCoupon,
                          ext::shared_ptr<Bond> bond,
@@ -126,7 +112,7 @@ namespace QuantLib {
         // if we're skipping a cashflow before the redemption
         // and it's a coupon, then add the accrued coupon.
         if (i < bondLeg.end()-1) {
-            auto c = ext::dynamic_pointer_cast<Coupon>(*i);
+            auto c = coupon_cast(*i);
             if (c != nullptr) {
                 Real accruedAmount = c->accruedAmount(dealMaturity);
                 auto accruedCoupon =
@@ -152,7 +138,7 @@ namespace QuantLib {
 
         if (overnight) {
             legs_[1] =
-                OvernightLeg(std::move(schedule), overnight)
+                OvernightLeg(schedule, overnight)
                 .withNotionals(notional)
                 .withPaymentAdjustment(paymentAdjustment)
                 .withGearings(gearing)

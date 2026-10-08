@@ -15,14 +15,13 @@ QuantLib is free software: you can redistribute it and/or modify it
 under the terms of the QuantLib license.  You should have received a
 copy of the license along with this program; if not, please email
 <quantlib-dev@lists.sf.net>. The license is also available online at
-<http://quantlib.org/license.shtml>.
+<https://www.quantlib.org/license.shtml>.
 
 This program is distributed in the hope that it will be useful, but WITHOUT
 ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
 FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include "preconditions.hpp"
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
 #include <ql/models/marketmodels/accountingengine.hpp>
@@ -1210,7 +1209,7 @@ void addCoterminalSwapsAndSwaptions(MultiProductComposite& product,
     }
 }
 
-BOOST_AUTO_TEST_CASE(testAllMultiStepProducts, *precondition(if_speed(Slow))) {
+BOOST_AUTO_TEST_CASE(testAllMultiStepProducts) {
     std::string testDescription = "all multi-step products ";
 
     setup();
@@ -1378,7 +1377,7 @@ BOOST_AUTO_TEST_CASE(testPeriodAdapter) {
     }
 }
 
-BOOST_AUTO_TEST_CASE(testCallableSwapNaif, *precondition(if_speed(Slow))) {
+BOOST_AUTO_TEST_CASE(testCallableSwapNaif) {
 
     BOOST_TEST_MESSAGE("Pricing callable swap with naif exercise strategy in a LIBOR market model...");
 
@@ -1531,7 +1530,7 @@ BOOST_AUTO_TEST_CASE(testCallableSwapNaif, *precondition(if_speed(Slow))) {
     }
 }
 
-BOOST_AUTO_TEST_CASE(testCallableSwapLS, *precondition(if_speed(Slow))) {
+BOOST_AUTO_TEST_CASE(testCallableSwapLS) {
 
     BOOST_TEST_MESSAGE("Pricing callable swap with Longstaff-Schwartz exercise strategy in a LIBOR market model...");
 
@@ -1690,7 +1689,7 @@ BOOST_AUTO_TEST_CASE(testCallableSwapLS, *precondition(if_speed(Slow))) {
     }
 }
 
-BOOST_AUTO_TEST_SUITE(CallableSwapAnderson, *precondition(if_speed(Slow)))
+BOOST_AUTO_TEST_SUITE(CallableSwapAnderson)
 
 template <MarketModelType mmtype, Size factors>
 struct slice {
@@ -1874,7 +1873,7 @@ BOOST_AUTO_TEST_CASE_TEMPLATE(testCallableSwapAnderson, T, slices) {
 
 BOOST_AUTO_TEST_SUITE_END()
 
-BOOST_AUTO_TEST_CASE(testGreeks, *precondition(if_speed(Fast))) {
+BOOST_AUTO_TEST_CASE(testGreeks) {
 
     BOOST_TEST_MESSAGE("Testing caplet greeks in a lognormal forward rate market model using partial proxy simulation...");
 
@@ -2322,7 +2321,7 @@ BOOST_AUTO_TEST_CASE(testPathwiseGreeks) {
     }
 }
 
-BOOST_AUTO_TEST_CASE(testPathwiseVegas, *precondition(if_speed(Fast))) {
+BOOST_AUTO_TEST_CASE(testPathwiseVegas) {
 
     BOOST_TEST_MESSAGE(
         "Testing pathwise vegas in a lognormal forward rate market model...");
@@ -2413,6 +2412,7 @@ BOOST_AUTO_TEST_CASE(testPathwiseVegas, *precondition(if_speed(Fast))) {
                 endIndex);
 
             std::vector<Matrix> pseudoRoots;
+            pseudoRoots.reserve(marketModel->numberOfSteps());
             for (Size k=0; k < marketModel->numberOfSteps(); ++k)
                 pseudoRoots.push_back( marketModel->pseudoRoot(k));
 
@@ -2513,6 +2513,7 @@ BOOST_AUTO_TEST_CASE(testPathwiseVegas, *precondition(if_speed(Fast))) {
                         endIndex, initialNumeraireValue);
 
                     std::vector<Matrix> pseudoRoots;
+                    pseudoRoots.reserve(marketModel->numberOfSteps());
                     for (Size k=0; k < marketModel->numberOfSteps(); ++k)
                         pseudoRoots.push_back( marketModel->pseudoRoot(k));
 
@@ -2659,6 +2660,7 @@ BOOST_AUTO_TEST_CASE(testPathwiseVegas, *precondition(if_speed(Fast))) {
                         endIndex,initialNumeraireValue);
 
                     std::vector<Matrix> pseudoRoots;
+                    pseudoRoots.reserve(marketModel->numberOfSteps());
                     for (Size k=0; k < marketModel->numberOfSteps(); ++k)
                         pseudoRoots.push_back( marketModel->pseudoRoot(k));
 
@@ -4491,7 +4493,7 @@ BOOST_AUTO_TEST_CASE(testDriftCalculator) {
     const std::vector<Real>& rateTaus = evolution.rateTaus();
     std::vector<Size> numeraires = moneyMarketPlusMeasure(evolution,
         measureOffset_);
-    std::vector<Size> alive = evolution.firstAliveRate();
+    const std::vector<Size>& alive = evolution.firstAliveRate();
     Size numberOfSteps = evolutionTimes.size();
     std::vector<Real> drifts(numberOfSteps), driftsReduced(numberOfSteps);
     MarketModelType marketModels[] = {ExponentialCorrelationFlatVolatility,

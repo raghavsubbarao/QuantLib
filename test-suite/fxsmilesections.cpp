@@ -23,11 +23,11 @@
 
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
-#include <ql/termstructures/volatility/fxsmilesection.hpp>
-#include <ql/termstructures/volatility/fxsmilesectionbystrike.hpp>
-#include <ql/termstructures/volatility/fxsmilesectionbydelta.hpp>
-#include <ql/termstructures/volatility/fxcostsmilesection.hpp>
-#include <ql/experimental/fx/deltavolquote.hpp>
+#include <ql/experimental/fxslv/fxsmilesection.hpp>
+#include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
+#include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
+#include <ql/experimental/fxslv/fxcostsmilesection.hpp>
+#include <ql/quotes/deltavolquote.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>

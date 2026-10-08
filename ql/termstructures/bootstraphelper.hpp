@@ -12,7 +12,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -61,8 +61,7 @@ namespace QuantLib {
     template <class TS>
     class BootstrapHelper : public Observer, public Observable {
       public:
-        explicit BootstrapHelper(Handle<Quote> quote);
-        explicit BootstrapHelper(Real quote);
+        explicit BootstrapHelper(const std::variant<Spread, Handle<Quote>>& quote);
         ~BootstrapHelper() override = default;
         //! \name BootstrapHelper interface
         //@{
@@ -122,15 +121,25 @@ namespace QuantLib {
 
     //! Bootstrap helper with date schedule relative to global evaluation date
     /*! Derived classes must takes care of rebuilding the date schedule when
-        the global evaluation date changes
+        the global evaluation date changes.
+
+        \warning Using this helper together with a bootstrapped curve constructed 
+                 with a fixed reference date causes the curve to re-bootstrap on 
+                 every evaluation date change, even though the result is identical. 
+                 This is because the helper registers with the global evaluation 
+                 date and notifies the curve on every change. To avoid the unnecessary 
+                 work, either:
+                 - call \c freeze() on the curve after the initial bootstrap; 
+                 - use the fixed-effective-date constructors of the helpers so that 
+                 they do not register with the global evaluation date at all.
     */
     template <class TS>
     class RelativeDateBootstrapHelper : public BootstrapHelper<TS> {
       public:
-        explicit RelativeDateBootstrapHelper(const Handle<Quote>& quote,
-                                             bool updateDates = true);
-        explicit RelativeDateBootstrapHelper(Real quote,
-                                             bool updateDates = true);
+        explicit RelativeDateBootstrapHelper(
+            const std::variant<Spread, Handle<Quote>>& quote,
+            bool updateDates = true);
+
         //! \name Observer interface
         //@{
         void update() override {
@@ -144,21 +153,16 @@ namespace QuantLib {
       protected:
         virtual void initializeDates() = 0;
         Date evaluationDate_;
-      private:
         bool updateDates_;
     };
 
     // template definitions
 
     template <class TS>
-    BootstrapHelper<TS>::BootstrapHelper(Handle<Quote> quote)
-    : quote_(std::move(quote)), termStructure_(nullptr) {
+    BootstrapHelper<TS>::BootstrapHelper(const std::variant<Spread, Handle<Quote>>& quote)
+    : quote_(handleFromVariant(quote)), termStructure_(nullptr) {
         registerWith(quote_);
     }
-
-    template <class TS>
-    BootstrapHelper<TS>::BootstrapHelper(Real quote)
-    : quote_(makeQuoteHandle(quote)), termStructure_(nullptr) {}
 
     template <class TS>
     void BootstrapHelper<TS>::setTermStructure(TS* t) {
@@ -216,18 +220,13 @@ namespace QuantLib {
 
     template <class TS>
     RelativeDateBootstrapHelper<TS>::RelativeDateBootstrapHelper(
-        const Handle<Quote>& quote, bool updateDates)
+        const std::variant<Spread, Handle<Quote>>& quote, bool updateDates)
     : BootstrapHelper<TS>(quote), updateDates_(updateDates) {
         if (updateDates) {
             this->registerWith(Settings::instance().evaluationDate());
             evaluationDate_ = Settings::instance().evaluationDate();
         }
     }
-
-    template <class TS>
-    RelativeDateBootstrapHelper<TS>::RelativeDateBootstrapHelper(
-        Real quote, bool updateDates)
-    : RelativeDateBootstrapHelper<TS>(makeQuoteHandle(quote), updateDates) {}
 
 
     inline std::ostream& operator<<(std::ostream& out,

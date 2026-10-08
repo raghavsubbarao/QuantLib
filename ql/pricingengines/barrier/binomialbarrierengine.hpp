@@ -10,7 +10,7 @@
  under the terms of the QuantLib license.  You should have received a
  copy of the license along with this program; if not, please email
  <quantlib-dev@lists.sf.net>. The license is also available online at
- <http://quantlib.org/license.shtml>.
+ <https://www.quantlib.org/license.shtml>.
 
  This program is distributed in the hope that it will be useful, but WITHOUT
  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
@@ -112,21 +112,17 @@ namespace QuantLib {
 
         // binomial trees with constant coefficient
         Handle<YieldTermStructure> flatRiskFree(
-            ext::shared_ptr<YieldTermStructure>(
-                new FlatForward(referenceDate, r, rfdc)));
+            ext::make_shared<FlatForward>(referenceDate, r, rfdc));
         Handle<YieldTermStructure> flatDividends(
-            ext::shared_ptr<YieldTermStructure>(
-                new FlatForward(referenceDate, q, divdc)));
+            ext::make_shared<FlatForward>(referenceDate, q, divdc));
         Handle<BlackVolTermStructure> flatVol(
-            ext::shared_ptr<BlackVolTermStructure>(
-                new BlackConstantVol(referenceDate, volcal, v, voldc)));
+            ext::make_shared<BlackConstantVol>(referenceDate, volcal, v, voldc));
 
         Time maturity = rfdc.yearFraction(referenceDate, maturityDate);
 
-        ext::shared_ptr<StochasticProcess1D> bs(
-                         new GeneralizedBlackScholesProcess(
+        auto bs = ext::make_shared<GeneralizedBlackScholesProcess>(
                                       process_->stateVariable(),
-                                      flatDividends, flatRiskFree, flatVol));
+                                      flatDividends, flatRiskFree, flatVol);
 
         // correct timesteps to ensure a (local) minimum, using Boyle and Lau
         // approach. See Journal of Derivatives, 1/1994,
@@ -134,7 +130,7 @@ namespace QuantLib {
         // Note: this approach works only for CoxRossRubinstein lattices, so
         // is disabled if T is not a CoxRossRubinstein or derived from it.
         Size optimum_steps = timeSteps_;
-        if (std::is_base_of<CoxRossRubinstein, T>::value &&
+        if (std::is_base_of_v<CoxRossRubinstein, T> &&
             maxTimeSteps_ > timeSteps_ && s0 > 0 && arguments_.barrier > 0) {
             Real divisor;
             if (s0 > arguments_.barrier)
@@ -157,11 +153,10 @@ namespace QuantLib {
 
         TimeGrid grid(maturity, optimum_steps);
 
-        ext::shared_ptr<T> tree(new T(bs, maturity, optimum_steps,
-                                        payoff->strike()));
+        auto tree = ext::make_shared<T>(bs, maturity, optimum_steps,
+                                        payoff->strike());
 
-        ext::shared_ptr<BlackScholesLattice<T> > lattice(
-            new BlackScholesLattice<T>(tree, r, maturity, optimum_steps));
+        auto lattice = ext::make_shared<BlackScholesLattice<T>>(tree, r, maturity, optimum_steps);
 
         D option(arguments_, *process_, grid);
         option.initialize(lattice, maturity);

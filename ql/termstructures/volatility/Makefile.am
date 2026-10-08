@@ -11,10 +11,6 @@ this_include_HEADERS = \
     atmadjustedsmilesection.hpp \
     atmsmilesection.hpp \
     flatsmilesection.hpp \
-    fxcostsmilesection.hpp \
-    fxsmilesection.hpp \
-    fxsmilesectionbydelta.hpp \
-    fxsmilesectionbystrike.hpp \
     gaussian1dsmilesection.hpp \
     interpolatedsmilesection.hpp \
     kahalesmilesection.hpp \
@@ -24,7 +20,10 @@ this_include_HEADERS = \
     smilesection.hpp \
     smilesectionutils.hpp \
     spreadedsmilesection.hpp \
-    volatilitytype.hpp
+    volatilitytype.hpp \
+    zabr.hpp \
+    zabrinterpolatedsmilesection.hpp \
+    zabrsmilesection.hpp
 
 cpp_files = \
     abcd.cpp \
@@ -32,10 +31,6 @@ cpp_files = \
     atmadjustedsmilesection.cpp \
     atmsmilesection.cpp \
     flatsmilesection.cpp \
-    fxcostsmilesection.cpp \
-    fxsmilesection.cpp \
-    fxsmilesectionbydelta.cpp \
-    fxsmilesectionbystrike.cpp \
     gaussian1dsmilesection.cpp \
     kahalesmilesection.cpp \
     sabr.cpp \
@@ -43,7 +38,8 @@ cpp_files = \
     sabrsmilesection.cpp \
     smilesection.cpp \
     smilesectionutils.cpp \
-    spreadedsmilesection.cpp
+    spreadedsmilesection.cpp \
+    zabr.cpp
 
 if UNITY_BUILD
 
