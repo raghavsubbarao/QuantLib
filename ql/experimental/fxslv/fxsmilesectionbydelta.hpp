@@ -83,6 +83,15 @@ namespace QuantLib {
         //! Initial parameter guess for calibration.
         virtual Array initialParams() const = 0;
 
+        /*! Strike of the put with the given put delta (in this section's
+            delta convention) and standard deviation.  Unlike
+            BlackDeltaCalculator::strikeFromDelta, this also handles
+            premium-adjusted put deltas below -dfor (resp. -1), which
+            correspond to in-the-money puts and are reached when converting
+            low call deltas to put deltas.
+        */
+        Rate putStrikeFromDelta(Real putDelta, Real stdDev) const;
+
         mutable std::vector<Real> params_;
     };
 
