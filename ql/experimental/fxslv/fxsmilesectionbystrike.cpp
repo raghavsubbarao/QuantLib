@@ -199,7 +199,8 @@ namespace QuantLib {
                                                     const std::vector<Real>& params) const
     {
         CumulativeNormalDistribution f;
-        Real x = f(std::log(fwd / strike) / (atm_->value() * std::sqrt(tau)));
+        Real atmfVol = std::exp(params_[0] / 4. + params_[1] / 2. + params_[2]);
+        Real x = f(std::log(fwd / strike) / (atmfVol * std::sqrt(tau)));
         return std::exp(params[0] * x * x + params[1] * x + params[2]);
     }
     //@}

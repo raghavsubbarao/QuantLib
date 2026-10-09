@@ -26,7 +26,7 @@
 
 namespace QuantLib {
 
-    Integer cubic::roots(std::vector<Real>& zeros)
+    Integer Cubic::roots(std::vector<Real>& zeros)
     {
         Real pi = 3.14159265358979323846;
         const std::vector<Real> c = coefficients();
@@ -106,12 +106,12 @@ namespace QuantLib {
     }
 
 
-    Integer quartic::roots(std::vector<Real>& zeros)
+    Integer Quartic::roots(std::vector<Real>& zeros)
     {
         const std::vector<Real> c = coefficients();
 
         if (c[4] == 0.0) {
-            return cubic(std::vector<Real>(c.begin() + 1, c.end())).roots(zeros);
+            return Cubic(std::vector<Real>(c.begin() + 1, c.end())).roots(zeros);
         }
 
         Real B = c[3] / c[4], C = c[2] / c[4], D = c[1] / c[4], E = c[0] / c[4];
@@ -149,7 +149,7 @@ namespace QuantLib {
 
         // create and solve cubic - this cubic is -J*J<0 at 0 and
         // tends to infinity as x-> infinity -> it has a positive root!
-        cubic p3(std::vector<Real>{-J * J, I * I - 4.0 * K, 2.0 * I, 1.0});
+        Cubic p3(std::vector<Real>{-J * J, I * I - 4.0 * K, 2.0 * I, 1.0});
 
         std::vector<Real> z3;
         int n = p3.roots(z3);
@@ -419,7 +419,7 @@ namespace QuantLib {
         Real x = std::log(fwd / strike);
         Integer s = premiumAdjust() ? 1 : -1;
 
-        quartic q(std::vector<Real>{-x * x * params[3], 2 * x * params[2], -params[0],
+        Quartic q(std::vector<Real>{-x * x * params[3], 2 * x * params[2], -params[0],
                                     s * params[2] - 2 * params[1], params[3] / 4.});
         std::vector<Real> omega;
         Integer n = q.roots(omega);

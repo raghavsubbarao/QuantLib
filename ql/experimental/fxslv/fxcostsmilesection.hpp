@@ -31,9 +31,9 @@
 
 namespace QuantLib {
 
-    class cubic : public PolynomialFunction {
+    class Cubic : public PolynomialFunction {
       public:
-          cubic(const std::vector<Real>& coeff): PolynomialFunction(coeff) {
+          Cubic(const std::vector<Real>& coeff): PolynomialFunction(coeff) {
             QL_REQUIRE(coeff.size() == 4,
                        "cubic requires four coefficients to initialize");
 
@@ -42,9 +42,9 @@ namespace QuantLib {
         Integer roots(std::vector<Real>& zeros);
     };
 
-    class quartic : public PolynomialFunction {
+    class Quartic : public PolynomialFunction {
       public:
-        quartic(const std::vector<Real>& coeff) : PolynomialFunction(coeff) {
+        Quartic(const std::vector<Real>& coeff) : PolynomialFunction(coeff) {
             QL_REQUIRE(coeff.size() == 5, "quartic requires five coefficients to initialize");
         }
 
