@@ -57,7 +57,7 @@ namespace QuantLib {
         per delta) or FxDeltaVolQuotes (generic delta-vol quotes).  The
         section fits its smile to the delta-vol quotes that object
         produces and then derives its ATM vol from the fitted smile, so
-        that atm() always lies on the calibrated curve.
+        that atmVol() always lies on the calibrated curve.
     */
     class FxSmileSection : public SmileSection, public LazyObject {
       public:
@@ -104,7 +104,11 @@ namespace QuantLib {
 
         // Introspection
         Handle<Quote> spot() const { return spot_; };
-        Handle<Quote> atm() const { calculate(); return atm_; };
+        //! ATM vol of the calibrated smile, under the section's ATM convention.
+        /*! A value, not a quote: it changes whenever the section
+            recalibrates, so observe the section to be notified.
+        */
+        Volatility atmVol() const { calculate(); return atmVol_; }
         Real forward() const {calculate(); return fwd_; };
         Handle<YieldTermStructure> foreignDiscount() const { return foreignDiscount_; };
         Handle<YieldTermStructure> domesticDiscount() const { return domesticDiscount_; };
@@ -197,6 +201,13 @@ namespace QuantLib {
         mutable Date spotDate_, deliveryDate_;
 
       protected:
+        //! Vol scale used to seed the smile: the quotes' reference vol.
+        /*! Depends on the quotes only.  Initial parameters, root-search
+            guesses and starting points must use this, never atmVol_, so
+            that the smile does not depend on a previous calibration.
+        */
+        Volatility referenceVol() const { return smileQuotes_->referenceVol(); }
+
         //! Initial parameter guess for calibration.
         virtual Array initialParams() const = 0;
         //! Sets the model parameters; used with trial values during calibration.
@@ -211,10 +222,11 @@ namespace QuantLib {
         mutable Real minStrike_;
 
         // Computed state: rebuilt on every calibration in stripDeltaVolQuotes().
-        // atm_ is seeded with the quotes' reference vol before calibrating
-        // and set to the fitted smile's ATM vol by calculateAtm() after.
+        // atmVol_ is the fitted smile's ATM vol, set by calculateAtm(); it is
+        // Null while the smile is being fitted, and nothing that defines the
+        // smile may read it (use referenceVol() instead).
         // targets_ holds the calibration targets while calibrate() runs.
-        mutable Handle<Quote> atm_;
+        mutable Volatility atmVol_ = Null<Volatility>();
         mutable FxSmileTargets targets_;
 
     };

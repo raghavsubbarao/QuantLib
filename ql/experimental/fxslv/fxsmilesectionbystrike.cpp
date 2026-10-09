@@ -72,7 +72,7 @@ namespace QuantLib {
         }
 
         Rate k0 = BlackDeltaCalculator(parity, deltaType(), spot()->value(), ddom_, dfor_,
-                                       atm()->value() * sqrt(exerciseTime()))
+                                       referenceVol() * sqrt(exerciseTime()))
                       .strikeFromDelta(delta);
         Rate kmin = (premiumAdjust() && parity==Option::Call) ? minStrike() : QL_EPSILON;
         Rate kmax = k0 * 10;
@@ -135,7 +135,7 @@ namespace QuantLib {
         Array guess(3);
         guess[0] = 0.0;
         guess[1] = 0.0;
-        guess[2] = std::log(atm_->value());
+        guess[2] = std::log(referenceVol());
         return guess;
     }
 
@@ -190,7 +190,7 @@ namespace QuantLib {
     {
         // SABR params: alpha, nu, rho (beta fixed at 1)
         Array guess(3);
-        guess[0] = atm_->value();  // alpha ~ atm vol for beta=1
+        guess[0] = referenceVol();  // alpha ~ atm vol for beta=1
         guess[1] = 0.5;            // nu
         guess[2] = 0.0;            // rho
         return guess;
@@ -247,7 +247,7 @@ namespace QuantLib {
         // SVI raw: w(k) = a + b*(rho*(k-m) + sqrt((k-m)^2 + sigma^2))
         // At ATM k=0: w(0) = a + b*(rho*(-m) + sqrt(m^2 + sigma^2))
         // Start with m=0, rho=0: w(0) = a + b*sigma = atm_vol^2 * tau
-        Real atmVar = atm_->value() * atm_->value();
+        Real atmVar = referenceVol() * referenceVol();
         Array guess(5);
         guess[0] = atmVar;  // a: base variance level
         guess[1] = 0.1;     // b: slope

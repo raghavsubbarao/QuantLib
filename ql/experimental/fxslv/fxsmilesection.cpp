@@ -117,11 +117,11 @@ namespace QuantLib {
     void FxSmileSection::calculateAtm() const {
         // Called from performCalculations() after the fit.  The ATM strike
         // is the fixed point K = K_atm(vol(K)); search in log-strike from
-        // the forward, in steps of one ATM standard deviation, widening as
+        // the forward, in steps of one reference standard deviation, widening as
         // needed, so that far-away strikes where a smile may be undefined
         // are only visited if the root is really out there.
         const Real spot = spot_->value();
-        const Real stdDev = atm_->value() * std::sqrt(exerciseTime()); // reference vol
+        const Real stdDev = referenceVol() * std::sqrt(exerciseTime());
 
         auto atmStrikeError = [&](Real logStrike) {
             const Real strike = std::exp(logStrike);
@@ -136,14 +136,13 @@ namespace QuantLib {
         solver.setMaxEvaluations(1000);
         const Rate k = std::exp(solver.solve(atmStrikeError, 1.0e-12, std::log(fwd_), stdDev));
 
-        atm_ = makeQuoteHandle(volByStrike(k));
+        atmVol_ = volByStrike(k);
     }
 
     void FxSmileSection::stripDeltaVolQuotes() const {
-        // Seed with a vol that depends on the quotes only, so that the
-        // same quotes always give the same smile; subclasses read atm_ in
-        // initialParams().
-        atm_ = makeQuoteHandle(smileQuotes_->referenceVol());
+        // No ATM vol until the new smile is fitted; the fit is seeded from
+        // referenceVol(), so the same quotes always give the same smile.
+        atmVol_ = Null<Volatility>();
 
         // The quotes drive the fit; check they actually fitted the section,
         // otherwise it would silently keep a previous calibration.
@@ -211,7 +210,7 @@ namespace QuantLib {
 
             QL_ASSERT((ddelta_dk(fwd_) < 0), "call delta should be well defined at the fwd");
 
-            Real k_min = fwd_ * std::exp(-atm()->value() * exerciseTime());
+            Real k_min = fwd_ * std::exp(-atmVol_ * exerciseTime());
             while (ddelta_dk(k_min) < 0) {
                 k_min = 0.95 * k_min;
             }
@@ -225,7 +224,7 @@ namespace QuantLib {
 
         // assumes the atm vol is known: either via market input or calibration!
         atmStrike_ = BlackDeltaCalculator(Option::Call, deltaType(), spot()->value(), ddom_, dfor_,
-                                          atm()->value() * sqrt(exerciseTime()))
+                                          atmVol_ * sqrt(exerciseTime()))
                          .atmStrike(atmType());
 
     }
@@ -276,8 +275,8 @@ namespace QuantLib {
         calculate();
 
         // Solve in log-moneyness, starting from the flat-smile answer
-        // N(d2) = p at the reference vol and widening the bracket as needed.
-        const Real stdDev = atm_->value() * std::sqrt(exerciseTime());
+        // N(d2) = p at the ATM vol and widening the bracket as needed.
+        const Real stdDev = atmVol_ * std::sqrt(exerciseTime());
         const Real guess = -stdDev * InverseCumulativeNormal()(p) - 0.5 * stdDev * stdDev;
         auto error = [&](Real x) { return exerciseProbability(std::exp(x)) - p; };
 

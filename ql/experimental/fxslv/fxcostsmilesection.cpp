@@ -346,8 +346,8 @@ namespace QuantLib {
                  - params[3] * std::pow(rho, 3.0);
         };
 
-        // Start from ATM total vol.
-        Real rho = atm_->value() * std::sqrt(tau);
+        // Start from the reference total vol.
+        Real rho = referenceVol() * std::sqrt(tau);
 
         static const Size maxIter = 100;
         static const Real tol = 1.0e-12;

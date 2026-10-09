@@ -145,7 +145,7 @@ namespace QuantLib {
         // the put delta at the specified strike! This requires a root finding
         // procedure as we know the strike but not the vol!
         Rate d0 = BlackDeltaCalculator(Option::Type::Put, deltaType(), spot()->value(), ddom_,
-                                       dfor_, atm()->value() * sqrt(exerciseTime()))
+                                       dfor_, referenceVol() * sqrt(exerciseTime()))
                       .deltaFromStrike(strike);
 
         // Solve the fixed point d = putDelta(strike, vol(d)). This only needs
@@ -255,7 +255,7 @@ namespace QuantLib {
         Array guess(3);
         guess[0] = 0.0;
         guess[1] = 0.0;
-        guess[2] = atm_->value();
+        guess[2] = referenceVol();
         return guess;
     }
 

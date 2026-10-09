@@ -765,9 +765,9 @@ BOOST_AUTO_TEST_CASE(testMarketStrangleCalibration) {
         BOOST_CHECK_SMALL(ss.volByDelta(delta, Option::Call) - ss.volByDelta(-delta, Option::Put) - rr,
                           1.0e-8);
 
-        // the ATM quote holds, and atm() lies on the smile
-        BOOST_CHECK_SMALL(ss.atm()->value() - atm, 1.0e-8);
-        BOOST_CHECK_SMALL(ss.atm()->value() - ss.volByStrike(ss.atmLevel()), 1.0e-12);
+        // the ATM quote holds, and atmVol() lies on the smile
+        BOOST_CHECK_SMALL(ss.atmVol() - atm, 1.0e-8);
+        BOOST_CHECK_SMALL(ss.atmVol() - ss.volByStrike(ss.atmLevel()), 1.0e-12);
     }
 
     // Two delta levels: five targets for three parameters, fitted jointly
@@ -779,7 +779,7 @@ BOOST_AUTO_TEST_CASE(testMarketStrangleCalibration) {
                                  FxRrBfQuotes::MarketStrangle),
                              md.forDiscount, md.domDiscount, dt, at, Actual365Fixed(),
                              md.settlement);
-    BOOST_CHECK_SMALL(ss.atm()->value() - ss.volByStrike(ss.atmLevel()), 1.0e-12);
+    BOOST_CHECK_SMALL(ss.atmVol() - ss.volByStrike(ss.atmLevel()), 1.0e-12);
 
     // cost models have a closed form for points on the smile only
     FxCostSmileSectionFlatDynamics cost(

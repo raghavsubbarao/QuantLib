@@ -160,7 +160,7 @@ namespace QuantLib {
 
             if (tau <= times_[1]) {
                 // before first expiry
-                Real vol = smileSections_.front().atm()->value();
+                Real vol = smileSections_.front().atmVol();
                 return (vol * vol * tau) / times_[1];
             } 
             else 
@@ -172,8 +172,8 @@ namespace QuantLib {
 
                 // times_ starts at 0 but there is no smile section
                 // so adjust i accordingly when accessing smileSections_
-                Real frontVol = smileSections_[i - 1].atm()->value();
-                Real backVol = smileSections_[i].atm()->value();
+                Real frontVol = smileSections_[i - 1].atmVol();
+                Real backVol = smileSections_[i].atmVol();
                 Real frontVar = frontVol * frontVol * times_[i];
                 Real backVar = backVol * backVol * times_[i + 1];
                 Real slopeVar = (backVar - frontVar) / (times_[i + 1] - times_[i]);
@@ -184,7 +184,7 @@ namespace QuantLib {
             // extrapolate with flat vol in trading time!
             // there might be events beyond the last expiry - this will 
             // account for that as we are working in trading time!
-            Real vol = smileSections_.back().atm()->value();
+            Real vol = smileSections_.back().atmVol();
             return (vol * vol * tau) / times_.back();
         }
     }
@@ -204,7 +204,7 @@ namespace QuantLib {
         // falls below this threshold) to evaluate to zero, making LocalVolSurface
         // return vol=0 and breaking the Concentrating1dMesher in HestonSLVFDMModel.
         if (tau < (1. / (365 * 8))) {
-            const Real vol0 = smileSections_.front().atm()->value();
+            const Real vol0 = smileSections_.front().atmVol();
             return vol0 * vol0 * t;
         }
 
@@ -335,8 +335,8 @@ namespace QuantLib {
             return std::sqrt(v1 * v1 * wInit + v2 * v2 * wFinal);
         };
 
-        Handle<Quote> atm = makeQuoteHandle(flatFwdVar(ssInit.atm()->value(),
-                                                       ssFinal.atm()->value()));
+        Handle<Quote> atm = makeQuoteHandle(flatFwdVar(ssInit.atmVol(),
+                                                       ssFinal.atmVol()));
 
         // 25 delta
         Volatility v25c = flatFwdVar(ssInit.volByDelta(0.25, Option::Call),
@@ -429,7 +429,7 @@ namespace QuantLib {
         if (&ssInit == &ssFinal) {
             Real s = std::sqrt(wInit + wFinal); // vol scaling factor
 
-            Handle<Quote> atm = makeQuoteHandle(ssInit.atm()->value() * s);
+            Handle<Quote> atm = makeQuoteHandle(ssInit.atmVol() * s);
 
             // 25 delta
             Volatility v25c = ssInit.volByDelta(0.25, Option::Call) * s;
