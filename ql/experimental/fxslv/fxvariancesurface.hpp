@@ -47,7 +47,7 @@ namespace QuantLib {
                           const Handle<tradingTimeTermStructure>& timesTs,
                           DeltaVolQuote::DeltaType deltaType,
                           DeltaVolQuote::AtmType atmType,
-                          FxSmileSection::FlyType flyType,
+                          FxRrBfQuotes::FlyType flyType,
                           const FxSettlementConvention& settlement,
                           const Calendar& cal = WeekendsOnly(),
                           BusinessDayConvention bdc = Following,
@@ -114,7 +114,7 @@ namespace QuantLib {
                                             const Handle<tradingTimeTermStructure>& timeTs,
                                             DeltaVolQuote::DeltaType deltaType,
                                             DeltaVolQuote::AtmType atmType,
-                                            FxSmileSection::FlyType flyType,
+                                            FxRrBfQuotes::FlyType flyType,
                                             const FxSettlementConvention& settlement,
                                             const Calendar& cal,
                                             BusinessDayConvention bdc,
@@ -132,9 +132,11 @@ namespace QuantLib {
         smileSections_.clear();
         for (Size j = 0; j < atms.size(); j++) {
             // this will also register the smile section with spot, vol quotes and discount curves
-            smileSections_.emplace_back(pillars[j], spot_, atms[j], rrs[j], bfs[j],
-                                        deltas, forTs_, domTs_, deltaType, atmType, 
-                                        flyType, Actual365Fixed(), settlement, referenceDate);
+            smileSections_.emplace_back(pillars[j], spot_,
+                                        ext::make_shared<FxRrBfQuotes>(atms[j], rrs[j], bfs[j],
+                                                                       deltas, flyType),
+                                        forTs_, domTs_, deltaType, atmType,
+                                        Actual365Fixed(), settlement, referenceDate);
         }
 
         registerWithMarketData();
@@ -285,7 +287,7 @@ namespace QuantLib {
                                const Handle<tradingTimeTermStructure>& timesTs,
                                DeltaVolQuote::DeltaType deltaType,
                                DeltaVolQuote::AtmType atmType,
-                               FxSmileSection::FlyType flyType,
+                               FxRrBfQuotes::FlyType flyType,
                                const FxSettlementConvention& settlement,
                                const Calendar& cal = WeekendsOnly(),
                                BusinessDayConvention bdc = Following,
@@ -307,7 +309,7 @@ namespace QuantLib {
                                                       const Handle<tradingTimeTermStructure>& timeTs,
                                                       DeltaVolQuote::DeltaType deltaType,
                                                       DeltaVolQuote::AtmType atmType,
-                                                      FxSmileSection::FlyType flyType,
+                                                      FxRrBfQuotes::FlyType flyType,
                                                       const FxSettlementConvention& settlement,
                                                       const Calendar& cal,
                                                       BusinessDayConvention bdc,
@@ -353,14 +355,16 @@ namespace QuantLib {
         Handle<Quote> bf10 = makeQuoteHandle((v10c + v10p) / 2. - atm->value());
 
         // create and return the smile section
-        return Handle<T>(ext::make_shared<T>(t, this->spot(), atm,
-                                             std::vector<Handle<Quote>>{rr25, rr10},
-                                             std::vector<Handle<Quote>>{bf25, bf10},
-                                             std::vector<Real>{0.25, 0.10},
+        return Handle<T>(ext::make_shared<T>(t, this->spot(),
+                                             // butterflies built from smile vols are smile strangles
+                                             ext::make_shared<FxRrBfQuotes>(
+                                                 atm, std::vector<Handle<Quote>>{rr25, rr10},
+                                                 std::vector<Handle<Quote>>{bf25, bf10}, std::vector<Real>{0.25, 0.10},
+                                                 FxRrBfQuotes::SmileStrangle),
                                              this->foreignDiscountCurve(),
                                              this->domesticDiscountCurve(),
                                              ssInit.deltaType(), ssInit.atmType(),
-                                             ssInit.flyType(), this->dayCounter()));
+                                             this->dayCounter()));
     }
     //@}
 
@@ -382,7 +386,7 @@ namespace QuantLib {
                              const Handle<tradingTimeTermStructure>& timesTs,
                              DeltaVolQuote::DeltaType deltaType,
                              DeltaVolQuote::AtmType atmType,
-                             FxSmileSection::FlyType flyType,
+                             FxRrBfQuotes::FlyType flyType,
                              const FxSettlementConvention& settlement,
                              const Calendar& cal = WeekendsOnly(),
                              BusinessDayConvention bdc = Following,
@@ -405,7 +409,7 @@ namespace QuantLib {
                                                   const Handle<tradingTimeTermStructure>& timeTs,
                                                   DeltaVolQuote::DeltaType deltaType,
                                                   DeltaVolQuote::AtmType atmType,
-                                                  FxSmileSection::FlyType flyType,
+                                                  FxRrBfQuotes::FlyType flyType,
                                                   const FxSettlementConvention& settlement,
                                                   const Calendar& cal,
                                                   BusinessDayConvention bdc,
@@ -439,14 +443,16 @@ namespace QuantLib {
             Handle<Quote> rr10 = makeQuoteHandle(v10c - v10p);
             Handle<Quote> bf10 = makeQuoteHandle((v10c + v10p) / 2. - atm->value());
 
-            return Handle<T>(ext::make_shared<T>(t, this->spot(), atm,
-                                                 std::vector<Handle<Quote>>{rr25, rr10},
-                                                 std::vector<Handle<Quote>>{bf25, bf10},
-                                                 std::vector<Real>{0.25, 0.10},
+            return Handle<T>(ext::make_shared<T>(t, this->spot(),
+                                                 // butterflies built from smile vols are smile strangles
+                                                 ext::make_shared<FxRrBfQuotes>(
+                                                     atm, std::vector<Handle<Quote>>{rr25, rr10},
+                                                     std::vector<Handle<Quote>>{bf25, bf10}, std::vector<Real>{0.25, 0.10},
+                                                     FxRrBfQuotes::SmileStrangle),
                                                  this->foreignDiscountCurve(),
                                                  this->domesticDiscountCurve(),
                                                  ssInit.deltaType(), ssInit.atmType(),
-                                                 ssInit.flyType(), this->dayCounter()));
+                                                 this->dayCounter()));
         }
 
         // Interpolation in probability space using normed call prices [Gope, Fries 2011].
@@ -510,11 +516,12 @@ namespace QuantLib {
         quotes.push_back(interpNcp(k_c10));
 
         // create and return the smile section
-        return Handle<T>(ext::make_shared<T>(t, this->spot(), quotes,
+        return Handle<T>(ext::make_shared<T>(t, this->spot(),
+                                             ext::make_shared<FxDeltaVolQuotes>(quotes),
                                              this->foreignDiscountCurve(),
                                              this->domesticDiscountCurve(),
                                              ssInit.deltaType(), ssInit.atmType(),
-                                             ssInit.flyType(), this->dayCounter()));
+                                             this->dayCounter()));
     }
     //@}
 

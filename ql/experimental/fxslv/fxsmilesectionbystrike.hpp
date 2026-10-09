@@ -8,58 +8,26 @@ namespace QuantLib {
 
     class fxSmileSectionByStrike : public FxSmileSection {
       public:
-        // ctor from market quotes for specific date
+        //! Date mode (see FxSmileSection).
         fxSmileSectionByStrike(const Date& exerciseDate,
                                const Handle<Quote>& spot,
-                               const Handle<Quote>& atm,
-                               const std::vector<Handle<Quote>>& rrs,
-                               const std::vector<Handle<Quote>>& bfs,
-                               const std::vector<Real>& deltas,
+                               const ext::shared_ptr<FxSmileQuotes>& quotes,
                                const Handle<YieldTermStructure>& foreignDiscount,
                                const Handle<YieldTermStructure>& domesticDiscount,
                                DeltaVolQuote::DeltaType deltaType,
                                DeltaVolQuote::AtmType atmType,
-                               FxSmileSection::FlyType flyType,
                                const DayCounter& dayCounter,
                                const FxSettlementConvention& settlement,
                                const Date& referenceDate = Date());
 
-        // ctor from market quotes with expiry time - floats with evaluation date
+        //! Time mode (see FxSmileSection).
         fxSmileSectionByStrike(Time exerciseTime,
                                const Handle<Quote>& spot,
-                               const Handle<Quote>& atm,
-                               const std::vector<Handle<Quote>>& rrs,
-                               const std::vector<Handle<Quote>>& bfs,
-                               const std::vector<Real>& deltas,
+                               const ext::shared_ptr<FxSmileQuotes>& quotes,
                                const Handle<YieldTermStructure>& foreignDiscount,
                                const Handle<YieldTermStructure>& domesticDiscount,
                                DeltaVolQuote::DeltaType deltaType,
                                DeltaVolQuote::AtmType atmType,
-                               FxSmileSection::FlyType flyType,
-                               const DayCounter& dayCounter = DayCounter());
-
-        // ctor from derived quotes for specific date
-        fxSmileSectionByStrike(const Date& exerciseDate,
-                               const Handle<Quote>& spot,
-                               const std::vector<Handle<DeltaVolQuote>>& quotes,
-                               const Handle<YieldTermStructure>& foreignDiscount,
-                               const Handle<YieldTermStructure>& domesticDiscount,
-                               DeltaVolQuote::DeltaType deltaType,
-                               DeltaVolQuote::AtmType atmType,
-                               FlyType flyType,
-                               const DayCounter& dayCounter,
-                               const FxSettlementConvention& settlement,
-                               const Date& referenceDate = Date());
-
-        // ctor form derived quotes for expiry time - floats with evaluation date
-        fxSmileSectionByStrike(Time exerciseTime,
-                               const Handle<Quote>& spot,
-                               const std::vector<Handle<DeltaVolQuote>>& quotes,
-                               const Handle<YieldTermStructure>& foreignDiscount,
-                               const Handle<YieldTermStructure>& domesticDiscount,
-                               DeltaVolQuote::DeltaType deltaType,
-                               DeltaVolQuote::AtmType atmType,
-                               FlyType flyType,
                                const DayCounter& dayCounter = DayCounter());
 
         //! \name fxSmileSection interface
@@ -94,58 +62,26 @@ namespace QuantLib {
 
     class polynomialSmileSection : public fxSmileSectionByStrike {
       public:
-        // ctor from market quotes for specific date
+        //! Date mode (see FxSmileSection).
         polynomialSmileSection(const Date& exerciseDate,
                                const Handle<Quote>& spot,
-                               const Handle<Quote>& atm,
-                               const std::vector<Handle<Quote>>& rrs,
-                               const std::vector<Handle<Quote>>& bfs,
-                               const std::vector<Real>& deltas,
+                               const ext::shared_ptr<FxSmileQuotes>& quotes,
                                const Handle<YieldTermStructure>& foreignDiscount,
                                const Handle<YieldTermStructure>& domesticDiscount,
                                DeltaVolQuote::DeltaType deltaType,
                                DeltaVolQuote::AtmType atmType,
-                               FxSmileSection::FlyType flyType,
                                const DayCounter& dayCounter,
                                const FxSettlementConvention& settlement,
                                const Date& referenceDate = Date());
 
-        // ctor from market quotes with expiry time - floats with evaluation date
+        //! Time mode (see FxSmileSection).
         polynomialSmileSection(Time exerciseTime,
                                const Handle<Quote>& spot,
-                               const Handle<Quote>& atm,
-                               const std::vector<Handle<Quote>>& rrs,
-                               const std::vector<Handle<Quote>>& bfs,
-                               const std::vector<Real>& deltas,
+                               const ext::shared_ptr<FxSmileQuotes>& quotes,
                                const Handle<YieldTermStructure>& foreignDiscount,
                                const Handle<YieldTermStructure>& domesticDiscount,
                                DeltaVolQuote::DeltaType deltaType,
                                DeltaVolQuote::AtmType atmType,
-                               FxSmileSection::FlyType flyType,
-                               const DayCounter& dayCounter = DayCounter());
-
-        // ctor from derived quotes for specific date
-        polynomialSmileSection(const Date& exerciseDate,
-                               const Handle<Quote>& spot,
-                               const std::vector<Handle<DeltaVolQuote>>& quotes,
-                               const Handle<YieldTermStructure>& foreignDiscount,
-                               const Handle<YieldTermStructure>& domesticDiscount,
-                               DeltaVolQuote::DeltaType deltaType,
-                               DeltaVolQuote::AtmType atmType,
-                               FlyType flyType,
-                               const DayCounter& dayCounter,
-                               const FxSettlementConvention& settlement,
-                               const Date& referenceDate = Date());
-
-        // ctor form derived quotes for expiry time - floats with evaluation date
-        polynomialSmileSection(Time exerciseTime,
-                               const Handle<Quote>& spot,
-                               const std::vector<Handle<DeltaVolQuote>>& quotes,
-                               const Handle<YieldTermStructure>& foreignDiscount,
-                               const Handle<YieldTermStructure>& domesticDiscount,
-                               DeltaVolQuote::DeltaType deltaType,
-                               DeltaVolQuote::AtmType atmType,
-                               FlyType flyType,
                                const DayCounter& dayCounter = DayCounter());
 
         // Introspection
@@ -169,58 +105,26 @@ namespace QuantLib {
 
     class fxSabrSmileSection : public fxSmileSectionByStrike {
       public:
-        // ctor from market quotes for specific date
+        //! Date mode (see FxSmileSection).
         fxSabrSmileSection(const Date& exerciseDate,
                            const Handle<Quote>& spot,
-                           const Handle<Quote>& atm,
-                           const std::vector<Handle<Quote>>& rrs,
-                           const std::vector<Handle<Quote>>& bfs,
-                           const std::vector<Real>& deltas,
+                           const ext::shared_ptr<FxSmileQuotes>& quotes,
                            const Handle<YieldTermStructure>& foreignDiscount,
                            const Handle<YieldTermStructure>& domesticDiscount,
                            DeltaVolQuote::DeltaType deltaType,
                            DeltaVolQuote::AtmType atmType,
-                           FxSmileSection::FlyType flyType,
                            const DayCounter& dayCounter,
                            const FxSettlementConvention& settlement,
                            const Date& referenceDate = Date());
 
-        // ctor from market quotes with expiry time - floats with evaluation date
+        //! Time mode (see FxSmileSection).
         fxSabrSmileSection(Time exerciseTime,
                            const Handle<Quote>& spot,
-                           const Handle<Quote>& atm,
-                           const std::vector<Handle<Quote>>& rrs,
-                           const std::vector<Handle<Quote>>& bfs,
-                           const std::vector<Real>& deltas,
+                           const ext::shared_ptr<FxSmileQuotes>& quotes,
                            const Handle<YieldTermStructure>& foreignDiscount,
                            const Handle<YieldTermStructure>& domesticDiscount,
                            DeltaVolQuote::DeltaType deltaType,
                            DeltaVolQuote::AtmType atmType,
-                           FxSmileSection::FlyType flyType,
-                           const DayCounter& dayCounter = DayCounter());
-
-        // ctor from derived quotes for specific date
-        fxSabrSmileSection(const Date& exerciseDate,
-                           const Handle<Quote>& spot,
-                           const std::vector<Handle<DeltaVolQuote>>& quotes,
-                           const Handle<YieldTermStructure>& foreignDiscount,
-                           const Handle<YieldTermStructure>& domesticDiscount,
-                           DeltaVolQuote::DeltaType deltaType,
-                           DeltaVolQuote::AtmType atmType,
-                           FlyType flyType,
-                           const DayCounter& dayCounter,
-                           const FxSettlementConvention& settlement,
-                           const Date& referenceDate = Date());
-
-        // ctor form derived quotes for expiry time - floats with evaluation date
-        fxSabrSmileSection(Time exerciseTime,
-                           const Handle<Quote>& spot,
-                           const std::vector<Handle<DeltaVolQuote>>& quotes,
-                           const Handle<YieldTermStructure>& foreignDiscount,
-                           const Handle<YieldTermStructure>& domesticDiscount,
-                           DeltaVolQuote::DeltaType deltaType,
-                           DeltaVolQuote::AtmType atmType,
-                           FlyType flyType,
                            const DayCounter& dayCounter = DayCounter());
 
         // Introspection
@@ -253,58 +157,26 @@ namespace QuantLib {
     */
     class fxSviSmileSection : public fxSmileSectionByStrike {
       public:
-        // ctor from market quotes for specific date
+        //! Date mode (see FxSmileSection).
         fxSviSmileSection(const Date& exerciseDate,
                           const Handle<Quote>& spot,
-                          const Handle<Quote>& atm,
-                          const std::vector<Handle<Quote>>& rrs,
-                          const std::vector<Handle<Quote>>& bfs,
-                          const std::vector<Real>& deltas,
+                          const ext::shared_ptr<FxSmileQuotes>& quotes,
                           const Handle<YieldTermStructure>& foreignDiscount,
                           const Handle<YieldTermStructure>& domesticDiscount,
                           DeltaVolQuote::DeltaType deltaType,
                           DeltaVolQuote::AtmType atmType,
-                          FxSmileSection::FlyType flyType,
                           const DayCounter& dayCounter,
                           const FxSettlementConvention& settlement,
                           const Date& referenceDate = Date());
 
-        // ctor from market quotes with expiry time - floats with evaluation date
+        //! Time mode (see FxSmileSection).
         fxSviSmileSection(Time exerciseTime,
                           const Handle<Quote>& spot,
-                          const Handle<Quote>& atm,
-                          const std::vector<Handle<Quote>>& rrs,
-                          const std::vector<Handle<Quote>>& bfs,
-                          const std::vector<Real>& deltas,
+                          const ext::shared_ptr<FxSmileQuotes>& quotes,
                           const Handle<YieldTermStructure>& foreignDiscount,
                           const Handle<YieldTermStructure>& domesticDiscount,
                           DeltaVolQuote::DeltaType deltaType,
                           DeltaVolQuote::AtmType atmType,
-                          FxSmileSection::FlyType flyType,
-                          const DayCounter& dayCounter = DayCounter());
-
-        // ctor from derived quotes for specific date
-        fxSviSmileSection(const Date& exerciseDate,
-                          const Handle<Quote>& spot,
-                          const std::vector<Handle<DeltaVolQuote>>& quotes,
-                          const Handle<YieldTermStructure>& foreignDiscount,
-                          const Handle<YieldTermStructure>& domesticDiscount,
-                          DeltaVolQuote::DeltaType deltaType,
-                          DeltaVolQuote::AtmType atmType,
-                          FlyType flyType,
-                          const DayCounter& dayCounter,
-                          const FxSettlementConvention& settlement,
-                          const Date& referenceDate = Date());
-
-        // ctor from derived quotes for expiry time - floats with evaluation date
-        fxSviSmileSection(Time exerciseTime,
-                          const Handle<Quote>& spot,
-                          const std::vector<Handle<DeltaVolQuote>>& quotes,
-                          const Handle<YieldTermStructure>& foreignDiscount,
-                          const Handle<YieldTermStructure>& domesticDiscount,
-                          DeltaVolQuote::DeltaType deltaType,
-                          DeltaVolQuote::AtmType atmType,
-                          FlyType flyType,
                           const DayCounter& dayCounter = DayCounter());
 
         // Introspection

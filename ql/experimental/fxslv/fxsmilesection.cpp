@@ -1,119 +1,49 @@
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
 #include <string>
+#include <utility>
 
 namespace QuantLib {
 
     FxSmileSection::FxSmileSection(const Date& exerciseDate,
                                    const Handle<Quote>& spot,
-                                   const Handle<Quote>& atm,
-                                   const std::vector<Handle<Quote>>& rrs,
-                                   const std::vector<Handle<Quote>>& bfs,
-                                   const std::vector<Real>& deltas,
+                                   const ext::shared_ptr<FxSmileQuotes>& quotes,
                                    const Handle<YieldTermStructure>& foreignDiscount,
                                    const Handle<YieldTermStructure>& domesticDiscount,
                                    DeltaVolQuote::DeltaType deltaType,
                                    DeltaVolQuote::AtmType atmType,
-                                   FlyType flyType,
                                    const DayCounter& dayCounter,
                                    const FxSettlementConvention& settlement,
                                    const Date& referenceDate)
     : SmileSection(exerciseDate, dayCounter, referenceDate, ShiftedLognormal, 0.0),
-      spot_(spot), rrs_(rrs), bfs_(bfs), deltas_(deltas),
+      deltaType_(deltaType), atmType_(atmType), spot_(spot), smileQuotes_(quotes),
       foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
-      settleConvention_(settlement),
-      deltaType_(deltaType), atmType_(atmType), flyType_(flyType), isDeltaVolQuote_(false),
-      atmInput_(atm), quotesInput_(),
-      atm_(), quotes_(), maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON)
-    {
-        QL_REQUIRE(rrs.size() == deltas.size(),
-                   "risk reversal quotes must be the same size as deltas");
-        QL_REQUIRE(bfs.size() == deltas.size(), 
-                   "butterfly quotes must be the same size as deltas");
+      settleConvention_(settlement), maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON) {
+        QL_REQUIRE(smileQuotes_, "no smile quotes given");
         registerWithMarketData();
     }
 
     FxSmileSection::FxSmileSection(Time exerciseTime,
                                    const Handle<Quote>& spot,
-                                   const Handle<Quote>& atm,
-                                   const std::vector<Handle<Quote>>& rrs,
-                                   const std::vector<Handle<Quote>>& bfs,
-                                   const std::vector<Real>& deltas,
+                                   const ext::shared_ptr<FxSmileQuotes>& quotes,
                                    const Handle<YieldTermStructure>& foreignDiscount,
                                    const Handle<YieldTermStructure>& domesticDiscount,
                                    DeltaVolQuote::DeltaType deltaType,
                                    DeltaVolQuote::AtmType atmType,
-                                   FlyType flyType,
                                    const DayCounter& dayCounter)
     : SmileSection(exerciseTime, dayCounter, ShiftedLognormal, 0.0),
-      spot_(spot), rrs_(rrs), bfs_(bfs), deltas_(deltas),
+      deltaType_(deltaType), atmType_(atmType), spot_(spot), smileQuotes_(quotes),
       foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
-      deltaType_(deltaType), atmType_(atmType), flyType_(flyType), isDeltaVolQuote_(false),
-      atmInput_(atm), quotesInput_(),
-      atm_(), quotes_(), maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON)
-    {
-        QL_REQUIRE(rrs.size() == deltas.size(),
-                   "risk reversal quotes must be the same size as deltas");
-        QL_REQUIRE(bfs.size() == deltas.size(), 
-                   "butterfly quotes must be the same size as deltas");
+      maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON) {
+        QL_REQUIRE(smileQuotes_, "no smile quotes given");
         registerWithMarketData();
     }
 
-    FxSmileSection::FxSmileSection(const Date& exerciseDate,
-                                   const Handle<Quote>& spot,
-                                   const std::vector<Handle<DeltaVolQuote>>& quotes,
-                                   const Handle<YieldTermStructure>& foreignDiscount,
-                                   const Handle<YieldTermStructure>& domesticDiscount,
-                                   DeltaVolQuote::DeltaType deltaType,
-                                   DeltaVolQuote::AtmType atmType,
-                                   FlyType flyType,
-                                   const DayCounter& dayCounter,
-                                   const FxSettlementConvention& settlement,
-                                   const Date& referenceDate)
-    : SmileSection(exerciseDate, dayCounter, referenceDate, ShiftedLognormal, 0.0), 
-      spot_(spot), rrs_(), bfs_(), deltas_(),
-      foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
-      settleConvention_(settlement),
-      deltaType_(deltaType), atmType_(atmType), flyType_(flyType), isDeltaVolQuote_(true),
-      atmInput_(), quotesInput_(quotes),
-      atm_(), quotes_(), maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON)
-    {
-        registerWithMarketData();
-    }
-
-    FxSmileSection::FxSmileSection(Time exerciseTime,
-                                   const Handle<Quote>& spot,
-                                   const std::vector<Handle<DeltaVolQuote>>& quotes,
-                                   const Handle<YieldTermStructure>& foreignDiscount,
-                                   const Handle<YieldTermStructure>& domesticDiscount,
-                                   DeltaVolQuote::DeltaType deltaType,
-                                   DeltaVolQuote::AtmType atmType,
-                                   FlyType flyType,
-                                   const DayCounter& dayCounter)
-    : SmileSection(exerciseTime, dayCounter, ShiftedLognormal, 0.0), 
-      spot_(spot), rrs_(), bfs_(), deltas_(),
-      foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
-      deltaType_(deltaType), atmType_(atmType), flyType_(flyType), isDeltaVolQuote_(true),
-      atmInput_(), quotesInput_(quotes),
-      atm_(), quotes_(), maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON)
-    {
-        registerWithMarketData();
-    }
-
-    void FxSmileSection::registerWithMarketData() 
-    {
+    void FxSmileSection::registerWithMarketData() {
         registerWith(spot_);
         registerWith(foreignDiscount_);
         registerWith(domesticDiscount_);
-        
-        if (isDeltaVolQuote()) {
-            for (auto& q : quotesInput_) registerWith(q);
-        }
-        else {
-            registerWith(atmInput_);
-            for (auto& r : rrs_) registerWith(r);
-            for (auto& b : bfs_) registerWith(b);
-        }
+        registerWith(smileQuotes_);
     }
 
     namespace {
@@ -199,164 +129,19 @@ namespace QuantLib {
     }
 
     void FxSmileSection::stripDeltaVolQuotes() const {
+        // Seed with a vol that depends on the quotes only, so that the
+        // same quotes always give the same smile; subclasses read atm_ in
+        // initialParams().
+        atm_ = makeQuoteHandle(smileQuotes_->referenceVol());
 
-        if (isDeltaVolQuote()) 
-        {
-            // Copy the immutable input quotes into the mutable workspace so that
-            // calibrate() always reads from quotes_ regardless of which path we are on.
-            quotes_ = quotesInput_;
-
-            // initialParams() in subclasses (e.g. fxSabrSmileSection) reads atm_->value()
-            // to seed the optimisation.  atm_ is normally set by calculateAtm() *after*
-            // calibrate(), so it is still empty here.  Provide a rough initial guess —
-            // the average of all input quote vols — so that the handle is never empty
-            // when calibrate() runs.  calculateAtm() below will overwrite atm_ with the
-            // proper value derived from the fitted smile.
-            if (atm_.empty()) {
-                Real sumVol = 0.0;
-                for (const auto& q : quotesInput_)
-                    sumVol += q->value();
-                atm_ = makeQuoteHandle(quotesInput_.empty() ? 0.1 : sumVol / static_cast<Real>(quotesInput_.size()));
-            }
-
+        smileQuotes_->calibrate(*this, [this](std::vector<Handle<DeltaVolQuote>> quotes) {
+            quotes_ = std::move(quotes);
             calibrate();
+        });
 
-            // When calibrating from delta-vol quotes the atm is not known a priori,
-            // so derive it from the fitted smile.
-            calculateAtm();
-        }
-        else if (flyType() == FlyType::MarketStrangle) 
-        {
-            // atm_ is the market input for this path.
-            atm_ = atmInput_;
-
-            // Create a strangle helper for each delta level.
-            std::vector<FxStrangleHelper<FxSmileSection>> helpers;
-            helpers.reserve(deltas_.size());
-            for (Size i = 0; i < deltas_.size(); ++i) {
-                helpers.emplace_back(bfs_[i], std::fabs(deltas_[i]));
-                helpers.back().setSmileSection(const_cast<FxSmileSection*>(this));
-                helpers.back().initialize();
-            }
-
-            // Initial guess: smile strangles = broker flies
-            std::vector<Real> smileStrangles(deltas_.size());
-            for (Size i = 0; i < deltas_.size(); ++i) {
-                smileStrangles[i] = bfs_[i]->value();
-            }
-
-            // Iteratively solve for each smile strangle.  In the
-            // three-point case (one delta) this converges in a single
-            // pass; with two or more deltas we iterate until the
-            // strangle errors are all within tolerance.
-            const Size maxOuterIter = 20;
-            const Real tol = 1.0e-10;
-
-            for (Size iter = 0; iter < maxOuterIter; ++iter) 
-            {
-                Real maxErr = 0.0;
-
-                for (Size i = 0; i < deltas_.size(); ++i) 
-                {
-                    // Objective: find smileStrangles[i] such that
-                    // the smile reproduces the market strangle price.
-                    auto error = [&](Real ss) -> Real {
-                        smileStrangles[i] = ss;
-
-                        // Rebuild delta-vol quotes from current smile strangles
-                        quotes_.clear();
-                        quotes_.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(atm(), deltaType(),
-                                                                                                 exerciseTime(), atmType())));
-
-                        for (Size j = 0; j < deltas_.size(); ++j)
-                        {
-                            Real d = std::fabs(deltas_[j]);
-                            Real rr = rrs_[j]->value();
-                            Real bf = smileStrangles[j];
-
-                            Volatility cVol = atm_->value() + bf + rr / 2.;
-                            Volatility pVol = atm_->value() + bf - rr / 2.;
-
-                            quotes_.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(d, makeQuoteHandle(cVol),
-                                                                                                     exerciseTime(), deltaType_)));
-                            quotes_.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(-d, makeQuoteHandle(pVol),
-                                                                                                     exerciseTime(), deltaType_)));
-                        }
-
-                        calibrate();
-                        return helpers[i].flyError();
-                    };
-
-                    Brent solver;
-                    solver.setMaxEvaluations(1000);
-                    Real guess = smileStrangles[i];
-                    smileStrangles[i] = solver.solve(error, 1.0e-12, guess, guess * 0.1, guess * 5.0);
-
-                    maxErr = std::max(maxErr, std::fabs(helpers[i].flyError()));
-                }
-
-                if (maxErr < tol)
-                    break;
-            }
-
-            // Final calibration with converged smile strangles
-            quotes_.clear();
-            quotes_.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(atm(), deltaType(),
-                                                                                     exerciseTime(), atmType())));
-
-            for (Size i = 0; i < deltas_.size(); ++i) {
-                Real d = std::fabs(deltas_[i]);
-                Real rr = rrs_[i]->value();
-                Real bf = smileStrangles[i];
-
-                Volatility cVol = atm_->value() + bf + rr / 2.;
-                Volatility pVol = atm_->value() + bf - rr / 2.;
-
-                quotes_.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(d, makeQuoteHandle(cVol),
-                                                                                         exerciseTime(), deltaType_)));
-                quotes_.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(-d, makeQuoteHandle(pVol),
-                                                                                         exerciseTime(), deltaType_)));
-            }
-
-            calibrate();
-
-            // the calibrated atm might differ from the input
-            // so get the atm from the calibrated smile section
-            calculateAtm();
-        } else {
-            // Calibrate from RRs and flies, where the flies are smile strangles.
-            // This is easily handled algebraically: convert to delta-vol quotes
-            // (stored in the mutable workspace quotes_) then call calibrate().
-            // atm_ is the market input for this path.
-            atm_ = atmInput_;
-            quotes_.clear();
-
-            // handle the atm
-            quotes_.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(atm(), deltaType(),
-                                                                                     exerciseTime(), atmType())));
-
-            for (Size i = 0; i < deltas_.size(); ++i)
-            {
-                Real d = std::fabs(deltas_[i]);
-                Real rr = rrs_[i]->value();
-                Real bf = bfs_[i]->value();
-
-                Volatility cVol = atm_->value() + bf + rr / 2.;
-                Volatility pVol = atm_->value() + bf - rr / 2.;
-
-                quotes_.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(d, makeQuoteHandle(cVol),
-                                                                                         exerciseTime(), deltaType_)));
-                quotes_.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(-d, makeQuoteHandle(pVol),
-                                                                                         exerciseTime(), deltaType_)));
-            }
-
-            calibrate();
-
-            // the calibrated atm might differ from the input
-            // so get the atm from the calibrated smile section
-            calculateAtm();
-        }
-        
+        // the calibrated atm might differ from the quoted one, so take it
+        // from the calibrated smile
+        calculateAtm();
     }
 
     void FxSmileSection::adjustStrikes() const {

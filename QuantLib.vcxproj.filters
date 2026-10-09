@@ -3315,6 +3315,9 @@
     <ClInclude Include="ql\experimental\fxslv\fxslvpricingcontext.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>
+    <ClInclude Include="ql\experimental\fxslv\fxsmilequotes.hpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClInclude>
     <ClInclude Include="ql\experimental\fxslv\fxsmilesection.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>
@@ -7448,6 +7451,9 @@
       <Filter>experimental\fxslv</Filter>
     </ClCompile>
     <ClCompile Include="ql\experimental\fxslv\fxslvpricingcontext.cpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClCompile>
+    <ClCompile Include="ql\experimental\fxslv\fxsmilequotes.cpp">
       <Filter>experimental\fxslv</Filter>
     </ClCompile>
     <ClCompile Include="ql\experimental\fxslv\fxsmilesection.cpp">

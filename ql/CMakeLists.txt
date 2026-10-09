@@ -153,6 +153,7 @@ set(QL_SOURCES
     experimental/fx/mtmcrosscurrencybasisswap.cpp
     experimental/fxslv/fxcostsmilesection.cpp
     experimental/fxslv/fxslvpricingcontext.cpp
+    experimental/fxslv/fxsmilequotes.cpp
     experimental/fxslv/fxsmilesection.cpp
     experimental/fxslv/fxsmilesectionbydelta.cpp
     experimental/fxslv/fxsmilesectionbystrike.cpp
@@ -1196,6 +1197,7 @@ set(QL_HEADERS
     experimental/fxslv/fxcostsmilesection.hpp
     experimental/fxslv/fxsettlementconvention.hpp
     experimental/fxslv/fxslvpricingcontext.hpp
+    experimental/fxslv/fxsmilequotes.hpp
     experimental/fxslv/fxsmilesection.hpp
     experimental/fxslv/fxsmilesectionbydelta.hpp
     experimental/fxslv/fxsmilesectionbystrike.hpp

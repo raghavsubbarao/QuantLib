@@ -53,6 +53,7 @@
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/fxsmilequotes.hpp>
 #include <ql/time/calendars/weekendsonly.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/time/date.hpp>
@@ -171,13 +172,16 @@ int main(int, char*[]) {
 
         DeltaVolQuote::DeltaType deltaType = DeltaVolQuote::PaSpot;
         DeltaVolQuote::AtmType   atmType   = DeltaVolQuote::AtmFwd;
-        FxSmileSection::FlyType  flyType   = FxSmileSection::SmileStrangle;
+        FxRrBfQuotes::FlyType  flyType   = FxRrBfQuotes::SmileStrangle;
         DayCounter               dc        = Actual365Fixed();
 
         // Settlement: generic pair, weekends-only calendar, T+2 spot lag.
         // For a real pair use the joint calendar of both currencies (and USD
         // if the pair settles through USD) and the pair's spot lag.
         FxSettlementConvention   settlement(WeekendsOnly(), 2);
+
+        // Market quotes, shared by all the sections below
+        auto smileQuotes = ext::make_shared<FxRrBfQuotes>(v_atm, rrs, bfs, deltas, flyType);
 
         // Derived market quotes for reference
         Real mkt_atm  = v_atm->value();
@@ -240,9 +244,9 @@ int main(int, char*[]) {
         std::cout << "--- Strike-parameterised models ---\n\n";
 
         {
-            polynomialSmileSection ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+            polynomialSmileSection ss(expiryDate, spot, smileQuotes,
                                       forDiscount, domDiscount,
-                                      deltaType, atmType, flyType, dc, settlement);
+                                      deltaType, atmType, dc, settlement);
             printRow("Polynomial (3 params)", ss,
                      mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
         }
@@ -257,9 +261,9 @@ int main(int, char*[]) {
         // ------------------------------------------------------------------
 
         {
-            fxSabrSmileSection ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+            fxSabrSmileSection ss(expiryDate, spot, smileQuotes,
                                   forDiscount, domDiscount,
-                                  deltaType, atmType, flyType, dc, settlement);
+                                  deltaType, atmType, dc, settlement);
             printRow("SABR beta=1 (3 params)", ss,
                      mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
 
@@ -278,9 +282,9 @@ int main(int, char*[]) {
         // ------------------------------------------------------------------
 
         {
-            fxSviSmileSection ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+            fxSviSmileSection ss(expiryDate, spot, smileQuotes,
                                  forDiscount, domDiscount,
-                                 deltaType, atmType, flyType, dc, settlement);
+                                 deltaType, atmType, dc, settlement);
             printRow("SVI raw (5 params)", ss,
                      mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
 
@@ -301,9 +305,9 @@ int main(int, char*[]) {
         // ------------------------------------------------------------------
 
         {
-            fxCostSmileSectionFlatDynamics ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+            fxCostSmileSectionFlatDynamics ss(expiryDate, spot, smileQuotes,
                                               forDiscount, domDiscount,
-                                              deltaType, atmType, flyType,
+                                              deltaType, atmType,
                                               dc, settlement, Date(), true);
             printRow("Cost model — flat dynamics", ss,
                      mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
@@ -318,9 +322,9 @@ int main(int, char*[]) {
         // ------------------------------------------------------------------
 
         {
-            fxCostSmileSectionScaledDynamics ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+            fxCostSmileSectionScaledDynamics ss(expiryDate, spot, smileQuotes,
                                                 forDiscount, domDiscount,
-                                                deltaType, atmType, flyType,
+                                                deltaType, atmType,
                                                 dc, settlement, Date(), true);
             printRow("Cost model — scaled dynamics", ss,
                      mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
@@ -337,9 +341,9 @@ int main(int, char*[]) {
         std::cout << "--- Delta-parameterised models ---\n\n";
 
         {
-            quadraticSmileSection ss(expiryDate, spot, v_atm, rrs, bfs, deltas,
+            quadraticSmileSection ss(expiryDate, spot, smileQuotes,
                                      forDiscount, domDiscount,
-                                     deltaType, atmType, flyType, dc, settlement);
+                                     deltaType, atmType, dc, settlement);
             printRow("Quadratic in delta (3 params)", ss,
                      mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
 
@@ -378,9 +382,9 @@ int main(int, char*[]) {
         std::cout << "--- Vol by strike (selected strikes) ---\n\n";
 
         // Use the cost flat dynamics model as reference for the ATM strike.
-        fxCostSmileSectionFlatDynamics ref(expiryDate, spot, v_atm, rrs, bfs, deltas,
+        fxCostSmileSectionFlatDynamics ref(expiryDate, spot, smileQuotes,
                                            forDiscount, domDiscount,
-                                           deltaType, atmType, flyType,
+                                           deltaType, atmType,
                                            dc, settlement, Date(), true);
         Real fwd = ref.forward();
         std::vector<Real> strikes = { fwd * 0.85, fwd * 0.90, fwd * 0.95,
@@ -404,35 +408,35 @@ int main(int, char*[]) {
         };
 
         {
-            polynomialSmileSection s1(expiryDate, spot, v_atm, rrs, bfs, deltas,
-                                      forDiscount, domDiscount, deltaType, atmType, flyType, dc, settlement);
+            polynomialSmileSection s1(expiryDate, spot, smileQuotes,
+                                      forDiscount, domDiscount, deltaType, atmType, dc, settlement);
             printStrikeRow("Polynomial", s1);
         }
         {
-            fxSabrSmileSection s2(expiryDate, spot, v_atm, rrs, bfs, deltas,
-                                  forDiscount, domDiscount, deltaType, atmType, flyType, dc, settlement);
+            fxSabrSmileSection s2(expiryDate, spot, smileQuotes,
+                                  forDiscount, domDiscount, deltaType, atmType, dc, settlement);
             printStrikeRow("SABR", s2);
         }
         {
-            fxSviSmileSection s3(expiryDate, spot, v_atm, rrs, bfs, deltas,
-                                 forDiscount, domDiscount, deltaType, atmType, flyType, dc, settlement);
+            fxSviSmileSection s3(expiryDate, spot, smileQuotes,
+                                 forDiscount, domDiscount, deltaType, atmType, dc, settlement);
             printStrikeRow("SVI", s3);
         }
         {
-            fxCostSmileSectionFlatDynamics s4(expiryDate, spot, v_atm, rrs, bfs, deltas,
-                                              forDiscount, domDiscount, deltaType, atmType, flyType,
+            fxCostSmileSectionFlatDynamics s4(expiryDate, spot, smileQuotes,
+                                              forDiscount, domDiscount, deltaType, atmType,
                                               dc, settlement, Date(), true);
             printStrikeRow("Cost-flat", s4);
         }
         {
-            fxCostSmileSectionScaledDynamics s5(expiryDate, spot, v_atm, rrs, bfs, deltas,
-                                                forDiscount, domDiscount, deltaType, atmType, flyType,
+            fxCostSmileSectionScaledDynamics s5(expiryDate, spot, smileQuotes,
+                                                forDiscount, domDiscount, deltaType, atmType,
                                                 dc, settlement, Date(), true);
             printStrikeRow("Cost-scaled", s5);
         }
         {
-            quadraticSmileSection s6(expiryDate, spot, v_atm, rrs, bfs, deltas,
-                                     forDiscount, domDiscount, deltaType, atmType, flyType, dc, settlement);
+            quadraticSmileSection s6(expiryDate, spot, smileQuotes,
+                                     forDiscount, domDiscount, deltaType, atmType, dc, settlement);
             printStrikeRow("Quadratic-delta", s6);
         }
         std::cout << "\n";

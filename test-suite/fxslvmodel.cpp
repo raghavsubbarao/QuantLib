@@ -103,7 +103,7 @@ namespace {
 
         DeltaVolQuote::DeltaType deltaType;
         DeltaVolQuote::AtmType   atmType;
-        FxSmileSection::FlyType  flyType;
+        FxRrBfQuotes::FlyType  flyType;
 
         ext::shared_ptr<fxVarianceSurfaceNCP<quadraticSmileSection>> volSurface;
         Handle<BlackVolTermStructure> volSurfaceHandle;
@@ -128,7 +128,7 @@ namespace {
 
             deltaType = DeltaVolQuote::Fwd;
             atmType   = DeltaVolQuote::AtmFwd;
-            flyType   = FxSmileSection::SmileStrangle;
+            flyType   = FxRrBfQuotes::SmileStrangle;
             deltas    = { 0.25, 0.10 };
 
             // ── 11-pillar market data ────────────────────────────────────────

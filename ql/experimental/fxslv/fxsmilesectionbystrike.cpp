@@ -11,68 +11,30 @@ namespace QuantLib {
 
     fxSmileSectionByStrike::fxSmileSectionByStrike(const Date& exerciseDate,
                                                    const Handle<Quote>& spot,
-                                                   const Handle<Quote>& atm,
-                                                   const std::vector<Handle<Quote>>& rrs,
-                                                   const std::vector<Handle<Quote>>& bfs,
-                                                   const std::vector<Real>& deltas,
+                                                   const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                    const Handle<YieldTermStructure>& foreignDiscount,
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   FxSmileSection::FlyType flyType,
-                                                   const DayCounter& dayCounter,
-                                                   const FxSettlementConvention& settlement,
-                                                   const Date& referenceDate)
-    : FxSmileSection(exerciseDate, spot, atm, rrs, bfs, deltas,
-                     foreignDiscount, domesticDiscount,
-                     deltaType, atmType, flyType, dayCounter, settlement, referenceDate),
-      params_() {}
-
-    fxSmileSectionByStrike::fxSmileSectionByStrike(Time exerciseTime,
-                                                   const Handle<Quote>& spot,
-                                                   const Handle<Quote>& atm,
-                                                   const std::vector<Handle<Quote>>& rrs,
-                                                   const std::vector<Handle<Quote>>& bfs,
-                                                   const std::vector<Real>& deltas,
-                                                   const Handle<YieldTermStructure>& foreignDiscount,
-                                                   const Handle<YieldTermStructure>& domesticDiscount,
-                                                   DeltaVolQuote::DeltaType deltaType,
-                                                   DeltaVolQuote::AtmType atmType,
-                                                   FxSmileSection::FlyType flyType,
-                                                   const DayCounter& dayCounter)
-    : FxSmileSection(exerciseTime, spot, atm, rrs, bfs, deltas,
-                     foreignDiscount, domesticDiscount,
-                     deltaType, atmType, flyType, dayCounter),
-      params_() {}
-
-    fxSmileSectionByStrike::fxSmileSectionByStrike(const Date& exerciseDate,
-                                                   const Handle<Quote>& spot,
-                                                   const std::vector<Handle<DeltaVolQuote>>& quotes,
-                                                   const Handle<YieldTermStructure>& foreignDiscount,
-                                                   const Handle<YieldTermStructure>& domesticDiscount,
-                                                   DeltaVolQuote::DeltaType deltaType,
-                                                   DeltaVolQuote::AtmType atmType,
-                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter,
                                                    const FxSettlementConvention& settlement,
                                                    const Date& referenceDate)
     : FxSmileSection(exerciseDate, spot, quotes,
                      foreignDiscount, domesticDiscount,
-                     deltaType, atmType, flyType, dayCounter, settlement, referenceDate),
+                     deltaType, atmType, dayCounter, settlement, referenceDate),
       params_() {}
 
     fxSmileSectionByStrike::fxSmileSectionByStrike(Time exerciseTime,
                                                    const Handle<Quote>& spot,
-                                                   const std::vector<Handle<DeltaVolQuote>>& quotes,
+                                                   const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                    const Handle<YieldTermStructure>& foreignDiscount,
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter)
     : FxSmileSection(exerciseTime, spot, quotes,
                      foreignDiscount, domesticDiscount,
-                     deltaType, atmType, flyType, dayCounter),
+                     deltaType, atmType, dayCounter),
       params_() {}
 
     Volatility fxSmileSectionByStrike::volByStrike(Rate strike) const 
@@ -192,74 +154,32 @@ namespace QuantLib {
     //@{
     polynomialSmileSection::polynomialSmileSection(const Date& exerciseDate,
                                                    const Handle<Quote>& spot,
-                                                   const Handle<Quote>& atm,
-                                                   const std::vector<Handle<Quote>>& rrs,
-                                                   const std::vector<Handle<Quote>>& bfs,       
-                                                   const std::vector<Real>& deltas,
-                                                   const Handle<YieldTermStructure>& foreignDiscount,
-                                                   const Handle<YieldTermStructure>& domesticDiscount,
-                                                   DeltaVolQuote::DeltaType deltaType,  
-                                                   DeltaVolQuote::AtmType atmType,
-                                                   FxSmileSection::FlyType flyType,
-                                                   const DayCounter& dayCounter,
-                                                   const FxSettlementConvention& settlement,
-                                                   const Date& referenceDate)
-    : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
-                             foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate) 
-    {
-        params_.reserve(3);
-    }
-
-    polynomialSmileSection::polynomialSmileSection(Time exerciseTime,
-                                                   const Handle<Quote>& spot,
-                                                   const Handle<Quote>& atm,
-                                                   const std::vector<Handle<Quote>>& rrs,
-                                                   const std::vector<Handle<Quote>>& bfs,
-                                                   const std::vector<Real>& deltas,
+                                                   const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                    const Handle<YieldTermStructure>& foreignDiscount,
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   FxSmileSection::FlyType flyType,
-                                                   const DayCounter& dayCounter)
-    : fxSmileSectionByStrike(exerciseTime, spot, atm, rrs, bfs, deltas,
-                             foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter) 
-    {
-        params_.reserve(3);
-    }
-
-    polynomialSmileSection::polynomialSmileSection(const Date& exerciseDate,
-                                                   const Handle<Quote>& spot,
-                                                   const std::vector<Handle<DeltaVolQuote>>& quotes,
-                                                   const Handle<YieldTermStructure>& foreignDiscount,
-                                                   const Handle<YieldTermStructure>& domesticDiscount,
-                                                   DeltaVolQuote::DeltaType deltaType,
-                                                   DeltaVolQuote::AtmType atmType,
-                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter,
                                                    const FxSettlementConvention& settlement,
                                                    const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate)
+                             deltaType, atmType, dayCounter, settlement, referenceDate)
     {
         params_.reserve(3);
     }
 
     polynomialSmileSection::polynomialSmileSection(Time exerciseTime,
                                                    const Handle<Quote>& spot,
-                                                   const std::vector<Handle<DeltaVolQuote>>& quotes,
+                                                   const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                    const Handle<YieldTermStructure>& foreignDiscount,
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter)
     : fxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter)
+                             deltaType, atmType, dayCounter)
     {
         params_.reserve(3);
     }
@@ -291,74 +211,32 @@ namespace QuantLib {
     //@{
     fxSabrSmileSection::fxSabrSmileSection(const Date& exerciseDate,
                                            const Handle<Quote>& spot,
-                                           const Handle<Quote>& atm,
-                                           const std::vector<Handle<Quote>>& rrs,
-                                           const std::vector<Handle<Quote>>& bfs,
-                                           const std::vector<Real>& deltas,
+                                           const ext::shared_ptr<FxSmileQuotes>& quotes,
                                            const Handle<YieldTermStructure>& foreignDiscount,
                                            const Handle<YieldTermStructure>& domesticDiscount,
                                            DeltaVolQuote::DeltaType deltaType,
                                            DeltaVolQuote::AtmType atmType,
-                                           FxSmileSection::FlyType flyType,
-                                           const DayCounter& dayCounter,
-                                           const FxSettlementConvention& settlement,
-                                           const Date& referenceDate)
-    : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
-                             foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate) 
-    {
-        params_.reserve(3);
-    }
-
-    fxSabrSmileSection::fxSabrSmileSection(Time exerciseTime,
-                                           const Handle<Quote>& spot,
-                                           const Handle<Quote>& atm,
-                                           const std::vector<Handle<Quote>>& rrs,
-                                           const std::vector<Handle<Quote>>& bfs,
-                                           const std::vector<Real>& deltas,
-                                           const Handle<YieldTermStructure>& foreignDiscount,
-                                           const Handle<YieldTermStructure>& domesticDiscount,
-                                           DeltaVolQuote::DeltaType deltaType,
-                                           DeltaVolQuote::AtmType atmType,
-                                           FxSmileSection::FlyType flyType,
-                                           const DayCounter& dayCounter)
-    : fxSmileSectionByStrike(exerciseTime, spot, atm,  rrs, bfs, deltas,
-                             foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter) 
-    {
-        params_.reserve(3);
-    }
-
-    fxSabrSmileSection::fxSabrSmileSection(const Date& exerciseDate,
-                                           const Handle<Quote>& spot,
-                                           const std::vector<Handle<DeltaVolQuote>>& quotes,
-                                           const Handle<YieldTermStructure>& foreignDiscount,
-                                           const Handle<YieldTermStructure>& domesticDiscount,
-                                           DeltaVolQuote::DeltaType deltaType,
-                                           DeltaVolQuote::AtmType atmType,
-                                           FxSmileSection::FlyType flyType,
                                            const DayCounter& dayCounter,
                                            const FxSettlementConvention& settlement,
                                            const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate) 
+                             deltaType, atmType, dayCounter, settlement, referenceDate) 
     {
         params_.reserve(3);
     }
 
     fxSabrSmileSection::fxSabrSmileSection(Time exerciseTime,
                                            const Handle<Quote>& spot,
-                                           const std::vector<Handle<DeltaVolQuote>>& quotes,
+                                           const ext::shared_ptr<FxSmileQuotes>& quotes,
                                            const Handle<YieldTermStructure>& foreignDiscount,
                                            const Handle<YieldTermStructure>& domesticDiscount,
                                            DeltaVolQuote::DeltaType deltaType,
                                            DeltaVolQuote::AtmType atmType,
-                                           FxSmileSection::FlyType flyType,
                                            const DayCounter& dayCounter)
     : fxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter) 
+                             deltaType, atmType, dayCounter) 
     {
         params_.reserve(3);
     }
@@ -389,74 +267,32 @@ namespace QuantLib {
     //@{
     fxSviSmileSection::fxSviSmileSection(const Date& exerciseDate,
                                          const Handle<Quote>& spot,
-                                         const Handle<Quote>& atm,
-                                         const std::vector<Handle<Quote>>& rrs,
-                                         const std::vector<Handle<Quote>>& bfs,
-                                         const std::vector<Real>& deltas,
+                                         const ext::shared_ptr<FxSmileQuotes>& quotes,
                                          const Handle<YieldTermStructure>& foreignDiscount,
                                          const Handle<YieldTermStructure>& domesticDiscount,
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
-                                         FxSmileSection::FlyType flyType,
-                                         const DayCounter& dayCounter,
-                                         const FxSettlementConvention& settlement,
-                                         const Date& referenceDate)
-    : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
-                             foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate)
-    {
-        params_.reserve(5);
-    }
-
-    fxSviSmileSection::fxSviSmileSection(Time exerciseTime,
-                                         const Handle<Quote>& spot,
-                                         const Handle<Quote>& atm,
-                                         const std::vector<Handle<Quote>>& rrs,
-                                         const std::vector<Handle<Quote>>& bfs,
-                                         const std::vector<Real>& deltas,
-                                         const Handle<YieldTermStructure>& foreignDiscount,
-                                         const Handle<YieldTermStructure>& domesticDiscount,
-                                         DeltaVolQuote::DeltaType deltaType,
-                                         DeltaVolQuote::AtmType atmType,
-                                         FxSmileSection::FlyType flyType,
-                                         const DayCounter& dayCounter)
-    : fxSmileSectionByStrike(exerciseTime, spot, atm, rrs, bfs, deltas,
-                             foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter)
-    {
-        params_.reserve(5);
-    }
-
-    fxSviSmileSection::fxSviSmileSection(const Date& exerciseDate,
-                                         const Handle<Quote>& spot,
-                                         const std::vector<Handle<DeltaVolQuote>>& quotes,
-                                         const Handle<YieldTermStructure>& foreignDiscount,
-                                         const Handle<YieldTermStructure>& domesticDiscount,
-                                         DeltaVolQuote::DeltaType deltaType,
-                                         DeltaVolQuote::AtmType atmType,
-                                         FxSmileSection::FlyType flyType,
                                          const DayCounter& dayCounter,
                                          const FxSettlementConvention& settlement,
                                          const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate)
+                             deltaType, atmType, dayCounter, settlement, referenceDate)
     {
         params_.reserve(5);
     }
 
     fxSviSmileSection::fxSviSmileSection(Time exerciseTime,
                                          const Handle<Quote>& spot,
-                                         const std::vector<Handle<DeltaVolQuote>>& quotes,
+                                         const ext::shared_ptr<FxSmileQuotes>& quotes,
                                          const Handle<YieldTermStructure>& foreignDiscount,
                                          const Handle<YieldTermStructure>& domesticDiscount,
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
-                                         FxSmileSection::FlyType flyType,
                                          const DayCounter& dayCounter)
     : fxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter)
+                             deltaType, atmType, dayCounter)
     {
         params_.reserve(5);
     }

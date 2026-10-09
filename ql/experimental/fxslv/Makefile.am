@@ -7,6 +7,7 @@ this_include_HEADERS = \
     fxcostsmilesection.hpp \
     fxsettlementconvention.hpp \
     fxslvpricingcontext.hpp \
+    fxsmilequotes.hpp \
     fxsmilesection.hpp \
     fxsmilesectionbydelta.hpp \
     fxsmilesectionbystrike.hpp \
@@ -20,6 +21,7 @@ this_include_HEADERS = \
 cpp_files = \
     fxcostsmilesection.cpp \
     fxslvpricingcontext.cpp \
+    fxsmilequotes.cpp \
     fxsmilesection.cpp \
     fxsmilesectionbydelta.cpp \
     fxsmilesectionbystrike.cpp \

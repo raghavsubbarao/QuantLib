@@ -86,7 +86,7 @@ namespace {
 
         DeltaVolQuote::DeltaType deltaType;
         DeltaVolQuote::AtmType   atmType;
-        FxSmileSection::FlyType  flyType;
+        FxRrBfQuotes::FlyType  flyType;
 
         ext::shared_ptr<fxVarianceSurfaceNCP<quadraticSmileSection>> surface;
         ext::shared_ptr<GeneralizedBlackScholesProcess> process;
@@ -110,7 +110,7 @@ namespace {
 
             deltaType = DeltaVolQuote::Fwd;
             atmType   = DeltaVolQuote::AtmFwd;
-            flyType   = FxSmileSection::SmileStrangle;
+            flyType   = FxRrBfQuotes::SmileStrangle;
             deltas    = { 0.25, 0.10 };
 
             // Two pillars: 3M and 6M
@@ -593,7 +593,7 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
     auto volSurface = ext::make_shared<fxVarianceSurfaceNCP<quadraticSmileSection>>(
         today, spot, pillars, atms, rrs, bfs, deltas,
         eurTs, usdTs, timeTs,
-        DeltaVolQuote::Fwd, DeltaVolQuote::AtmFwd, FxSmileSection::SmileStrangle,
+        DeltaVolQuote::Fwd, DeltaVolQuote::AtmFwd, FxRrBfQuotes::SmileStrangle,
         FxSettlementConvention(calendar, 2),
         calendar, Following, true);
     volSurface->enableExtrapolation();

@@ -2,6 +2,7 @@
 #define quantlib_axl_fx_smile_section_hpp
 
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/fxsmilequotes.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <ql/quotes/deltavolquote.hpp>
 #include <ql/patterns/lazyobject.hpp>
@@ -13,161 +14,11 @@
 #include <ql/option.hpp>
 #include <ql/math/solvers1d/bisection.hpp>
 #include <ql/math/solvers1d/brent.hpp>
+#include <ql/shared_ptr.hpp>
 #include <optional>
 
 
 namespace QuantLib {
-
-    //! Helper for broker-fly / market-strangle calibration.
-    /*! Models the rate-helper pattern: each helper corresponds to one
-        delta level and computes the broker-fly implied by the current
-        calibrated smile.  The residual flyError() = market broker fly
-        minus implied broker fly is driven to zero by the outer solver.
-
-        \warning Being a pointer and not a shared_ptr, the smile
-                 section is not guaranteed to remain allocated for the
-                 whole life of the strangle helper. It is the
-                 responsibility of the programmer to ensure that the
-                 pointer remains valid. It is advised that this method
-                 is called only inside the fx smile section being
-                 calibrated, setting the pointer to <b>this</b>,
-                 i.e., the smile section itself.
-    */
-    template <class SS>
-    class FxStrangleHelper : public Observer, public Observable {
-      public:
-        FxStrangleHelper(Handle<Quote> brokerFlyQuote, Real delta);
-        FxStrangleHelper(Real brokerFlyQuote, Real delta);
-        ~FxStrangleHelper() override = default;
-
-        //! \name Observer interface
-        //@{
-        void update() override { notifyObservers(); }
-        //@}
-
-        //! The market broker-fly quote.
-        const Handle<Quote>& quote() const { return quote_; }
-
-        //! The delta level this helper calibrates (e.g. 0.25).
-        Real delta() const { return delta_; }
-
-        //! Sets the smile section used for pricing.
-        void setSmileSection(SS* ss);
-
-        //! Precomputes market strangle strikes and price.
-        /*! Must be called after setSmileSection() and after the smile
-            section's forward / discount data are available (i.e. after
-            calculateForward()).
-        */
-        void initialize();
-
-        //! Broker fly implied by the current calibrated smile.
-        /*! Analogous to BootstrapHelper::impliedQuote().  Computes the
-            strangle price from the calibrated smile at the market
-            strangle strikes and converts it back to an equivalent
-            broker-fly volatility.
-        */
-        Real impliedQuote() const;
-
-        //! Residual: market broker fly - implied broker fly.
-        Real flyError() const { return quote_->value() - impliedQuote(); }
-
-      private:
-        Handle<Quote> quote_;
-        Real delta_;
-        SS* smileSection_;
-
-        // Cached market strangle data (set by initialize())
-        Real callStrike_;
-        Real putStrike_;
-        Real marketStranglePrice_;
-        bool initialized_;
-    };
-
-    // ---------------------------------------------------------------
-    //  fxStrangleHelper inline / template implementation
-    // ---------------------------------------------------------------
-
-    template <class SS>
-    FxStrangleHelper<SS>::FxStrangleHelper(Handle<Quote> brokerFlyQuote, Real delta)
-    : quote_(std::move(brokerFlyQuote)), delta_(delta), smileSection_(nullptr),
-      callStrike_(0.0), putStrike_(0.0), marketStranglePrice_(0.0), initialized_(false) 
-    {
-        registerWith(quote_);
-    }
-
-    template <class SS>
-    FxStrangleHelper<SS>::FxStrangleHelper(Real brokerFlyQuote, Real delta)
-    : quote_(makeQuoteHandle(brokerFlyQuote)), delta_(delta), smileSection_(nullptr), 
-      callStrike_(0.0), putStrike_(0.0), marketStranglePrice_(0.0), initialized_(false) 
-    {}
-
-    template <class SS>
-    void FxStrangleHelper<SS>::setSmileSection(SS* ss) 
-    {
-        QL_REQUIRE(ss != nullptr, "null smile section given");
-        smileSection_ = ss;
-        initialized_ = false;
-    }
-
-    template <class SS>
-    void FxStrangleHelper<SS>::initialize() 
-    {
-        QL_REQUIRE(smileSection_ != nullptr, "smile section not set");
-
-        Real atmVol = smileSection_->atm_->value();
-        Real strdVol = atmVol + quote_->value();
-        Real htau = std::sqrt(smileSection_->exerciseTime());
-        Real w = strdVol * htau;
-
-        Real spotVal = smileSection_->spot()->value();
-        Real ddom = smileSection_->ddom_;
-        Real dfor = smileSection_->dfor_;
-        Real fwd = smileSection_->fwd_;
-        DeltaVolQuote::DeltaType dt = smileSection_->deltaType();
-
-        callStrike_ = BlackDeltaCalculator(Option::Call, dt, spotVal, ddom, dfor, w)
-                          .strikeFromDelta(delta_);
-        putStrike_ = BlackDeltaCalculator(Option::Put, dt, spotVal, ddom, dfor, w)
-                         .strikeFromDelta(-delta_);
-
-        marketStranglePrice_ = BlackCalculator(Option::Call, callStrike_, fwd, w).value() +
-                                 BlackCalculator(Option::Put, putStrike_, fwd, w).value();
-
-        initialized_ = true;
-    }
-
-    template <class SS>
-    Real FxStrangleHelper<SS>::impliedQuote() const 
-    {
-        QL_REQUIRE(initialized_, "FxStrangleHelper not initialized");
-
-        Real htau = std::sqrt(smileSection_->exerciseTime());
-        Real fwd = smileSection_->fwd_;
-        Real atmVol = smileSection_->atm_->value();
-
-        // Price the strangle using the calibrated smile
-        Real vc = smileSection_->volByStrike(callStrike_);
-        Real vp = smileSection_->volByStrike(putStrike_);
-
-        Real smileStranglePrice = BlackCalculator(Option::Call, callStrike_, fwd, vc * htau).value() +
-                                    BlackCalculator(Option::Put, putStrike_, fwd, vp * htau).value();
-
-        // Convert back to a broker-fly vol: find sigma_bf such that
-        // strangle priced at atm + sigma_bf = smileStranglePrice
-        auto priceError = [&](Real bf) {
-            Real w = (atmVol + bf) * htau;
-            return BlackCalculator(Option::Call, callStrike_, fwd, w).value() +
-                   BlackCalculator(Option::Put, putStrike_, fwd, w).value() -
-                   smileStranglePrice;
-        };
-
-        Brent solver;
-        solver.setMaxEvaluations(1000);
-        Real guess = quote_->value();
-        return solver.solve(priceError, 1.0e-12, guess, guess * 0.5, guess * 2.0);
-    }
-
 
     //! Base class for FX smile sections calibrated to delta-quoted vols
     /*! A section can be built in one of two modes.
@@ -200,69 +51,35 @@ namespace QuantLib {
         calculation.  The section's own day counter is not used in this
         mode, since no date has to be converted to a time.
 
-        Quotes are either an ATM vol with risk reversals and butterflies
-        (smile or broker strangles) per delta, or a generic set of
-        delta-vol quotes.
+        The market quotes are given as an FxSmileQuotes object: either
+        FxRrBfQuotes (ATM, risk reversals and smile or broker strangles
+        per delta) or FxDeltaVolQuotes (generic delta-vol quotes).  The
+        section fits its smile to the delta-vol quotes that object
+        produces and then derives its ATM vol from the fitted smile, so
+        that atm() always lies on the calibrated curve.
     */
     class FxSmileSection : public SmileSection, public LazyObject {
       public:
-        enum FlyType {
-            SmileStrangle, // Market fly
-            MarketStrangle // Broker Fly
-        };
-
-        //! Date mode, from ATM, risk-reversal and butterfly quotes.
+        //! Date mode.
         FxSmileSection(const Date& exerciseDate,
                        const Handle<Quote>& spot,
-                       const Handle<Quote>& atm,
-                       const std::vector<Handle<Quote>>& rrs,
-                       const std::vector<Handle<Quote>>& bfs,
-                       const std::vector<Real>& deltas,
+                       const ext::shared_ptr<FxSmileQuotes>& quotes,
                        const Handle<YieldTermStructure>& foreignDiscount,
                        const Handle<YieldTermStructure>& domesticDiscount,
                        DeltaVolQuote::DeltaType deltaType,
                        DeltaVolQuote::AtmType atmType,
-                       FlyType flyType,
                        const DayCounter& dayCounter,
                        const FxSettlementConvention& settlement,
                        const Date& referenceDate = Date());
 
-        //! Time mode, from ATM, risk-reversal and butterfly quotes.
+        //! Time mode.
         FxSmileSection(Time exerciseTime,
                        const Handle<Quote>& spot,
-                       const Handle<Quote>& atm,
-                       const std::vector<Handle<Quote>>& rrs,
-                       const std::vector<Handle<Quote>>& bfs,
-                       const std::vector<Real>& deltas,
+                       const ext::shared_ptr<FxSmileQuotes>& quotes,
                        const Handle<YieldTermStructure>& foreignDiscount,
                        const Handle<YieldTermStructure>& domesticDiscount,
                        DeltaVolQuote::DeltaType deltaType,
                        DeltaVolQuote::AtmType atmType,
-                       FlyType flyType,
-                       const DayCounter& dayCounter = DayCounter());
-
-        //! Date mode, from generic delta-vol quotes.
-        FxSmileSection(const Date& exerciseDate,
-                       const Handle<Quote>& spot,
-                       const std::vector<Handle<DeltaVolQuote>>& quotes,
-                       const Handle<YieldTermStructure>& foreignDiscount,
-                       const Handle<YieldTermStructure>& domesticDiscount,
-                       DeltaVolQuote::DeltaType deltaType,
-                       DeltaVolQuote::AtmType atmType,
-                       FlyType flyType,
-                       const DayCounter& dayCounter,
-                       const FxSettlementConvention& settlement,
-                       const Date& referenceDate = Date());
-
-        //! Time mode, from generic delta-vol quotes.
-        FxSmileSection(Time exerciseTime,
-                       const Handle<Quote>& spot,
-                       const std::vector<Handle<DeltaVolQuote>>& quotes,
-                       const Handle<YieldTermStructure>& foreignDiscount,
-                       const Handle<YieldTermStructure>& domesticDiscount,
-                       DeltaVolQuote::DeltaType deltaType,
-                       DeltaVolQuote::AtmType atmType,
-                       FlyType flyType,
                        const DayCounter& dayCounter = DayCounter());
 
         //! \name Observer interface
@@ -280,7 +97,6 @@ namespace QuantLib {
         // Conventions
         DeltaVolQuote::DeltaType deltaType() const { return deltaType_; };
         DeltaVolQuote::AtmType atmType() const { return atmType_; };
-        FlyType flyType() const { return flyType_; };
         bool premiumAdjust() const {
             return (deltaType_ == DeltaVolQuote::PaSpot || deltaType_ == DeltaVolQuote::PaFwd);
         };
@@ -304,7 +120,8 @@ namespace QuantLib {
         //! Foreign discount factor from spot to delivery (time mode: to expiry time).
         DiscountFactor foreignDiscountFactor() const { calculate(); return dfor_; }
 
-        bool isDeltaVolQuote() const { return isDeltaVolQuote_; };
+        //! Market quotes the section is calibrated to.
+        const ext::shared_ptr<FxSmileQuotes>& smileQuotes() const { return smileQuotes_; }
 
         // Calibration
         virtual Volatility volByStrike(Rate strike) const = 0;
@@ -334,25 +151,13 @@ namespace QuantLib {
 
         DeltaVolQuote::DeltaType deltaType_;
         DeltaVolQuote::AtmType atmType_;
-        FlyType flyType_;
-        bool isDeltaVolQuote_;
 
         Handle<Quote> spot_;
-        std::vector<Handle<Quote>> rrs_;
-        std::vector<Handle<Quote>> bfs_;
-        std::vector<Real> deltas_;
+        ext::shared_ptr<FxSmileQuotes> smileQuotes_;
         Handle<YieldTermStructure> foreignDiscount_;
         Handle<YieldTermStructure> domesticDiscount_;
         std::optional<FxSettlementConvention> settleConvention_;
         mutable Date spotDate_, deliveryDate_;
-
-        // Immutable inputs: set once at construction, never modified.
-        // atmInput_ holds the market ATM quote for the RR/BF input path.
-        // quotesInput_ holds the quotes for the DeltaVolQuote input path.
-        const Handle<Quote> atmInput_;
-        const std::vector<Handle<DeltaVolQuote>> quotesInput_;
-
-        friend class FxStrangleHelper<FxSmileSection>;
 
       protected:
         mutable Real ddom_;
@@ -364,7 +169,8 @@ namespace QuantLib {
         mutable Real minStrike_;
 
         // Computed state: rebuilt on every calibration in stripDeltaVolQuotes().
-        // atm_ is set from atmInput_ (RR/BF) or by calculateAtm() (DeltaVolQuote).
+        // atm_ is seeded with the quotes' reference vol before calibrating
+        // and set to the fitted smile's ATM vol by calculateAtm() after.
         // quotes_ is always a workspace populated before each call to calibrate().
         mutable Handle<Quote> atm_;
         mutable std::vector<Handle<DeltaVolQuote>> quotes_;

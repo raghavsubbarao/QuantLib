@@ -152,7 +152,7 @@ int main(int, char*[]) {
 
         DeltaVolQuote::DeltaType  deltaType = DeltaVolQuote::Fwd;
         DeltaVolQuote::AtmType    atmType   = DeltaVolQuote::AtmFwd;
-        FxSmileSection::FlyType   flyType   = FxSmileSection::SmileStrangle;
+        FxRrBfQuotes::FlyType   flyType   = FxRrBfQuotes::SmileStrangle;
 
         // Eleven pillar tenors: O/N through 2Y, generated from the reference date.
         const Calendar calendar = WeekendsOnly();

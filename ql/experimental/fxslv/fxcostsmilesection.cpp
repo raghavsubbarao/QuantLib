@@ -197,62 +197,13 @@ namespace QuantLib {
     //  fxCostSmileSection — constructors
     // -----------------------------------------------------------------------
 
-	fxCostSmileSection::fxCostSmileSection(const Date& exerciseDate,
-                                           const Handle<Quote>& spot,
-                                           const Handle<Quote>& atm,
-                                           const std::vector<Handle<Quote>>& rrs,
-                                           const std::vector<Handle<Quote>>& bfs,
-                                           const std::vector<Real>& deltas,
-                                           const Handle<YieldTermStructure>& foreignDiscount,
-                                           const Handle<YieldTermStructure>& domesticDiscount,
-                                           DeltaVolQuote::DeltaType deltaType,
-                                           DeltaVolQuote::AtmType atmType,
-                                           FxSmileSection::FlyType flyType,
-                                           Real alpha,
-                                           const DayCounter& dayCounter,
-                                           const FxSettlementConvention& settlement,
-                                           const Date& referenceDate,
-                                           bool weightedCalibrationFlag)
-    : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
-                             foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate),
-        weightedCalibrationFlag_(weightedCalibrationFlag), alpha_(alpha)
-    {
-        QL_REQUIRE(alpha >= 0.0 && alpha <= 1.0, "alpha must be in [0,1], got " << alpha);
-        params_.reserve(4);
-    }
-
-    fxCostSmileSection::fxCostSmileSection(Time exerciseTime,
-                                           const Handle<Quote>& spot,
-                                           const Handle<Quote>& atm,
-                                           const std::vector<Handle<Quote>>& rrs,
-                                           const std::vector<Handle<Quote>>& bfs,
-                                           const std::vector<Real>& deltas,
-                                           const Handle<YieldTermStructure>& foreignDiscount,
-                                           const Handle<YieldTermStructure>& domesticDiscount,
-                                           DeltaVolQuote::DeltaType deltaType,
-                                           DeltaVolQuote::AtmType atmType,
-                                           FxSmileSection::FlyType flyType,
-                                           Real alpha,
-                                           const DayCounter& dayCounter,
-                                           bool weightedCalibrationFlag)
-    : fxSmileSectionByStrike(exerciseTime, spot, atm, rrs, bfs, deltas,
-                             foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter),
-        weightedCalibrationFlag_(weightedCalibrationFlag), alpha_(alpha)
-    {
-        QL_REQUIRE(alpha >= 0.0 && alpha <= 1.0, "alpha must be in [0,1], got " << alpha);
-        params_.reserve(4);
-    }
-
     fxCostSmileSection::fxCostSmileSection(const Date& exerciseDate,
                                            const Handle<Quote>& spot,
-                                           const std::vector<Handle<DeltaVolQuote>>& quotes,
+                                           const ext::shared_ptr<FxSmileQuotes>& quotes,
                                            const Handle<YieldTermStructure>& foreignDiscount,
                                            const Handle<YieldTermStructure>& domesticDiscount,
                                            DeltaVolQuote::DeltaType deltaType,
                                            DeltaVolQuote::AtmType atmType,
-                                           FxSmileSection::FlyType flyType,
                                            Real alpha,
                                            const DayCounter& dayCounter,
                                            const FxSettlementConvention& settlement,
@@ -260,7 +211,7 @@ namespace QuantLib {
                                            bool weightedCalibrationFlag)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate),
+                             deltaType, atmType, dayCounter, settlement, referenceDate),
         weightedCalibrationFlag_(weightedCalibrationFlag), alpha_(alpha)
     {
         QL_REQUIRE(alpha >= 0.0 && alpha <= 1.0, "alpha must be in [0,1], got " << alpha);
@@ -269,18 +220,17 @@ namespace QuantLib {
 
     fxCostSmileSection::fxCostSmileSection(Time exerciseTime,
                                            const Handle<Quote>& spot,
-                                           const std::vector<Handle<DeltaVolQuote>>& quotes,
+                                           const ext::shared_ptr<FxSmileQuotes>& quotes,
                                            const Handle<YieldTermStructure>& foreignDiscount,
                                            const Handle<YieldTermStructure>& domesticDiscount,
                                            DeltaVolQuote::DeltaType deltaType,
                                            DeltaVolQuote::AtmType atmType,
-                                           FxSmileSection::FlyType flyType,
                                            Real alpha,
                                            const DayCounter& dayCounter,
                                            bool weightedCalibrationFlag)
     : fxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter),
+                             deltaType, atmType, dayCounter),
         weightedCalibrationFlag_(weightedCalibrationFlag), alpha_(alpha)
     {
         QL_REQUIRE(alpha >= 0.0 && alpha <= 1.0, "alpha must be in [0,1], got " << alpha);
@@ -428,72 +378,32 @@ namespace QuantLib {
 
     fxCostSmileSectionFlatDynamics::fxCostSmileSectionFlatDynamics(const Date& exerciseDate,
                                                                    const Handle<Quote>& spot,
-                                                                   const Handle<Quote>& atm,
-                                                                   const std::vector<Handle<Quote>>& rrs,
-                                                                   const std::vector<Handle<Quote>>& bfs,
-                                                                   const std::vector<Real>& deltas,
+                                                                   const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                                    const Handle<YieldTermStructure>& foreignDiscount,
                                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                                    DeltaVolQuote::DeltaType deltaType,
                                                                    DeltaVolQuote::AtmType atmType,
-                                                                   FxSmileSection::FlyType flyType,
-                                                                   const DayCounter& dayCounter,
-                                                                   const FxSettlementConvention& settlement,
-                                                                   const Date& referenceDate,
-                                                                   bool weightedCalibrationFlag)
-    : fxCostSmileSection(exerciseDate, spot, atm, rrs, bfs, deltas,
-                         foreignDiscount, domesticDiscount,
-                         deltaType, atmType, flyType, 0.0,
-                         dayCounter, settlement, referenceDate, weightedCalibrationFlag) {}
-
-    fxCostSmileSectionFlatDynamics::fxCostSmileSectionFlatDynamics(Time exerciseTime,
-                                                                   const Handle<Quote>& spot,
-                                                                   const Handle<Quote>& atm,
-                                                                   const std::vector<Handle<Quote>>& rrs,
-                                                                   const std::vector<Handle<Quote>>& bfs,
-                                                                   const std::vector<Real>& deltas,
-                                                                   const Handle<YieldTermStructure>& foreignDiscount,
-                                                                   const Handle<YieldTermStructure>& domesticDiscount,
-                                                                   DeltaVolQuote::DeltaType deltaType,
-                                                                   DeltaVolQuote::AtmType atmType,
-                                                                   FxSmileSection::FlyType flyType,
-                                                                   const DayCounter& dayCounter,
-                                                                   bool weightedCalibrationFlag)
-    : fxCostSmileSection(exerciseTime, spot, atm, rrs, bfs, deltas,
-                         foreignDiscount, domesticDiscount,
-                         deltaType, atmType, flyType, 0.0,
-                         dayCounter, weightedCalibrationFlag) {}
-
-    fxCostSmileSectionFlatDynamics::fxCostSmileSectionFlatDynamics(const Date& exerciseDate,
-                                                                   const Handle<Quote>& spot,
-                                                                   const std::vector<Handle<DeltaVolQuote>>& quotes,
-                                                                   const Handle<YieldTermStructure>& foreignDiscount,
-                                                                   const Handle<YieldTermStructure>& domesticDiscount,
-                                                                   DeltaVolQuote::DeltaType deltaType,
-                                                                   DeltaVolQuote::AtmType atmType,
-                                                                   FxSmileSection::FlyType flyType,
                                                                    const DayCounter& dayCounter,
                                                                    const FxSettlementConvention& settlement,
                                                                    const Date& referenceDate,
                                                                    bool weightedCalibrationFlag)
     : fxCostSmileSection(exerciseDate, spot, quotes,
                          foreignDiscount, domesticDiscount,
-                         deltaType, atmType, flyType, 0.0,
+                         deltaType, atmType, 0.0,
                          dayCounter, settlement, referenceDate, weightedCalibrationFlag) {}
 
     fxCostSmileSectionFlatDynamics::fxCostSmileSectionFlatDynamics(Time exerciseTime,
                                                                    const Handle<Quote>& spot,
-                                                                   const std::vector<Handle<DeltaVolQuote>>& quotes,
+                                                                   const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                                    const Handle<YieldTermStructure>& foreignDiscount,
                                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                                    DeltaVolQuote::DeltaType deltaType,
                                                                    DeltaVolQuote::AtmType atmType,
-                                                                   FxSmileSection::FlyType flyType,
                                                                    const DayCounter& dayCounter,
                                                                    bool weightedCalibrationFlag)
     : fxCostSmileSection(exerciseTime, spot, quotes,
                          foreignDiscount, domesticDiscount,
-                         deltaType, atmType, flyType, 0.0,
+                         deltaType, atmType, 0.0,
                          dayCounter, weightedCalibrationFlag) {}
 
 
@@ -538,72 +448,32 @@ namespace QuantLib {
 
     fxCostSmileSectionScaledDynamics::fxCostSmileSectionScaledDynamics(const Date& exerciseDate,
                                                                        const Handle<Quote>& spot,
-                                                                       const Handle<Quote>& atm,
-                                                                       const std::vector<Handle<Quote>>& rrs,
-                                                                       const std::vector<Handle<Quote>>& bfs,
-                                                                       const std::vector<Real>& deltas,
+                                                                       const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                                        const Handle<YieldTermStructure>& foreignDiscount,
                                                                        const Handle<YieldTermStructure>& domesticDiscount,
                                                                        DeltaVolQuote::DeltaType deltaType,
                                                                        DeltaVolQuote::AtmType atmType,
-                                                                       FxSmileSection::FlyType flyType,
-                                                                       const DayCounter& dayCounter,
-                                                                       const FxSettlementConvention& settlement,
-                                                                       const Date& referenceDate,
-                                                                       bool weightedCalibrationFlag)
-    : fxCostSmileSection(exerciseDate, spot, atm, rrs, bfs, deltas,
-                         foreignDiscount, domesticDiscount,
-                         deltaType, atmType, flyType, 1.0,
-                         dayCounter, settlement, referenceDate, weightedCalibrationFlag) {}
-
-    fxCostSmileSectionScaledDynamics::fxCostSmileSectionScaledDynamics(Time exerciseTime,
-                                                                       const Handle<Quote>& spot,
-                                                                       const Handle<Quote>& atm,
-                                                                       const std::vector<Handle<Quote>>& rrs,
-                                                                       const std::vector<Handle<Quote>>& bfs,
-                                                                       const std::vector<Real>& deltas,
-                                                                       const Handle<YieldTermStructure>& foreignDiscount,
-                                                                       const Handle<YieldTermStructure>& domesticDiscount,
-                                                                       DeltaVolQuote::DeltaType deltaType,
-                                                                       DeltaVolQuote::AtmType atmType,
-                                                                       FxSmileSection::FlyType flyType,
-                                                                       const DayCounter& dayCounter,
-                                                                       bool weightedCalibrationFlag)
-    : fxCostSmileSection(exerciseTime, spot, atm, rrs, bfs, deltas,
-                         foreignDiscount, domesticDiscount,
-                         deltaType, atmType, flyType, 1.0,
-                         dayCounter, weightedCalibrationFlag) {}
-
-    fxCostSmileSectionScaledDynamics::fxCostSmileSectionScaledDynamics(const Date& exerciseDate,
-                                                                       const Handle<Quote>& spot,
-                                                                       const std::vector<Handle<DeltaVolQuote>>& quotes,
-                                                                       const Handle<YieldTermStructure>& foreignDiscount,
-                                                                       const Handle<YieldTermStructure>& domesticDiscount,
-                                                                       DeltaVolQuote::DeltaType deltaType,
-                                                                       DeltaVolQuote::AtmType atmType,
-                                                                       FxSmileSection::FlyType flyType,
                                                                        const DayCounter& dayCounter,
                                                                        const FxSettlementConvention& settlement,
                                                                        const Date& referenceDate,
                                                                        bool weightedCalibrationFlag)
     : fxCostSmileSection(exerciseDate, spot, quotes,
                          foreignDiscount, domesticDiscount,
-                         deltaType, atmType, flyType, 1.0,
+                         deltaType, atmType, 1.0,
                          dayCounter, settlement, referenceDate, weightedCalibrationFlag) {}
 
     fxCostSmileSectionScaledDynamics::fxCostSmileSectionScaledDynamics(Time exerciseTime,
                                                                        const Handle<Quote>& spot,
-                                                                       const std::vector<Handle<DeltaVolQuote>>& quotes,
+                                                                       const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                                        const Handle<YieldTermStructure>& foreignDiscount,
                                                                        const Handle<YieldTermStructure>& domesticDiscount,
                                                                        DeltaVolQuote::DeltaType deltaType,
                                                                        DeltaVolQuote::AtmType atmType,
-                                                                       FxSmileSection::FlyType flyType,
                                                                        const DayCounter& dayCounter,
                                                                        bool weightedCalibrationFlag)
     : fxCostSmileSection(exerciseTime, spot, quotes,
                          foreignDiscount, domesticDiscount,
-                         deltaType, atmType, flyType, 1.0,
+                         deltaType, atmType, 1.0,
                          dayCounter, weightedCalibrationFlag) {}
 
 
