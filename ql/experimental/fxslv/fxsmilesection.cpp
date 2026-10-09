@@ -157,8 +157,7 @@ namespace QuantLib {
             checkCurveCovers(domesticDiscount_, "domestic", spotDate_, deliveryDate_);
             dfor_ = foreignDiscount_->discount(deliveryDate_) / foreignDiscount_->discount(spotDate_);
             ddom_ = domesticDiscount_->discount(deliveryDate_) / domesticDiscount_->discount(spotDate_);
-        } 
-        else {
+        } else {
             // Time mode: the expiry time is read on the curves' time axis,
             // which is only well defined if both curves share it.
             QL_REQUIRE(!foreignDiscount_.empty() && !domesticDiscount_.empty(), "empty discount curve");
@@ -328,8 +327,7 @@ namespace QuantLib {
             // the calibrated atm might differ from the input
             // so get the atm from the calibrated smile section
             calculateAtm();
-        }
-        else {
+        } else {
             // Calibrate from RRs and flies, where the flies are smile strangles.
             // This is easily handled algebraically: convert to delta-vol quotes
             // (stored in the mutable workspace quotes_) then call calibrate().
