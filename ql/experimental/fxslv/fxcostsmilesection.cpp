@@ -366,6 +366,12 @@ namespace QuantLib {
             rho += step;
         }
 
+        // the loop also ends on running out of iterations; never return a
+        // vol that is not on the smile
+        QL_ENSURE(std::fabs(f(rho)) < tol,
+                  "Newton-Raphson for fxCostSmileSection did not converge at strike "
+                      << strike << " after " << maxIter << " iterations: residual " << f(rho));
+
         return rho / std::sqrt(tau);
     }
 
