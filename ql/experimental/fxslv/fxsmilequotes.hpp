@@ -49,29 +49,31 @@ namespace QuantLib {
         //! Residual of the section's current smile, in vol units.
         virtual Real residual(const FxSmileSection& section) const = 0;
 
-        //! The point (strike, vol) the smile must pass through for this target
-        /*! Models the closed-form fits to points (e.g. the cost models).
+        //! The point (strike, vol) on the section's smile this target fixes, if any
+        /*! For models with closed-form fits to points (e.g. the cost
+            models).  The strike depends on the section's forward and
+            conventions, so it is worked out for the given section.
         */
-        virtual std::optional<std::pair<Rate, Volatility>> point() const { return std::nullopt; }
+        virtual std::optional<std::pair<Rate, Volatility>> point(const FxSmileSection&) const {
+            return std::nullopt;
+        }
     };
 
-    //! The smile passes through (strike, vol)
-    /*! The strike comes from the quote's own delta and vol, or from the
-        ATM convention, so it is known before calibration.  The residual
-        is measured in the section's natural coordinate, see
-        FxSmileSection::volResidual().
+    //! The smile matches a delta-vol quote
+    /*! The quote's strike follows from its own delta and vol, or from
+        the ATM convention, and the section's forward and conventions; it
+        is worked out when the target is evaluated, so a target is not
+        tied to one section.  The residual is measured in the section's
+        natural coordinate, see FxSmileSection::volResidual().
     */
-    class FxVolTarget : public FxSmileTarget {
+    class FxDeltaVolTarget : public FxSmileTarget {
       public:
-        FxVolTarget(Rate strike, Volatility vol) : strike_(strike), vol_(vol) {}
+        explicit FxDeltaVolTarget(Handle<DeltaVolQuote> quote) : quote_(std::move(quote)) {}
         Real residual(const FxSmileSection& section) const override;
-        std::optional<std::pair<Rate, Volatility>> point() const override {
-            return std::make_pair(strike_, vol_);
-        }
+        std::optional<std::pair<Rate, Volatility>> point(const FxSmileSection& section) const override;
 
       private:
-        Rate strike_;
-        Volatility vol_;
+        Handle<DeltaVolQuote> quote_;
     };
 
     //! Risk reversal at the smile's own deltas
@@ -143,10 +145,6 @@ namespace QuantLib {
             requested at any other time.
         */
         static void fit(const FxSmileSection& section, FxSmileTargets targets);
-
-        //! Target for a delta-vol quote: the strike from its own delta and vol.
-        static ext::shared_ptr<FxSmileTarget> volTarget(const FxSmileSection& section,
-                                                        const DeltaVolQuote& quote);
 
       private:
         // Only the section can start its own calibration.
