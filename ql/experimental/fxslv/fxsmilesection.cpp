@@ -21,14 +21,15 @@ namespace QuantLib {
     : SmileSection(exerciseDate, dayCounter, referenceDate, ShiftedLognormal, 0.0),
       spot_(spot), rrs_(rrs), bfs_(bfs), deltas_(deltas),
       foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
-      settlement_(settlement),
+      settleConvention_(settlement),
       deltaType_(deltaType), atmType_(atmType), flyType_(flyType), isDeltaVolQuote_(false),
       atmInput_(atm), quotesInput_(),
       atm_(), quotes_(), maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON)
     {
         QL_REQUIRE(rrs.size() == deltas.size(),
                    "risk reversal quotes must be the same size as deltas");
-        QL_REQUIRE(bfs.size() == deltas.size(), "butterfly quotes must be the same size as deltas");
+        QL_REQUIRE(bfs.size() == deltas.size(), 
+                   "butterfly quotes must be the same size as deltas");
         registerWithMarketData();
     }
 
@@ -53,7 +54,8 @@ namespace QuantLib {
     {
         QL_REQUIRE(rrs.size() == deltas.size(),
                    "risk reversal quotes must be the same size as deltas");
-        QL_REQUIRE(bfs.size() == deltas.size(), "butterfly quotes must be the same size as deltas");
+        QL_REQUIRE(bfs.size() == deltas.size(), 
+                   "butterfly quotes must be the same size as deltas");
         registerWithMarketData();
     }
 
@@ -71,7 +73,7 @@ namespace QuantLib {
     : SmileSection(exerciseDate, dayCounter, referenceDate, ShiftedLognormal, 0.0), 
       spot_(spot), rrs_(), bfs_(), deltas_(),
       foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
-      settlement_(settlement),
+      settleConvention_(settlement),
       deltaType_(deltaType), atmType_(atmType), flyType_(flyType), isDeltaVolQuote_(true),
       atmInput_(), quotesInput_(quotes),
       atm_(), quotes_(), maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON)
@@ -132,35 +134,34 @@ namespace QuantLib {
     }
 
     Date FxSmileSection::spotDate() const {
-        QL_REQUIRE(settlement_, "spot date is only defined for sections built from dates");
+        QL_REQUIRE(settleConvention_, "spot date is only defined for sections built from dates");
         calculate();
         return spotDate_;
     }
 
     Date FxSmileSection::deliveryDate() const {
-        QL_REQUIRE(settlement_, "delivery date is only defined for sections built from dates");
+        QL_REQUIRE(settleConvention_, "delivery date is only defined for sections built from dates");
         calculate();
         return deliveryDate_;
     }
 
     void FxSmileSection::calculateForward() const {
-        if (settlement_) {
+        if (settleConvention_) {
             // Date mode: rates run from the spot date of the trade date to
             // the delivery date of the expiry.  Taking ratios of discount
             // factors by date makes the result independent of the curves'
             // own reference dates and day counters.
-            spotDate_ = settlement_->spotDate(referenceDate());
-            deliveryDate_ = settlement_->deliveryDate(exerciseDate());
+            spotDate_ = settleConvention_->spotDate(referenceDate());
+            deliveryDate_ = settleConvention_->deliveryDate(exerciseDate());
             checkCurveCovers(foreignDiscount_, "foreign", spotDate_, deliveryDate_);
             checkCurveCovers(domesticDiscount_, "domestic", spotDate_, deliveryDate_);
             dfor_ = foreignDiscount_->discount(deliveryDate_) / foreignDiscount_->discount(spotDate_);
-            ddom_ = domesticDiscount_->discount(deliveryDate_) /
-                    domesticDiscount_->discount(spotDate_);
-        } else {
+            ddom_ = domesticDiscount_->discount(deliveryDate_) / domesticDiscount_->discount(spotDate_);
+        } 
+        else {
             // Time mode: the expiry time is read on the curves' time axis,
             // which is only well defined if both curves share it.
-            QL_REQUIRE(!foreignDiscount_.empty() && !domesticDiscount_.empty(),
-                       "empty discount curve");
+            QL_REQUIRE(!foreignDiscount_.empty() && !domesticDiscount_.empty(), "empty discount curve");
             QL_REQUIRE(foreignDiscount_->referenceDate() == domesticDiscount_->referenceDate(),
                        "time-based FX smile section requires both discount curves to have the "
                        "same reference date: foreign "
@@ -171,10 +172,10 @@ namespace QuantLib {
                        "same day counter: foreign "
                            << foreignDiscount_->dayCounter() << ", domestic "
                            << domesticDiscount_->dayCounter());
-            QL_REQUIRE(dayCounter().empty() || dayCounter() == foreignDiscount_->dayCounter(),
+            /*QL_REQUIRE(dayCounter().empty() || dayCounter() == foreignDiscount_->dayCounter(),
                        "time-based FX smile section day counter ("
                            << dayCounter() << ") differs from the discount curves' ("
-                           << foreignDiscount_->dayCounter() << ")");
+                           << foreignDiscount_->dayCounter() << ")");*/
             dfor_ = foreignDiscount_->discount(exerciseTime());
             ddom_ = domesticDiscount_->discount(exerciseTime());
         }
@@ -323,6 +324,10 @@ namespace QuantLib {
             }
 
             calibrate();
+
+            // the calibrated atm might differ from the input
+            // so get the atm from the calibrated smile section
+            calculateAtm();
         }
         else {
             // Calibrate from RRs and flies, where the flies are smile strangles.

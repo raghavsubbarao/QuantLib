@@ -290,16 +290,19 @@ namespace QuantLib {
         Real forward() const {calculate(); return fwd_; };
         Handle<YieldTermStructure> foreignDiscount() const { return foreignDiscount_; };
         Handle<YieldTermStructure> domesticDiscount() const { return domesticDiscount_; };
+
         //! Settlement convention; empty for sections built in time mode.
-        const std::optional<FxSettlementConvention>& settlement() const { return settlement_; }
-        //! Spot date of the reference date (date mode only).
-        Date spotDate() const;
-        //! Delivery date of the expiry (date mode only).
-        Date deliveryDate() const;
+        const std::optional<FxSettlementConvention>& settlement() const { return settleConvention_; }
+
+        Date spotDate() const;  //! Spot date of the reference date (date mode only).
+        Date deliveryDate() const;  //! Delivery date of the expiry (date mode only).
+        
         //! Domestic discount factor from spot to delivery (time mode: to expiry time).
-        DiscountFactor domesticDiscountFactor() const { calculate(); return ddom_; }
+        DiscountFactor domDf() const { calculate(); return ddom_; }
+        
         //! Foreign discount factor from spot to delivery (time mode: to expiry time).
-        DiscountFactor foreignDiscountFactor() const { calculate(); return dfor_; }
+        DiscountFactor forDf() const { calculate(); return dfor_; }
+
         bool isDeltaVolQuote() const { return isDeltaVolQuote_; };
 
         // Calibration
@@ -339,12 +342,12 @@ namespace QuantLib {
         std::vector<Real> deltas_;
         Handle<YieldTermStructure> foreignDiscount_;
         Handle<YieldTermStructure> domesticDiscount_;
-        std::optional<FxSettlementConvention> settlement_;
+        std::optional<FxSettlementConvention> settleConvention_;
         mutable Date spotDate_, deliveryDate_;
 
         // Immutable inputs: set once at construction, never modified.
         // atmInput_ holds the market ATM quote for the RR/BF input path.
-        // quotesInput_ holds the full set of DeltaVolQuotes for the DeltaVolQuote input path.
+        // quotesInput_ holds the quotes for the DeltaVolQuote input path.
         const Handle<Quote> atmInput_;
         const std::vector<Handle<DeltaVolQuote>> quotesInput_;
 
@@ -360,7 +363,7 @@ namespace QuantLib {
         mutable Real minStrike_;
 
         // Computed state: rebuilt on every calibration in stripDeltaVolQuotes().
-        // atm_ is always set from atmInput_ (RR/BF path) or by calculateAtm() (DeltaVolQuote path).
+        // atm_ is set from atmInput_ (RR/BF) or by calculateAtm() (DeltaVolQuote).
         // quotes_ is always a workspace populated before each call to calibrate().
         mutable Handle<Quote> atm_;
         mutable std::vector<Handle<DeltaVolQuote>> quotes_;
