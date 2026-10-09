@@ -1,15 +1,15 @@
-#ifndef quantlib_axl_fx_smile_section_delta_hpp
-#define quantlib_axl_fx_smile_section_delta_hpp
+#ifndef quantlib_fx_smile_section_delta_hpp
+#define quantlib_fx_smile_section_delta_hpp
 
 #include <ql/math/array.hpp>
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
 
 namespace QuantLib {
 
-    class fxSmileSectionByDelta : public FxSmileSection {
+    class FxSmileSectionByDelta : public FxSmileSection {
       public:
         //! Date mode (see FxSmileSection).
-        fxSmileSectionByDelta(const Date& exerciseDate,
+        FxSmileSectionByDelta(const Date& exerciseDate,
                               const Handle<Quote>& spot,
                               const ext::shared_ptr<FxSmileQuotes>& quotes,
                               const Handle<YieldTermStructure>& foreignDiscount,
@@ -21,7 +21,7 @@ namespace QuantLib {
                               const Date& referenceDate = Date());
 
         //! Time mode (see FxSmileSection).
-        fxSmileSectionByDelta(Time exerciseTime,
+        FxSmileSectionByDelta(Time exerciseTime,
                               const Handle<Quote>& spot,
                               const ext::shared_ptr<FxSmileQuotes>& quotes,
                               const Handle<YieldTermStructure>& foreignDiscount,
@@ -65,17 +65,17 @@ namespace QuantLib {
         mutable std::vector<Real> params_;
     };
 
-    typedef ext::shared_ptr<fxSmileSectionByDelta> fxSmileSectionByDeltaPtr;
+    //typedef ext::shared_ptr<fxSmileSectionByDelta> fxSmileSectionByDeltaPtr;
 
 
     //! Quadratic smile section parameterized by put delta.
     /*! Implied volatility is a quadratic function of put delta:
         \f$ \sigma(\Delta) = a \Delta^2 + b \Delta + c \f$
     */
-    class quadraticSmileSection : public fxSmileSectionByDelta {
+    class QuadraticSmileSection : public FxSmileSectionByDelta {
       public:
         //! Date mode (see FxSmileSection).
-        quadraticSmileSection(const Date& exerciseDate,
+        QuadraticSmileSection(const Date& exerciseDate,
                               const Handle<Quote>& spot,
                               const ext::shared_ptr<FxSmileQuotes>& quotes,
                               const Handle<YieldTermStructure>& foreignDiscount,
@@ -87,7 +87,7 @@ namespace QuantLib {
                               const Date& referenceDate = Date());
 
         //! Time mode (see FxSmileSection).
-        quadraticSmileSection(Time exerciseTime,
+        QuadraticSmileSection(Time exerciseTime,
                               const Handle<Quote>& spot,
                               const ext::shared_ptr<FxSmileQuotes>& quotes,
                               const Handle<YieldTermStructure>& foreignDiscount,

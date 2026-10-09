@@ -197,7 +197,7 @@ namespace QuantLib {
     //  fxCostSmileSection — constructors
     // -----------------------------------------------------------------------
 
-    fxCostSmileSection::fxCostSmileSection(const Date& exerciseDate,
+    FxCostSmileSection::FxCostSmileSection(const Date& exerciseDate,
                                            const Handle<Quote>& spot,
                                            const ext::shared_ptr<FxSmileQuotes>& quotes,
                                            const Handle<YieldTermStructure>& foreignDiscount,
@@ -209,7 +209,7 @@ namespace QuantLib {
                                            const FxSettlementConvention& settlement,
                                            const Date& referenceDate,
                                            bool weightedCalibrationFlag)
-    : fxSmileSectionByStrike(exerciseDate, spot, quotes,
+    : FxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
                              deltaType, atmType, dayCounter, settlement, referenceDate),
         weightedCalibrationFlag_(weightedCalibrationFlag), alpha_(alpha)
@@ -218,7 +218,7 @@ namespace QuantLib {
         params_.reserve(4);
     }
 
-    fxCostSmileSection::fxCostSmileSection(Time exerciseTime,
+    FxCostSmileSection::FxCostSmileSection(Time exerciseTime,
                                            const Handle<Quote>& spot,
                                            const ext::shared_ptr<FxSmileQuotes>& quotes,
                                            const Handle<YieldTermStructure>& foreignDiscount,
@@ -228,7 +228,7 @@ namespace QuantLib {
                                            Real alpha,
                                            const DayCounter& dayCounter,
                                            bool weightedCalibrationFlag)
-    : fxSmileSectionByStrike(exerciseTime, spot, quotes,
+    : FxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,
                              deltaType, atmType, dayCounter),
         weightedCalibrationFlag_(weightedCalibrationFlag), alpha_(alpha)
@@ -242,7 +242,7 @@ namespace QuantLib {
     //  fxCostSmileSection — calibration (linear SVD, general alpha)
     // -----------------------------------------------------------------------
 
-    Array fxCostSmileSection::initialParams() const
+    Array FxCostSmileSection::initialParams() const
     {
         // Not used — calibration is algebraic (SVD).
         Array guess(4, 0.0);
@@ -250,7 +250,7 @@ namespace QuantLib {
         return guess;
     }
 
-    void fxCostSmileSection::calibrate() const {
+    void FxCostSmileSection::calibrate() const {
         // Build the regressor matrix for the general-alpha cost equation.
         //
         // The cost equation at a quoted point with total vol w = sigma * sqrt(T) is:
@@ -314,7 +314,7 @@ namespace QuantLib {
     //  fxCostSmileSection — Newton-Raphson vol by strike (general alpha)
     // -----------------------------------------------------------------------
 
-    Volatility fxCostSmileSection::_volByStrike(Real strike,
+    Volatility FxCostSmileSection::_volByStrike(Real strike,
                                                  Real fwd,
                                                  Time tau,
                                                  const std::vector<Real>& params) const
@@ -376,7 +376,7 @@ namespace QuantLib {
     //  fxCostSmileSectionFlatDynamics — constructors (forward alpha=0)
     // -----------------------------------------------------------------------
 
-    fxCostSmileSectionFlatDynamics::fxCostSmileSectionFlatDynamics(const Date& exerciseDate,
+    FxCostSmileSectionFlatDynamics::FxCostSmileSectionFlatDynamics(const Date& exerciseDate,
                                                                    const Handle<Quote>& spot,
                                                                    const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                                    const Handle<YieldTermStructure>& foreignDiscount,
@@ -387,12 +387,12 @@ namespace QuantLib {
                                                                    const FxSettlementConvention& settlement,
                                                                    const Date& referenceDate,
                                                                    bool weightedCalibrationFlag)
-    : fxCostSmileSection(exerciseDate, spot, quotes,
+    : FxCostSmileSection(exerciseDate, spot, quotes,
                          foreignDiscount, domesticDiscount,
                          deltaType, atmType, 0.0,
                          dayCounter, settlement, referenceDate, weightedCalibrationFlag) {}
 
-    fxCostSmileSectionFlatDynamics::fxCostSmileSectionFlatDynamics(Time exerciseTime,
+    FxCostSmileSectionFlatDynamics::FxCostSmileSectionFlatDynamics(Time exerciseTime,
                                                                    const Handle<Quote>& spot,
                                                                    const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                                    const Handle<YieldTermStructure>& foreignDiscount,
@@ -401,7 +401,7 @@ namespace QuantLib {
                                                                    DeltaVolQuote::AtmType atmType,
                                                                    const DayCounter& dayCounter,
                                                                    bool weightedCalibrationFlag)
-    : fxCostSmileSection(exerciseTime, spot, quotes,
+    : FxCostSmileSection(exerciseTime, spot, quotes,
                          foreignDiscount, domesticDiscount,
                          deltaType, atmType, 0.0,
                          dayCounter, weightedCalibrationFlag) {}
@@ -411,7 +411,7 @@ namespace QuantLib {
     //  fxCostSmileSectionFlatDynamics — quartic vol by strike (alpha = 0)
     // -----------------------------------------------------------------------
 
-    Volatility fxCostSmileSectionFlatDynamics::_volByStrike(Real strike,
+    Volatility FxCostSmileSectionFlatDynamics::_volByStrike(Real strike,
                                                             Real fwd,
                                                             Time tau,
                                                             const std::vector<Real>& params) const
@@ -446,7 +446,7 @@ namespace QuantLib {
     //  fxCostSmileSectionScaledDynamics — constructors (forward alpha=1)
     // -----------------------------------------------------------------------
 
-    fxCostSmileSectionScaledDynamics::fxCostSmileSectionScaledDynamics(const Date& exerciseDate,
+    FxCostSmileSectionScaledDynamics::FxCostSmileSectionScaledDynamics(const Date& exerciseDate,
                                                                        const Handle<Quote>& spot,
                                                                        const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                                        const Handle<YieldTermStructure>& foreignDiscount,
@@ -457,12 +457,12 @@ namespace QuantLib {
                                                                        const FxSettlementConvention& settlement,
                                                                        const Date& referenceDate,
                                                                        bool weightedCalibrationFlag)
-    : fxCostSmileSection(exerciseDate, spot, quotes,
+    : FxCostSmileSection(exerciseDate, spot, quotes,
                          foreignDiscount, domesticDiscount,
                          deltaType, atmType, 1.0,
                          dayCounter, settlement, referenceDate, weightedCalibrationFlag) {}
 
-    fxCostSmileSectionScaledDynamics::fxCostSmileSectionScaledDynamics(Time exerciseTime,
+    FxCostSmileSectionScaledDynamics::FxCostSmileSectionScaledDynamics(Time exerciseTime,
                                                                        const Handle<Quote>& spot,
                                                                        const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                                        const Handle<YieldTermStructure>& foreignDiscount,
@@ -471,7 +471,7 @@ namespace QuantLib {
                                                                        DeltaVolQuote::AtmType atmType,
                                                                        const DayCounter& dayCounter,
                                                                        bool weightedCalibrationFlag)
-    : fxCostSmileSection(exerciseTime, spot, quotes,
+    : FxCostSmileSection(exerciseTime, spot, quotes,
                          foreignDiscount, domesticDiscount,
                          deltaType, atmType, 1.0,
                          dayCounter, weightedCalibrationFlag) {}
@@ -481,7 +481,7 @@ namespace QuantLib {
     //  fxCostSmileSectionScaledDynamics — quadratic vol by strike (alpha = 1)
     // -----------------------------------------------------------------------
 
-    Volatility fxCostSmileSectionScaledDynamics::_volByStrike(Real strike,
+    Volatility FxCostSmileSectionScaledDynamics::_volByStrike(Real strike,
                                                               Real fwd,
                                                               Time tau,
                                                               const std::vector<Real>& params) const

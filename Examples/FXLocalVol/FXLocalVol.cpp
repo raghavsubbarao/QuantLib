@@ -220,7 +220,7 @@ int main(int, char*[]) {
         // ──────────────────────────────────────────────────────────────────────
         //  2. Calibrate the FX variance surface
         // ──────────────────────────────────────────────────────────────────────
-        auto fxVolSurface = ext::make_shared<fxVarianceSurfaceNCP<fxSabrSmileSection>>(today, spot, pillars, atms, rrs, bfs, deltas,
+        auto fxVolSurface = ext::make_shared<fxVarianceSurfaceNCP<FxSabrSmileSection>>(today, spot, pillars, atms, rrs, bfs, deltas,
                                                                                        eurTs, usdTs, timeTs, deltaType, atmType, flyType,
                                                                                        FxSettlementConvention(calendar, 2),
                                                                                        calendar, Following, true);

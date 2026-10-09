@@ -158,7 +158,7 @@ namespace QuantLib {
         calculateAtm();
     }
 
-    void FxSmileSection::fitTo(std::vector<Handle<DeltaVolQuote>> quotes) const {
+    void FxSmileSection::fitToQuotes(std::vector<Handle<DeltaVolQuote>> quotes) const {
         QL_REQUIRE(calibrating_, "smile section can only be fitted while its quotes calibrate it");
         quotes_ = std::move(quotes);
         calibrate();

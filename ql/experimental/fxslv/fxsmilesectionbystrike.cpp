@@ -9,7 +9,7 @@
 
 namespace QuantLib {
 
-    fxSmileSectionByStrike::fxSmileSectionByStrike(const Date& exerciseDate,
+    FxSmileSectionByStrike::FxSmileSectionByStrike(const Date& exerciseDate,
                                                    const Handle<Quote>& spot,
                                                    const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                    const Handle<YieldTermStructure>& foreignDiscount,
@@ -24,7 +24,7 @@ namespace QuantLib {
                      deltaType, atmType, dayCounter, settlement, referenceDate),
       params_() {}
 
-    fxSmileSectionByStrike::fxSmileSectionByStrike(Time exerciseTime,
+    FxSmileSectionByStrike::FxSmileSectionByStrike(Time exerciseTime,
                                                    const Handle<Quote>& spot,
                                                    const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                    const Handle<YieldTermStructure>& foreignDiscount,
@@ -37,19 +37,19 @@ namespace QuantLib {
                      deltaType, atmType, dayCounter),
       params_() {}
 
-    Volatility fxSmileSectionByStrike::volByStrike(Rate strike) const 
+    Volatility FxSmileSectionByStrike::volByStrike(Rate strike) const 
     {
         calculate();
         return _volByStrike(strike, fwd_, exerciseTime(), params_);
     }
 
-    Volatility fxSmileSectionByStrike::volByDelta(Real delta, Option::Type parity) const 
+    Volatility FxSmileSectionByStrike::volByDelta(Real delta, Option::Type parity) const 
     {
         calculate();
         return volByStrike(strikeByDelta(delta, parity));
     }
 
-    Real fxSmileSectionByStrike::deltaByStrike(Rate strike, Option::Type parity) const 
+    Real FxSmileSectionByStrike::deltaByStrike(Rate strike, Option::Type parity) const 
     {
         calculate();
 
@@ -59,7 +59,7 @@ namespace QuantLib {
             .deltaFromStrike(strike);
     }
 
-    Rate fxSmileSectionByStrike::strikeByDelta(Real delta, Option::Type parity) const 
+    Rate FxSmileSectionByStrike::strikeByDelta(Real delta, Option::Type parity) const 
     {
         calculate();
 
@@ -92,7 +92,7 @@ namespace QuantLib {
         return k;
     }
 
-    void fxSmileSectionByStrike::calibrate() const
+    void FxSmileSectionByStrike::calibrate() const
     {
         QL_REQUIRE(!quotes_.empty(), "no delta-vol quotes to calibrate against");
 
@@ -118,9 +118,7 @@ namespace QuantLib {
             {
                 Option::Type ot = (quotes_[i]->delta() < 0) ? Option::Put : Option::Call;
                 strikes[i] = BlackDeltaCalculator(ot, dt, spotVal, ddom, dfor, w).strikeFromDelta(quotes_[i]->delta());
-            } 
-            else 
-            {
+            } else {
                 strikes[i] = BlackDeltaCalculator(Option::Call, dt, spotVal, ddom, dfor, w).atmStrike(quotes_[i]->atmType());
             }
         }
@@ -152,7 +150,7 @@ namespace QuantLib {
 
     //! \name Polynomial smile section
     //@{
-    polynomialSmileSection::polynomialSmileSection(const Date& exerciseDate,
+    PolynomialSmileSection::PolynomialSmileSection(const Date& exerciseDate,
                                                    const Handle<Quote>& spot,
                                                    const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                    const Handle<YieldTermStructure>& foreignDiscount,
@@ -162,14 +160,14 @@ namespace QuantLib {
                                                    const DayCounter& dayCounter,
                                                    const FxSettlementConvention& settlement,
                                                    const Date& referenceDate)
-    : fxSmileSectionByStrike(exerciseDate, spot, quotes,
+    : FxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
                              deltaType, atmType, dayCounter, settlement, referenceDate)
     {
         params_.reserve(3);
     }
 
-    polynomialSmileSection::polynomialSmileSection(Time exerciseTime,
+    PolynomialSmileSection::PolynomialSmileSection(Time exerciseTime,
                                                    const Handle<Quote>& spot,
                                                    const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                    const Handle<YieldTermStructure>& foreignDiscount,
@@ -177,14 +175,14 @@ namespace QuantLib {
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
                                                    const DayCounter& dayCounter)
-    : fxSmileSectionByStrike(exerciseTime, spot, quotes,
+    : FxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,
                              deltaType, atmType, dayCounter)
     {
         params_.reserve(3);
     }
 
-    Array polynomialSmileSection::initialParams() const
+    Array PolynomialSmileSection::initialParams() const
     {
         // vol = exp(a*x^2 + b*x + c), at ATM x = Phi(0) = 0.5
         // with a=b=0, c = log(atm_vol)
@@ -195,7 +193,7 @@ namespace QuantLib {
         return guess;
     }
 
-    Volatility polynomialSmileSection::_volByStrike(Rate strike,
+    Volatility PolynomialSmileSection::_volByStrike(Rate strike,
                                                     Real fwd,
                                                     Time tau,
                                                     const std::vector<Real>& params) const
@@ -209,7 +207,7 @@ namespace QuantLib {
 
     //! \name SABR smile section
     //@{
-    fxSabrSmileSection::fxSabrSmileSection(const Date& exerciseDate,
+    FxSabrSmileSection::FxSabrSmileSection(const Date& exerciseDate,
                                            const Handle<Quote>& spot,
                                            const ext::shared_ptr<FxSmileQuotes>& quotes,
                                            const Handle<YieldTermStructure>& foreignDiscount,
@@ -219,14 +217,14 @@ namespace QuantLib {
                                            const DayCounter& dayCounter,
                                            const FxSettlementConvention& settlement,
                                            const Date& referenceDate)
-    : fxSmileSectionByStrike(exerciseDate, spot, quotes,
+    : FxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
                              deltaType, atmType, dayCounter, settlement, referenceDate) 
     {
         params_.reserve(3);
     }
 
-    fxSabrSmileSection::fxSabrSmileSection(Time exerciseTime,
+    FxSabrSmileSection::FxSabrSmileSection(Time exerciseTime,
                                            const Handle<Quote>& spot,
                                            const ext::shared_ptr<FxSmileQuotes>& quotes,
                                            const Handle<YieldTermStructure>& foreignDiscount,
@@ -234,14 +232,14 @@ namespace QuantLib {
                                            DeltaVolQuote::DeltaType deltaType,
                                            DeltaVolQuote::AtmType atmType,
                                            const DayCounter& dayCounter)
-    : fxSmileSectionByStrike(exerciseTime, spot, quotes,
+    : FxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,
                              deltaType, atmType, dayCounter) 
     {
         params_.reserve(3);
     }
 
-    Array fxSabrSmileSection::initialParams() const
+    Array FxSabrSmileSection::initialParams() const
     {
         // SABR params: alpha, nu, rho (beta fixed at 1)
         Array guess(3);
@@ -251,7 +249,7 @@ namespace QuantLib {
         return guess;
     }
 
-    Volatility fxSabrSmileSection::_volByStrike(Rate strike,
+    Volatility FxSabrSmileSection::_volByStrike(Rate strike,
                                                 Real fwd,
                                                 Time tau,
                                                 const std::vector<Real>& params) const
@@ -265,7 +263,7 @@ namespace QuantLib {
 
     //! \name SVI smile section
     //@{
-    fxSviSmileSection::fxSviSmileSection(const Date& exerciseDate,
+    FxSviSmileSection::FxSviSmileSection(const Date& exerciseDate,
                                          const Handle<Quote>& spot,
                                          const ext::shared_ptr<FxSmileQuotes>& quotes,
                                          const Handle<YieldTermStructure>& foreignDiscount,
@@ -275,14 +273,14 @@ namespace QuantLib {
                                          const DayCounter& dayCounter,
                                          const FxSettlementConvention& settlement,
                                          const Date& referenceDate)
-    : fxSmileSectionByStrike(exerciseDate, spot, quotes,
+    : FxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
                              deltaType, atmType, dayCounter, settlement, referenceDate)
     {
         params_.reserve(5);
     }
 
-    fxSviSmileSection::fxSviSmileSection(Time exerciseTime,
+    FxSviSmileSection::FxSviSmileSection(Time exerciseTime,
                                          const Handle<Quote>& spot,
                                          const ext::shared_ptr<FxSmileQuotes>& quotes,
                                          const Handle<YieldTermStructure>& foreignDiscount,
@@ -290,14 +288,14 @@ namespace QuantLib {
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
                                          const DayCounter& dayCounter)
-    : fxSmileSectionByStrike(exerciseTime, spot, quotes,
+    : FxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,
                              deltaType, atmType, dayCounter)
     {
         params_.reserve(5);
     }
 
-    Array fxSviSmileSection::initialParams() const
+    Array FxSviSmileSection::initialParams() const
     {
         // SVI raw: w(k) = a + b*(rho*(k-m) + sqrt((k-m)^2 + sigma^2))
         // At ATM k=0: w(0) = a + b*(rho*(-m) + sqrt(m^2 + sigma^2))
@@ -312,7 +310,7 @@ namespace QuantLib {
         return guess;
     }
 
-    Volatility fxSviSmileSection::_volByStrike(Rate strike,
+    Volatility FxSviSmileSection::_volByStrike(Rate strike,
                                                 Real fwd,
                                                 Time tau,
                                                 const std::vector<Real>& params) const

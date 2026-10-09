@@ -1,5 +1,5 @@
-#ifndef quantlib_axl_fx_smile_section_hpp
-#define quantlib_axl_fx_smile_section_hpp
+#ifndef quantlib_fx_smile_section_hpp
+#define quantlib_fx_smile_section_hpp
 
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxsmilequotes.hpp>
@@ -164,7 +164,7 @@ namespace QuantLib {
         // FxSmileQuotes::fit() is the only caller of fitTo().
         friend class FxSmileQuotes;
         //! Fits the smile to the given quotes; only valid while the quotes calibrate the section.
-        void fitTo(std::vector<Handle<DeltaVolQuote>> quotes) const;
+        void fitToQuotes(std::vector<Handle<DeltaVolQuote>> quotes) const;
         mutable bool calibrating_ = false;  // the quotes are calibrating this section
         mutable bool fitted_ = false;       // fitTo() ran during the current calibration
         virtual void adjustStrikes() const;

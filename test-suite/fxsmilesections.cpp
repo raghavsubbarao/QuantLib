@@ -209,7 +209,7 @@ BOOST_AUTO_TEST_CASE(testPolynomialSmileSection) {
 
     MarketData md;
 
-    polynomialSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
+    PolynomialSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
                               md.deltaType, md.atmType,
                               Actual365Fixed(), md.settlement);
 
@@ -229,7 +229,7 @@ BOOST_AUTO_TEST_CASE(testSabrSmileSection) {
 
     MarketData md;
 
-    fxSabrSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
+    FxSabrSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
                           md.deltaType, md.atmType,
                           Actual365Fixed(), md.settlement);
 
@@ -254,7 +254,7 @@ BOOST_AUTO_TEST_CASE(testSviSmileSection) {
 
     MarketData md;
 
-    fxSviSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
+    FxSviSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
                          md.deltaType, md.atmType,
                          Actual365Fixed(), md.settlement);
 
@@ -273,7 +273,7 @@ BOOST_AUTO_TEST_CASE(testQuadraticSmileSection) {
 
     MarketData md;
 
-    quadraticSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
+    QuadraticSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
                              md.deltaType, md.atmType,
                              Actual365Fixed(), md.settlement);
 
@@ -292,7 +292,7 @@ BOOST_AUTO_TEST_CASE(testCostSmileSectionFlatDynamics) {
 
     MarketData md;
 
-    fxCostSmileSectionFlatDynamics ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
+    FxCostSmileSectionFlatDynamics ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
                                       md.deltaType, md.atmType,
                                       Actual365Fixed(), md.settlement, Date(), true);
 
@@ -311,7 +311,7 @@ BOOST_AUTO_TEST_CASE(testCostSmileSectionScaledDynamics) {
 
     MarketData md;
 
-    fxCostSmileSectionScaledDynamics ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
+    FxCostSmileSectionScaledDynamics ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount,
                                         md.deltaType, md.atmType,
                                         Actual365Fixed(), md.settlement, Date(), true);
 
@@ -349,7 +349,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
 
     // --- polynomial ---
     {
-        polynomialSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
+        PolynomialSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
                                   md.forDiscount, md.domDiscount,
                                   md.deltaType, md.atmType,
                                   Actual365Fixed(), md.settlement);
@@ -360,7 +360,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
 
     // --- SABR ---
     {
-        fxSabrSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
+        FxSabrSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
                               md.forDiscount, md.domDiscount,
                               md.deltaType, md.atmType,
                               Actual365Fixed(), md.settlement);
@@ -371,7 +371,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
 
     // --- SVI ---
     {
-        fxSviSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
+        FxSviSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
                              md.forDiscount, md.domDiscount,
                              md.deltaType, md.atmType,
                              Actual365Fixed(), md.settlement);
@@ -382,7 +382,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
 
     // --- quadratic ---
     {
-        quadraticSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
+        QuadraticSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
                                  md.forDiscount, md.domDiscount,
                                  md.deltaType, md.atmType,
                                  Actual365Fixed(), md.settlement);
@@ -393,7 +393,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
 
     // --- cost flat dynamics ---
     {
-        fxCostSmileSectionFlatDynamics ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
+        FxCostSmileSectionFlatDynamics ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
                                           md.forDiscount, md.domDiscount,
                                           md.deltaType, md.atmType,
                                           Actual365Fixed(), md.settlement);
@@ -404,7 +404,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
 
     // --- cost scaled dynamics ---
     {
-        fxCostSmileSectionScaledDynamics ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
+        FxCostSmileSectionScaledDynamics ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
                                             md.forDiscount, md.domDiscount,
                                             md.deltaType, md.atmType,
                                             Actual365Fixed(), md.settlement);
@@ -431,7 +431,7 @@ BOOST_AUTO_TEST_CASE(testMarketDataReactivity) {
     auto bf25Quote = ext::make_shared<SimpleQuote>(md.v_25bf->value());
     auto bf10Quote = ext::make_shared<SimpleQuote>(md.v_10bf->value());
 
-    polynomialSmileSection ss(
+    PolynomialSmileSection ss(
         md.expiryDate,
         Handle<Quote>(spotQuote),
         ext::make_shared<FxRrBfQuotes>(
@@ -461,7 +461,7 @@ namespace {
                     const Handle<YieldTermStructure>& forDiscount,
                     const Handle<YieldTermStructure>& domDiscount,
                     const Date& referenceDate = Date()) {
-        return ext::make_shared<quadraticSmileSection>(
+        return ext::make_shared<QuadraticSmileSection>(
             md.expiryDate, md.spot, md.rrBfQuotes(),
             forDiscount, domDiscount, md.deltaType, md.atmType,
             Actual365Fixed(), md.settlement, referenceDate);
@@ -572,7 +572,7 @@ BOOST_AUTO_TEST_CASE(testTimeModeForwardAndConsistencyChecks) {
     auto section = [&](const Handle<YieldTermStructure>& forDiscount,
                        const Handle<YieldTermStructure>& domDiscount,
                        const DayCounter& dc) {
-        return ext::make_shared<quadraticSmileSection>(
+        return ext::make_shared<QuadraticSmileSection>(
             tau, md.spot, md.rrBfQuotes(), forDiscount,
             domDiscount, md.deltaType, md.atmType, dc);
     };
@@ -620,9 +620,9 @@ BOOST_AUTO_TEST_CASE(testSmileQuotesValidationAndNotification) {
         std::vector<Handle<Quote>>{md.v_25bf, md.v_10bf}, md.deltas, md.flyType);
     BOOST_CHECK_CLOSE(quotes->referenceVol(), md.v_atm->value(), 1.0e-12);
 
-    quadraticSmileSection first(md.expiryDate, md.spot, quotes, md.forDiscount, md.domDiscount,
+    QuadraticSmileSection first(md.expiryDate, md.spot, quotes, md.forDiscount, md.domDiscount,
                                 md.deltaType, md.atmType, Actual365Fixed(), md.settlement);
-    quadraticSmileSection second(1.0, md.spot, quotes, md.forDiscount, md.domDiscount,
+    QuadraticSmileSection second(1.0, md.spot, quotes, md.forDiscount, md.domDiscount,
                                  md.deltaType, md.atmType, Actual365Fixed());
     const Real K = 1.05 * first.forward();
     const Real v1 = first.volByStrike(K), v2 = second.volByStrike(K);
@@ -631,7 +631,7 @@ BOOST_AUTO_TEST_CASE(testSmileQuotesValidationAndNotification) {
     BOOST_CHECK(std::fabs(first.volByStrike(K) - v1) > 1.0e-6);
     BOOST_CHECK(std::fabs(second.volByStrike(K) - v2) > 1.0e-6);
 
-    BOOST_CHECK_THROW(quadraticSmileSection(md.expiryDate, md.spot,
+    BOOST_CHECK_THROW(QuadraticSmileSection(md.expiryDate, md.spot,
                                             ext::shared_ptr<FxSmileQuotes>(), md.forDiscount,
                                             md.domDiscount, md.deltaType, md.atmType,
                                             Actual365Fixed(), md.settlement),
@@ -652,7 +652,7 @@ BOOST_AUTO_TEST_CASE(testCalibrationDoesNotDependOnHistory) {
 
     // the polynomial seeds and scales with the starting ATM vol, so it
     // used to drift when that seed was the previous calibration's ATM
-    polynomialSmileSection ss(md.expiryDate, Handle<Quote>(spot),
+    PolynomialSmileSection ss(md.expiryDate, Handle<Quote>(spot),
                               ext::make_shared<FxDeltaVolQuotes>(q), md.forDiscount,
                               md.domDiscount, md.deltaType, md.atmType, Actual365Fixed(),
                               md.settlement);
@@ -701,7 +701,7 @@ BOOST_AUTO_TEST_CASE(testSmileQuotesMustFitDuringCalibration) {
 
     MarketData md;
 
-    quadraticSmileSection unfitted(md.expiryDate, md.spot,
+    QuadraticSmileSection unfitted(md.expiryDate, md.spot,
                                    ext::make_shared<QuotesThatNeverFit>(), md.forDiscount,
                                    md.domDiscount, md.deltaType, md.atmType, Actual365Fixed(),
                                    md.settlement);
@@ -712,7 +712,7 @@ BOOST_AUTO_TEST_CASE(testSmileQuotesMustFitDuringCalibration) {
         Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(0.25, makeQuoteHandle(md.v_25c), 1.0, md.deltaType)),
         Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(-0.25, makeQuoteHandle(md.v_25p), 1.0, md.deltaType))};
     auto later = ext::make_shared<QuotesThatFitLater>(q);
-    quadraticSmileSection ss(md.expiryDate, md.spot, later, md.forDiscount, md.domDiscount,
+    QuadraticSmileSection ss(md.expiryDate, md.spot, later, md.forDiscount, md.domDiscount,
                              md.deltaType, md.atmType, Actual365Fixed(), md.settlement);
     const Real K = 1.05 * ss.forward(), v = ss.volByStrike(K);
     BOOST_CHECK_THROW(later->fitAgain(), Error);   // outside calibration: rejected...
@@ -729,7 +729,7 @@ BOOST_AUTO_TEST_CASE(testMarketStrangleCalibration) {
     for (Real flyScale : {1.0, 0.0}) {   // quoted flies, and zero (flat-wing) flies
         std::vector<Handle<Quote>> bfs = {makeQuoteHandle(flyScale * md.v_25bf->value()),
                                           makeQuoteHandle(flyScale * md.v_10bf->value())};
-        quadraticSmileSection ss(md.expiryDate, md.spot,
+        QuadraticSmileSection ss(md.expiryDate, md.spot,
                                  ext::make_shared<FxRrBfQuotes>(
                                      md.v_atm, std::vector<Handle<Quote>>{md.v_25rr, md.v_10rr},
                                      bfs, md.deltas, FxRrBfQuotes::MarketStrangle),
@@ -774,7 +774,7 @@ BOOST_AUTO_TEST_CASE(testProbabilitySpaceFunctions) {
 
     // flat smile: closed forms are Black's
     std::vector<Handle<Quote>> zero = {makeQuoteHandle(0.0), makeQuoteHandle(0.0)};
-    quadraticSmileSection flat(md.expiryDate, md.spot,
+    QuadraticSmileSection flat(md.expiryDate, md.spot,
                                ext::make_shared<FxRrBfQuotes>(md.v_atm, zero, zero, md.deltas,
                                                               FxRrBfQuotes::SmileStrangle),
                                md.forDiscount, md.domDiscount, dt, at, Actual365Fixed(),
@@ -790,7 +790,7 @@ BOOST_AUTO_TEST_CASE(testProbabilitySpaceFunctions) {
     }
 
     // a skewed smile: the inverse recovers the moneyness
-    quadraticSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount,
+    QuadraticSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount,
                              md.domDiscount, dt, at, Actual365Fixed(), md.settlement);
     for (Real p : {0.02, 0.1, 0.25, 0.5, 0.75, 0.9, 0.98}) {
         const Real k = ss.moneynessFromProbability(p);

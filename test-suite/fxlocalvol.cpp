@@ -88,7 +88,7 @@ namespace {
         DeltaVolQuote::AtmType   atmType;
         FxRrBfQuotes::FlyType  flyType;
 
-        ext::shared_ptr<fxVarianceSurfaceNCP<quadraticSmileSection>> surface;
+        ext::shared_ptr<fxVarianceSurfaceNCP<QuadraticSmileSection>> surface;
         ext::shared_ptr<GeneralizedBlackScholesProcess> process;
 
         FxMarket() {
@@ -146,7 +146,7 @@ namespace {
                 bfs.push_back({ Handle<Quote>(bf25SQ), Handle<Quote>(bf10SQ) });
             }
 
-            surface = ext::make_shared<fxVarianceSurfaceNCP<quadraticSmileSection>>(
+            surface = ext::make_shared<fxVarianceSurfaceNCP<QuadraticSmileSection>>(
                 today, spot, pillars, atms, rrs, bfs, deltas,
                 eurTs, usdTs, timeTs,
                 deltaType, atmType, flyType,
@@ -590,7 +590,7 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
     auto timeTs = Handle<tradingTimeTermStructure>(
         ext::make_shared<tradingTimeTermStructure>(today, calendar, 0.0));
 
-    auto volSurface = ext::make_shared<fxVarianceSurfaceNCP<quadraticSmileSection>>(
+    auto volSurface = ext::make_shared<fxVarianceSurfaceNCP<QuadraticSmileSection>>(
         today, spot, pillars, atms, rrs, bfs, deltas,
         eurTs, usdTs, timeTs,
         DeltaVolQuote::Fwd, DeltaVolQuote::AtmFwd, FxRrBfQuotes::SmileStrangle,

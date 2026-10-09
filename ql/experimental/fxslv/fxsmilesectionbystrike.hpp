@@ -1,15 +1,15 @@
-#ifndef quantlib_axl_fx_smile_section_strike_hpp
-#define quantlib_axl_fx_smile_section_strike_hpp
+#ifndef quantlib_fx_smile_section_strike_hpp
+#define quantlib_fx_smile_section_strike_hpp
 
 #include <ql/math/array.hpp>
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
 
 namespace QuantLib {
 
-    class fxSmileSectionByStrike : public FxSmileSection {
+    class FxSmileSectionByStrike : public FxSmileSection {
       public:
         //! Date mode (see FxSmileSection).
-        fxSmileSectionByStrike(const Date& exerciseDate,
+        FxSmileSectionByStrike(const Date& exerciseDate,
                                const Handle<Quote>& spot,
                                const ext::shared_ptr<FxSmileQuotes>& quotes,
                                const Handle<YieldTermStructure>& foreignDiscount,
@@ -21,7 +21,7 @@ namespace QuantLib {
                                const Date& referenceDate = Date());
 
         //! Time mode (see FxSmileSection).
-        fxSmileSectionByStrike(Time exerciseTime,
+        FxSmileSectionByStrike(Time exerciseTime,
                                const Handle<Quote>& spot,
                                const ext::shared_ptr<FxSmileQuotes>& quotes,
                                const Handle<YieldTermStructure>& foreignDiscount,
@@ -57,13 +57,13 @@ namespace QuantLib {
 
     };
 
-    typedef ext::shared_ptr<fxSmileSectionByStrike> fxSmileSectionByStrikePtr;
+    //typedef ext::shared_ptr<FxSmileSectionByStrike> fxSmileSectionByStrikePtr;
 
 
-    class polynomialSmileSection : public fxSmileSectionByStrike {
+    class PolynomialSmileSection : public FxSmileSectionByStrike {
       public:
         //! Date mode (see FxSmileSection).
-        polynomialSmileSection(const Date& exerciseDate,
+        PolynomialSmileSection(const Date& exerciseDate,
                                const Handle<Quote>& spot,
                                const ext::shared_ptr<FxSmileQuotes>& quotes,
                                const Handle<YieldTermStructure>& foreignDiscount,
@@ -75,7 +75,7 @@ namespace QuantLib {
                                const Date& referenceDate = Date());
 
         //! Time mode (see FxSmileSection).
-        polynomialSmileSection(Time exerciseTime,
+        PolynomialSmileSection(Time exerciseTime,
                                const Handle<Quote>& spot,
                                const ext::shared_ptr<FxSmileQuotes>& quotes,
                                const Handle<YieldTermStructure>& foreignDiscount,
@@ -103,10 +103,10 @@ namespace QuantLib {
     };
 
 
-    class fxSabrSmileSection : public fxSmileSectionByStrike {
+    class FxSabrSmileSection : public FxSmileSectionByStrike {
       public:
         //! Date mode (see FxSmileSection).
-        fxSabrSmileSection(const Date& exerciseDate,
+        FxSabrSmileSection(const Date& exerciseDate,
                            const Handle<Quote>& spot,
                            const ext::shared_ptr<FxSmileQuotes>& quotes,
                            const Handle<YieldTermStructure>& foreignDiscount,
@@ -118,7 +118,7 @@ namespace QuantLib {
                            const Date& referenceDate = Date());
 
         //! Time mode (see FxSmileSection).
-        fxSabrSmileSection(Time exerciseTime,
+        FxSabrSmileSection(Time exerciseTime,
                            const Handle<Quote>& spot,
                            const ext::shared_ptr<FxSmileQuotes>& quotes,
                            const Handle<YieldTermStructure>& foreignDiscount,
@@ -155,10 +155,10 @@ namespace QuantLib {
 
         Parameters: a, b, rho, m, sigma (5 parameters).
     */
-    class fxSviSmileSection : public fxSmileSectionByStrike {
+    class FxSviSmileSection : public FxSmileSectionByStrike {
       public:
         //! Date mode (see FxSmileSection).
-        fxSviSmileSection(const Date& exerciseDate,
+        FxSviSmileSection(const Date& exerciseDate,
                           const Handle<Quote>& spot,
                           const ext::shared_ptr<FxSmileQuotes>& quotes,
                           const Handle<YieldTermStructure>& foreignDiscount,
@@ -170,7 +170,7 @@ namespace QuantLib {
                           const Date& referenceDate = Date());
 
         //! Time mode (see FxSmileSection).
-        fxSviSmileSection(Time exerciseTime,
+        FxSviSmileSection(Time exerciseTime,
                           const Handle<Quote>& spot,
                           const ext::shared_ptr<FxSmileQuotes>& quotes,
                           const Handle<YieldTermStructure>& foreignDiscount,

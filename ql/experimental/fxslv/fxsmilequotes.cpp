@@ -92,7 +92,7 @@ namespace QuantLib {
 
     void FxSmileQuotes::fit(const FxSmileSection& section,
                             std::vector<Handle<DeltaVolQuote>> quotes) {
-        section.fitTo(std::move(quotes));
+        section.fitToQuotes(std::move(quotes));
     }
 
 

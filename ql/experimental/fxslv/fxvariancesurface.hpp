@@ -484,9 +484,7 @@ namespace QuantLib {
             Real d;
             if (k > fwd) {
                 d = BlackDeltaCalculator(Option::Call, ssFinal.deltaType(), spt, ddom, dfor, iw).deltaFromStrike(k);
-            }
-            else
-            {
+            } else {
                 d = BlackDeltaCalculator(Option::Put, ssFinal.deltaType(), spt, ddom, dfor, iw).deltaFromStrike(k);
             }
             return Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(d, makeQuoteHandle(v), t, ssFinal.deltaType()));

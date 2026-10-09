@@ -8,7 +8,7 @@
 
 namespace QuantLib {
 
-    fxSmileSectionByDelta::fxSmileSectionByDelta(const Date& exerciseDate,
+    FxSmileSectionByDelta::FxSmileSectionByDelta(const Date& exerciseDate,
                                                  const Handle<Quote>& spot,
                                                  const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                  const Handle<YieldTermStructure>& foreignDiscount,
@@ -23,7 +23,7 @@ namespace QuantLib {
                      deltaType, atmType, dayCounter, settlement, referenceDate),
       params_() {}
 
-    fxSmileSectionByDelta::fxSmileSectionByDelta(Time exerciseTime,
+    FxSmileSectionByDelta::FxSmileSectionByDelta(Time exerciseTime,
                                                  const Handle<Quote>& spot,
                                                  const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                  const Handle<YieldTermStructure>& foreignDiscount,
@@ -36,7 +36,7 @@ namespace QuantLib {
                      deltaType, atmType, dayCounter),
       params_() {}
 
-    Volatility fxSmileSectionByDelta::volByStrike(Rate strike) const 
+    Volatility FxSmileSectionByDelta::volByStrike(Rate strike) const 
     {
         calculate();
 
@@ -44,7 +44,7 @@ namespace QuantLib {
         return volByDelta(delta, Option::Type::Put);
     }
 
-    Volatility fxSmileSectionByDelta::volByDelta(Real delta, Option::Type parity) const 
+    Volatility FxSmileSectionByDelta::volByDelta(Real delta, Option::Type parity) const 
     {
         calculate();
 
@@ -107,7 +107,7 @@ namespace QuantLib {
         return _volByDelta(delta, fwd_, exerciseTime(), params_);
     }
 
-    Rate fxSmileSectionByDelta::strikeByDelta(Real delta, Option::Type parity) const 
+    Rate FxSmileSectionByDelta::strikeByDelta(Real delta, Option::Type parity) const 
     {
         calculate();
 
@@ -119,7 +119,7 @@ namespace QuantLib {
         return bdc.strikeFromDelta(delta);
     }
 
-    Rate fxSmileSectionByDelta::putStrikeFromDelta(Real putDelta, Real stdDev) const
+    Rate FxSmileSectionByDelta::putStrikeFromDelta(Real putDelta, Real stdDev) const
     {
         QL_REQUIRE(putDelta < 0.0, "put delta must be negative: " << putDelta);
 
@@ -137,7 +137,7 @@ namespace QuantLib {
         return solver.solve(f, 1.0e-12, fwd_, 0.1 * fwd_);
     }
 
-    Real fxSmileSectionByDelta::deltaByStrike(Rate strike, Option::Type parity) const 
+    Real FxSmileSectionByDelta::deltaByStrike(Rate strike, Option::Type parity) const 
     {
         calculate();
 
@@ -147,6 +147,7 @@ namespace QuantLib {
         Rate d0 = BlackDeltaCalculator(Option::Type::Put, deltaType(), spot()->value(), ddom_,
                                        dfor_, atm()->value() * sqrt(exerciseTime()))
                       .deltaFromStrike(strike);
+
         // Solve the fixed point d = putDelta(strike, vol(d)). This only needs
         // deltaFromStrike, so it avoids inverting delta -> strike at every
         // step (which, for premium-adjusted deltas, throws for put deltas
@@ -200,7 +201,7 @@ namespace QuantLib {
         return d;
     }
 
-    void fxSmileSectionByDelta::calibrate() const
+    void FxSmileSectionByDelta::calibrate() const
     {
         QL_REQUIRE(!quotes_.empty(), "no delta-vol quotes to calibrate against");
 
@@ -269,7 +270,7 @@ namespace QuantLib {
 
     //! \name Quadratic smile section (delta-parameterized)
     //@{
-    quadraticSmileSection::quadraticSmileSection(const Date& exerciseDate,
+    QuadraticSmileSection::QuadraticSmileSection(const Date& exerciseDate,
                                                  const Handle<Quote>& spot,
                                                  const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                  const Handle<YieldTermStructure>& foreignDiscount,
@@ -279,14 +280,14 @@ namespace QuantLib {
                                                  const DayCounter& dayCounter,
                                                  const FxSettlementConvention& settlement,
                                                  const Date& referenceDate)
-    : fxSmileSectionByDelta(exerciseDate, spot, quotes,
+    : FxSmileSectionByDelta(exerciseDate, spot, quotes,
                             foreignDiscount, domesticDiscount,
                             deltaType, atmType, dayCounter, settlement, referenceDate)
     {
         params_.reserve(3);
     }
 
-    quadraticSmileSection::quadraticSmileSection(Time exerciseTime,
+    QuadraticSmileSection::QuadraticSmileSection(Time exerciseTime,
                                                  const Handle<Quote>& spot,
                                                  const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                  const Handle<YieldTermStructure>& foreignDiscount,
@@ -294,14 +295,14 @@ namespace QuantLib {
                                                  DeltaVolQuote::DeltaType deltaType,
                                                  DeltaVolQuote::AtmType atmType,
                                                  const DayCounter& dayCounter)
-    : fxSmileSectionByDelta(exerciseTime, spot, quotes,
+    : FxSmileSectionByDelta(exerciseTime, spot, quotes,
                             foreignDiscount, domesticDiscount,
                             deltaType, atmType, dayCounter)
     {
         params_.reserve(3);
     }
 
-    Array quadraticSmileSection::initialParams() const
+    Array QuadraticSmileSection::initialParams() const
     {
         // vol = a*delta^2 + b*delta + c
         // ATM put delta is conventionally -0.5, so at ATM:
@@ -314,7 +315,7 @@ namespace QuantLib {
         return guess;
     }
 
-    Volatility quadraticSmileSection::_volByDelta(Real delta,
+    Volatility QuadraticSmileSection::_volByDelta(Real delta,
                                                    Real fwd,
                                                    Time tau,
                                                    const std::vector<Real>& params) const

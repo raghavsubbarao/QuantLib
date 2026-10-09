@@ -21,8 +21,8 @@
     \brief FX cost-model smile sections (flat, scaled, and general-alpha dynamics).
 */
 
-#ifndef quantlib_axl_cost_fx_smile_section_hpp
-#define quantlib_axl_cost_fx_smile_section_hpp
+#ifndef quantlib_cost_fx_smile_section_hpp
+#define quantlib_cost_fx_smile_section_hpp
 
 #include <ql/math/array.hpp>
 #include <ql/math/polynomialmathfunction.hpp>
@@ -63,10 +63,10 @@ namespace QuantLib {
         Derived classes may override _volByStrike() with closed-form solvers when
         alpha takes a special value (0 → quartic, 1 → biquadratic/quadratic).
     */
-    class fxCostSmileSection : public fxSmileSectionByStrike {
+    class FxCostSmileSection : public FxSmileSectionByStrike {
       public:
         //! Date mode (see FxSmileSection).
-        fxCostSmileSection(const Date& exerciseDate,
+        FxCostSmileSection(const Date& exerciseDate,
                            const Handle<Quote>& spot,
                            const ext::shared_ptr<FxSmileQuotes>& quotes,
                            const Handle<YieldTermStructure>& foreignDiscount,
@@ -80,7 +80,7 @@ namespace QuantLib {
                            bool weightedCalibrationFlag = true);
 
         //! Time mode (see FxSmileSection).
-        fxCostSmileSection(Time exerciseTime,
+        FxCostSmileSection(Time exerciseTime,
                            const Handle<Quote>& spot,
                            const ext::shared_ptr<FxSmileQuotes>& quotes,
                            const Handle<YieldTermStructure>& foreignDiscount,
@@ -121,10 +121,10 @@ namespace QuantLib {
         analytically (Ferrari's method).  Calibration is inherited from the base
         class using alpha = 0.
     */
-    class fxCostSmileSectionFlatDynamics : public fxCostSmileSection {
+    class FxCostSmileSectionFlatDynamics : public FxCostSmileSection {
       public:
         //! Date mode (see FxSmileSection).
-        fxCostSmileSectionFlatDynamics(const Date& exerciseDate,
+        FxCostSmileSectionFlatDynamics(const Date& exerciseDate,
                                        const Handle<Quote>& spot,
                                        const ext::shared_ptr<FxSmileQuotes>& quotes,
                                        const Handle<YieldTermStructure>& foreignDiscount,
@@ -137,7 +137,7 @@ namespace QuantLib {
                                        bool weightedCalibrationFlag = true);
 
         //! Time mode (see FxSmileSection).
-        fxCostSmileSectionFlatDynamics(Time exerciseTime,
+        FxCostSmileSectionFlatDynamics(Time exerciseTime,
                                        const Handle<Quote>& spot,
                                        const ext::shared_ptr<FxSmileQuotes>& quotes,
                                        const Handle<YieldTermStructure>& foreignDiscount,
@@ -162,10 +162,10 @@ namespace QuantLib {
         The cost equation reduces to a biquadratic (quadratic in rho^2), which is solved
         analytically.  Calibration is inherited from the base class using alpha = 1.
     */
-    class fxCostSmileSectionScaledDynamics : public fxCostSmileSection {
+    class FxCostSmileSectionScaledDynamics : public FxCostSmileSection {
       public:
         //! Date mode (see FxSmileSection).
-        fxCostSmileSectionScaledDynamics(const Date& exerciseDate,
+        FxCostSmileSectionScaledDynamics(const Date& exerciseDate,
                                          const Handle<Quote>& spot,
                                          const ext::shared_ptr<FxSmileQuotes>& quotes,
                                          const Handle<YieldTermStructure>& foreignDiscount,
@@ -178,7 +178,7 @@ namespace QuantLib {
                                          bool weightedCalibrationFlag = true);
 
         //! Time mode (see FxSmileSection).
-        fxCostSmileSectionScaledDynamics(Time exerciseTime,
+        FxCostSmileSectionScaledDynamics(Time exerciseTime,
                                          const Handle<Quote>& spot,
                                          const ext::shared_ptr<FxSmileQuotes>& quotes,
                                          const Handle<YieldTermStructure>& foreignDiscount,
