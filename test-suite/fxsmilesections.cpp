@@ -61,7 +61,7 @@ namespace {
         std::vector<Real> deltas;
         DeltaVolQuote::DeltaType deltaType;
         DeltaVolQuote::AtmType atmType;
-        fxSmileSection::FlyType flyType;
+        FxSmileSection::FlyType flyType;
 
         // Derived market vols (smile-strangle convention)
         // 25D: call = atm + rr/2 + bf,  put = atm - rr/2 + bf
@@ -88,7 +88,7 @@ namespace {
             deltas    = {0.25, 0.1};
             deltaType = DeltaVolQuote::PaSpot;
             atmType   = DeltaVolQuote::AtmFwd;
-            flyType   = fxSmileSection::SmileStrangle;
+            flyType   = FxSmileSection::SmileStrangle;
 
             // In smile-strangle convention the market quotes are:
             //   bf  = (call_vol + put_vol)/2 - atm
@@ -105,7 +105,7 @@ namespace {
 
     // Check that a smile section reproduces the input vols to within tolerance.
     // rr_tol / bf_tol are tolerances on the RR and BF residuals respectively.
-    void checkSmileSection(fxSmileSection& ss,
+    void checkSmileSection(FxSmileSection& ss,
                            const MarketData& md,
                            Real rr25_tol,
                            Real bf25_tol,
@@ -166,7 +166,7 @@ namespace {
 
     // Check that volByStrike and volByDelta are consistent via the
     // strikeByDelta round-trip.
-    void checkStrikeDeltaConsistency(fxSmileSection& ss,
+    void checkStrikeDeltaConsistency(FxSmileSection& ss,
                                      const MarketData& /*md*/,
                                      Real tol = 1.0e-6) {
         std::vector<Real> testDeltas = {-0.10, -0.25, -0.40};

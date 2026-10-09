@@ -19,10 +19,10 @@ namespace QuantLib {
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   fxSmileSection::FlyType flyType,
+                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter,
                                                    const Date& referenceDate)
-    : fxSmileSection(exerciseDate, spot, atm, rrs, bfs, deltas,
+    : FxSmileSection(exerciseDate, spot, atm, rrs, bfs, deltas,
                      foreignDiscount, domesticDiscount,
                      deltaType, atmType, flyType, dayCounter, referenceDate),
       params_() {}
@@ -37,9 +37,9 @@ namespace QuantLib {
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   fxSmileSection::FlyType flyType,
+                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter)
-    : fxSmileSection(exerciseTime, spot, atm, rrs, bfs, deltas,
+    : FxSmileSection(exerciseTime, spot, atm, rrs, bfs, deltas,
                      foreignDiscount, domesticDiscount,
                      deltaType, atmType, flyType, dayCounter),
       params_() {}
@@ -51,10 +51,10 @@ namespace QuantLib {
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   fxSmileSection::FlyType flyType,
+                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter,
                                                    const Date& referenceDate)
-    : fxSmileSection(exerciseDate, spot, quotes,
+    : FxSmileSection(exerciseDate, spot, quotes,
                      foreignDiscount, domesticDiscount,
                      deltaType, atmType, flyType, dayCounter, referenceDate),
       params_() {}
@@ -66,9 +66,9 @@ namespace QuantLib {
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   fxSmileSection::FlyType flyType,
+                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter)
-    : fxSmileSection(exerciseTime, spot, quotes,
+    : FxSmileSection(exerciseTime, spot, quotes,
                      foreignDiscount, domesticDiscount,
                      deltaType, atmType, flyType, dayCounter),
       params_() {}
@@ -198,7 +198,7 @@ namespace QuantLib {
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,  
                                                    DeltaVolQuote::AtmType atmType,
-                                                   fxSmileSection::FlyType flyType,
+                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter,
                                                    const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
@@ -218,7 +218,7 @@ namespace QuantLib {
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   fxSmileSection::FlyType flyType,
+                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter)
     : fxSmileSectionByStrike(exerciseTime, spot, atm, rrs, bfs, deltas,
                              foreignDiscount, domesticDiscount,
@@ -234,7 +234,7 @@ namespace QuantLib {
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   fxSmileSection::FlyType flyType,
+                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter,
                                                    const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
@@ -251,7 +251,7 @@ namespace QuantLib {
                                                    const Handle<YieldTermStructure>& domesticDiscount,
                                                    DeltaVolQuote::DeltaType deltaType,
                                                    DeltaVolQuote::AtmType atmType,
-                                                   fxSmileSection::FlyType flyType,
+                                                   FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter)
     : fxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,
@@ -295,7 +295,7 @@ namespace QuantLib {
                                            const Handle<YieldTermStructure>& domesticDiscount,
                                            DeltaVolQuote::DeltaType deltaType,
                                            DeltaVolQuote::AtmType atmType,
-                                           fxSmileSection::FlyType flyType,
+                                           FxSmileSection::FlyType flyType,
                                            const DayCounter& dayCounter,
                                            const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
@@ -315,7 +315,7 @@ namespace QuantLib {
                                            const Handle<YieldTermStructure>& domesticDiscount,
                                            DeltaVolQuote::DeltaType deltaType,
                                            DeltaVolQuote::AtmType atmType,
-                                           fxSmileSection::FlyType flyType,
+                                           FxSmileSection::FlyType flyType,
                                            const DayCounter& dayCounter)
     : fxSmileSectionByStrike(exerciseTime, spot, atm,  rrs, bfs, deltas,
                              foreignDiscount, domesticDiscount,
@@ -331,7 +331,7 @@ namespace QuantLib {
                                            const Handle<YieldTermStructure>& domesticDiscount,
                                            DeltaVolQuote::DeltaType deltaType,
                                            DeltaVolQuote::AtmType atmType,
-                                           fxSmileSection::FlyType flyType,
+                                           FxSmileSection::FlyType flyType,
                                            const DayCounter& dayCounter,
                                            const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
@@ -348,7 +348,7 @@ namespace QuantLib {
                                            const Handle<YieldTermStructure>& domesticDiscount,
                                            DeltaVolQuote::DeltaType deltaType,
                                            DeltaVolQuote::AtmType atmType,
-                                           fxSmileSection::FlyType flyType,
+                                           FxSmileSection::FlyType flyType,
                                            const DayCounter& dayCounter)
     : fxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,
@@ -391,7 +391,7 @@ namespace QuantLib {
                                          const Handle<YieldTermStructure>& domesticDiscount,
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
-                                         fxSmileSection::FlyType flyType,
+                                         FxSmileSection::FlyType flyType,
                                          const DayCounter& dayCounter,
                                          const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
@@ -411,7 +411,7 @@ namespace QuantLib {
                                          const Handle<YieldTermStructure>& domesticDiscount,
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
-                                         fxSmileSection::FlyType flyType,
+                                         FxSmileSection::FlyType flyType,
                                          const DayCounter& dayCounter)
     : fxSmileSectionByStrike(exerciseTime, spot, atm, rrs, bfs, deltas,
                              foreignDiscount, domesticDiscount,
@@ -427,7 +427,7 @@ namespace QuantLib {
                                          const Handle<YieldTermStructure>& domesticDiscount,
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
-                                         fxSmileSection::FlyType flyType,
+                                         FxSmileSection::FlyType flyType,
                                          const DayCounter& dayCounter,
                                          const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
@@ -444,7 +444,7 @@ namespace QuantLib {
                                          const Handle<YieldTermStructure>& domesticDiscount,
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
-                                         fxSmileSection::FlyType flyType,
+                                         FxSmileSection::FlyType flyType,
                                          const DayCounter& dayCounter)
     : fxSmileSectionByStrike(exerciseTime, spot, quotes,
                              foreignDiscount, domesticDiscount,

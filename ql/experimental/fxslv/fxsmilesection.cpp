@@ -3,7 +3,7 @@
 
 namespace QuantLib {
 
-    fxSmileSection::fxSmileSection(const Date& exerciseDate,
+    FxSmileSection::FxSmileSection(const Date& exerciseDate,
                                    const Handle<Quote>& spot,
                                    const Handle<Quote>& atm,
                                    const std::vector<Handle<Quote>>& rrs,
@@ -29,7 +29,7 @@ namespace QuantLib {
         registerWithMarketData();
     }
 
-    fxSmileSection::fxSmileSection(Time exerciseTime,
+    FxSmileSection::FxSmileSection(Time exerciseTime,
                                    const Handle<Quote>& spot,
                                    const Handle<Quote>& atm,
                                    const std::vector<Handle<Quote>>& rrs,
@@ -54,7 +54,7 @@ namespace QuantLib {
         registerWithMarketData();
     }
 
-    fxSmileSection::fxSmileSection(const Date& exerciseDate,
+    FxSmileSection::FxSmileSection(const Date& exerciseDate,
                                    const Handle<Quote>& spot,
                                    const std::vector<Handle<DeltaVolQuote>>& quotes,
                                    const Handle<YieldTermStructure>& foreignDiscount,
@@ -64,8 +64,8 @@ namespace QuantLib {
                                    FlyType flyType,
                                    const DayCounter& dayCounter,
                                    const Date& referenceDate)
-    : SmileSection(exerciseDate, dayCounter, referenceDate, ShiftedLognormal, 0.0),
-      spot_(spot),
+    : SmileSection(exerciseDate, dayCounter, referenceDate, ShiftedLognormal, 0.0), 
+      spot_(spot), rrs_(), bfs_(), deltas_(),
       foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
       deltaType_(deltaType), atmType_(atmType), flyType_(flyType), isDeltaVolQuote_(true),
       atmInput_(), quotesInput_(quotes),
@@ -74,7 +74,7 @@ namespace QuantLib {
         registerWithMarketData();
     }
 
-    fxSmileSection::fxSmileSection(Time exerciseTime,
+    FxSmileSection::FxSmileSection(Time exerciseTime,
                                    const Handle<Quote>& spot,
                                    const std::vector<Handle<DeltaVolQuote>>& quotes,
                                    const Handle<YieldTermStructure>& foreignDiscount,
@@ -83,8 +83,8 @@ namespace QuantLib {
                                    DeltaVolQuote::AtmType atmType,
                                    FlyType flyType,
                                    const DayCounter& dayCounter)
-    : SmileSection(exerciseTime, dayCounter, ShiftedLognormal, 0.0),
-      spot_(spot),
+    : SmileSection(exerciseTime, dayCounter, ShiftedLognormal, 0.0), 
+      spot_(spot), rrs_(), bfs_(), deltas_(),
       foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
       deltaType_(deltaType), atmType_(atmType), flyType_(flyType), isDeltaVolQuote_(true),
       atmInput_(), quotesInput_(quotes),
@@ -93,7 +93,7 @@ namespace QuantLib {
         registerWithMarketData();
     }
 
-    void fxSmileSection::registerWithMarketData() 
+    void FxSmileSection::registerWithMarketData() 
     {
         registerWith(spot_);
         registerWith(foreignDiscount_);
@@ -109,13 +109,13 @@ namespace QuantLib {
         }
     }
 
-    void fxSmileSection::calculateForward() const {
+    void FxSmileSection::calculateForward() const {
         ddom_ = domesticDiscount_->discount(exerciseTime());
         dfor_ = foreignDiscount_->discount(exerciseTime());
         fwd_ = spot_->value() * dfor_ / ddom_;
     }
 
-    void fxSmileSection::calculateAtm() const {
+    void FxSmileSection::calculateAtm() const {
         calculate(); // should not be necc but force calibration!
 
         Real spot = spot_->value();
@@ -138,7 +138,7 @@ namespace QuantLib {
         atm_ = makeQuoteHandle(volByStrike(k));
     }
 
-    void fxSmileSection::stripDeltaVolQuotes() const {
+    void FxSmileSection::stripDeltaVolQuotes() const {
 
         if (isDeltaVolQuote()) 
         {
@@ -171,11 +171,11 @@ namespace QuantLib {
             atm_ = atmInput_;
 
             // Create a strangle helper for each delta level.
-            std::vector<fxStrangleHelper<fxSmileSection>> helpers;
+            std::vector<fxStrangleHelper<FxSmileSection>> helpers;
             helpers.reserve(deltas_.size());
             for (Size i = 0; i < deltas_.size(); ++i) {
                 helpers.emplace_back(bfs_[i], std::fabs(deltas_[i]));
-                helpers.back().setSmileSection(const_cast<fxSmileSection*>(this));
+                helpers.back().setSmileSection(const_cast<FxSmileSection*>(this));
                 helpers.back().initialize();
             }
 
@@ -288,11 +288,15 @@ namespace QuantLib {
             }
 
             calibrate();
+
+            // the calibrated atm might differ from the input
+            // so get the atm from the calibrated smile section
+            calculateAtm();
         }
         
     }
 
-    void fxSmileSection::adjustMinStrike() const {
+    void FxSmileSection::adjustStrikes() const {
         if (premiumAdjust()) {
             calculate();  // should not be necc but force calibration!
 
@@ -318,6 +322,7 @@ namespace QuantLib {
             minStrike_ = k;
         }
 
+        // assumes the atm vol is known: either via market input or calibration!
         atmStrike_ = BlackDeltaCalculator(Option::Call, deltaType(), spot()->value(),
                                           domesticDiscount_->discount(exerciseTime()),
                                           foreignDiscount_->discount(exerciseTime()),
@@ -326,13 +331,13 @@ namespace QuantLib {
 
     }
 
-    void fxSmileSection::performCalculations() const {
+    void FxSmileSection::performCalculations() const {
         calculateForward();
         stripDeltaVolQuotes();
-        adjustMinStrike();
+        adjustStrikes();
     }
 
-    Real fxSmileSection::normedCallPrice(Rate strike) const {
+    Real FxSmileSection::normedCallPrice(Rate strike) const {
         calculate();
 
         Real w = volByStrike(strike) * std::sqrt(exerciseTime());
@@ -340,7 +345,7 @@ namespace QuantLib {
         return bc.value() / fwd_;
     }
 
-    Real fxSmileSection::normedProbability(Rate strike, Real eps) const {
+    Real FxSmileSection::normedProbability(Rate strike, Real eps) const {
         QL_REQUIRE((eps > 0) && (eps < 1.), "eps should be between 0 and 1");
 
         calculate();
@@ -350,7 +355,7 @@ namespace QuantLib {
         return (ncp_dn - ncp_up) / (2. * eps);
     }
 
-    Rate fxSmileSection::strikeFromNormProb(Real q) const {
+    Rate FxSmileSection::strikeFromNormProb(Real q) const {
         QL_REQUIRE((q > 0.) && (q < 1.), "q should be between 0 and 1.");
 
         calculate();

@@ -167,7 +167,7 @@ namespace QuantLib {
     }
 
 
-    class fxSmileSection : public SmileSection, public LazyObject {
+    class FxSmileSection : public SmileSection, public LazyObject {
       public:
         enum FlyType {
             SmileStrangle, // Market fly
@@ -175,7 +175,7 @@ namespace QuantLib {
         };
 
         // ctor from market quotes for specific date
-        fxSmileSection(const Date& exerciseDate,
+        FxSmileSection(const Date& exerciseDate,
                        const Handle<Quote>& spot,
                        const Handle<Quote>& atm,
                        const std::vector<Handle<Quote>>& rrs,
@@ -190,7 +190,7 @@ namespace QuantLib {
                        const Date& referenceDate = Date());
 
         // ctor from market quotes with expiry time - floats with evaluation date
-        fxSmileSection(Time exerciseTime,
+        FxSmileSection(Time exerciseTime,
                        const Handle<Quote>& spot,
                        const Handle<Quote>& atm,
                        const std::vector<Handle<Quote>>& rrs,
@@ -204,7 +204,7 @@ namespace QuantLib {
                        const DayCounter& dayCounter = DayCounter());
 
         // ctor from derived quotes for specific date
-        fxSmileSection(const Date& exerciseDate,
+        FxSmileSection(const Date& exerciseDate,
                        const Handle<Quote>& spot,
                        const std::vector<Handle<DeltaVolQuote>>& quotes,
                        const Handle<YieldTermStructure>& foreignDiscount,
@@ -216,7 +216,7 @@ namespace QuantLib {
                        const Date& referenceDate = Date());
 
         // ctor form derived quotes for expiry time - floats with evaluation date
-        fxSmileSection(Time exerciseTime,
+        FxSmileSection(Time exerciseTime,
                        const Handle<Quote>& spot,
                        const std::vector<Handle<DeltaVolQuote>>& quotes,
                        const Handle<YieldTermStructure>& foreignDiscount,
@@ -275,7 +275,7 @@ namespace QuantLib {
         void calculateForward() const;
         void calculateAtm() const;
         void stripDeltaVolQuotes() const;
-        virtual void adjustMinStrike() const;
+        virtual void adjustStrikes() const;
         virtual void calibrate() const = 0;
         
         virtual Volatility volatilityImpl(Rate strike) const { return volByStrike(strike); };
@@ -298,7 +298,7 @@ namespace QuantLib {
         const Handle<Quote> atmInput_;
         const std::vector<Handle<DeltaVolQuote>> quotesInput_;
 
-        friend class fxStrangleHelper<fxSmileSection>;
+        friend class fxStrangleHelper<FxSmileSection>;
 
       protected:
         mutable Real ddom_;
@@ -317,12 +317,12 @@ namespace QuantLib {
 
     };
 
-    inline void fxSmileSection::update() {
+    inline void FxSmileSection::update() {
         SmileSection::update();
         LazyObject::update();
     }
 
-    typedef ext::shared_ptr<fxSmileSection> fxSmileSectionPtr;
+    typedef ext::shared_ptr<FxSmileSection> fxSmileSectionPtr;
 
 }  // namespace QuantLib
 

@@ -67,7 +67,7 @@ using namespace QuantLib;
 // ---------------------------------------------------------------------------
 
 void printRow(const std::string& name,
-              fxSmileSection& ss,
+              FxSmileSection& ss,
               Real market_atm,
               Real market_rr25,
               Real market_bf25,
@@ -169,7 +169,7 @@ int main(int, char*[]) {
 
         DeltaVolQuote::DeltaType deltaType = DeltaVolQuote::PaSpot;
         DeltaVolQuote::AtmType   atmType   = DeltaVolQuote::AtmFwd;
-        fxSmileSection::FlyType  flyType   = fxSmileSection::SmileStrangle;
+        FxSmileSection::FlyType  flyType   = FxSmileSection::SmileStrangle;
         DayCounter               dc        = Actual365Fixed();
 
         // Derived market quotes for reference
@@ -388,7 +388,7 @@ int main(int, char*[]) {
             std::cout << std::setw(wv) << std::right << std::fixed << std::setprecision(4) << k;
         std::cout << "\n" << std::string(wk + wv * strikes.size(), '-') << "\n";
 
-        auto printStrikeRow = [&](const std::string& nm, fxSmileSection& ss) {
+        auto printStrikeRow = [&](const std::string& nm, FxSmileSection& ss) {
             std::cout << std::setw(wk) << std::left << nm;
             for (Real k : strikes)
                 std::cout << std::setw(wv) << std::right << std::fixed

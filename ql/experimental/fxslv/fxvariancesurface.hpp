@@ -31,7 +31,7 @@ namespace QuantLib {
          * as the interpolation is done in variance space.
          */
 
-    static_assert(std::is_base_of_v<fxSmileSection, T>,
+    static_assert(std::is_base_of_v<FxSmileSection, T>,
                       "Template parameter must be derived from fxSmileSection");
 
       public:
@@ -47,7 +47,7 @@ namespace QuantLib {
                           const Handle<tradingTimeTermStructure>& timesTs,
                           DeltaVolQuote::DeltaType deltaType,
                           DeltaVolQuote::AtmType atmType,
-                          fxSmileSection::FlyType flyType,
+                          FxSmileSection::FlyType flyType,
                           const Calendar& cal = WeekendsOnly(),
                           BusinessDayConvention bdc = Following,
                           bool forceMonotoneVariance = true);
@@ -111,7 +111,7 @@ namespace QuantLib {
                                             const Handle<tradingTimeTermStructure>& timeTs,
                                             DeltaVolQuote::DeltaType deltaType,
                                             DeltaVolQuote::AtmType atmType,
-                                            fxSmileSection::FlyType flyType,
+                                            FxSmileSection::FlyType flyType,
                                             const Calendar& cal,
                                             BusinessDayConvention bdc,
                                             bool forceMonotoneVariance)
@@ -280,7 +280,7 @@ namespace QuantLib {
                                const Handle<tradingTimeTermStructure>& timesTs,
                                DeltaVolQuote::DeltaType deltaType,
                                DeltaVolQuote::AtmType atmType,
-                               fxSmileSection::FlyType flyType,
+                               FxSmileSection::FlyType flyType,
                                const Calendar& cal = WeekendsOnly(),
                                BusinessDayConvention bdc = Following,
                                bool forceMonotoneVariance = true);
@@ -301,7 +301,7 @@ namespace QuantLib {
                                                       const Handle<tradingTimeTermStructure>& timeTs,
                                                       DeltaVolQuote::DeltaType deltaType,
                                                       DeltaVolQuote::AtmType atmType,
-                                                      fxSmileSection::FlyType flyType,
+                                                      FxSmileSection::FlyType flyType,
                                                       const Calendar& cal,
                                                       BusinessDayConvention bdc,
                                                       bool forceMonotoneVariance)
@@ -375,7 +375,7 @@ namespace QuantLib {
                              const Handle<tradingTimeTermStructure>& timesTs,
                              DeltaVolQuote::DeltaType deltaType,
                              DeltaVolQuote::AtmType atmType,
-                             fxSmileSection::FlyType flyType,
+                             FxSmileSection::FlyType flyType,
                              const Calendar& cal = WeekendsOnly(),
                              BusinessDayConvention bdc = Following,
                              bool forceMonotoneVariance = true);
@@ -397,7 +397,7 @@ namespace QuantLib {
                                                   const Handle<tradingTimeTermStructure>& timeTs,
                                                   DeltaVolQuote::DeltaType deltaType,
                                                   DeltaVolQuote::AtmType atmType,
-                                                  fxSmileSection::FlyType flyType,
+                                                  FxSmileSection::FlyType flyType,
                                                   const Calendar& cal,
                                                   BusinessDayConvention bdc,
                                                   bool forceMonotoneVariance)

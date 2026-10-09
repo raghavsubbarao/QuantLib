@@ -6,7 +6,7 @@
 
 namespace QuantLib {
 
-    class fxSmileSectionByDelta : public fxSmileSection {
+    class fxSmileSectionByDelta : public FxSmileSection {
       public:
         // ctor from market quotes for specific date
         fxSmileSectionByDelta(const Date& exerciseDate,
@@ -19,7 +19,7 @@ namespace QuantLib {
                               const Handle<YieldTermStructure>& domesticDiscount,
                               DeltaVolQuote::DeltaType deltaType,
                               DeltaVolQuote::AtmType atmType,
-                              fxSmileSection::FlyType flyType,
+                              FxSmileSection::FlyType flyType,
                               const DayCounter& dayCounter = DayCounter(),
                               const Date& referenceDate = Date());
 
@@ -34,7 +34,7 @@ namespace QuantLib {
                               const Handle<YieldTermStructure>& domesticDiscount,
                               DeltaVolQuote::DeltaType deltaType,
                               DeltaVolQuote::AtmType atmType,
-                              fxSmileSection::FlyType flyType,
+                              FxSmileSection::FlyType flyType,
                               const DayCounter& dayCounter = DayCounter());
 
         // ctor from derived quotes for specific date
@@ -115,7 +115,7 @@ namespace QuantLib {
                               const Handle<YieldTermStructure>& domesticDiscount,
                               DeltaVolQuote::DeltaType deltaType,
                               DeltaVolQuote::AtmType atmType,
-                              fxSmileSection::FlyType flyType,
+                              FxSmileSection::FlyType flyType,
                               const DayCounter& dayCounter = DayCounter(),
                               const Date& referenceDate = Date());
 
@@ -130,7 +130,7 @@ namespace QuantLib {
                               const Handle<YieldTermStructure>& domesticDiscount,
                               DeltaVolQuote::DeltaType deltaType,
                               DeltaVolQuote::AtmType atmType,
-                              fxSmileSection::FlyType flyType,
+                              FxSmileSection::FlyType flyType,
                               const DayCounter& dayCounter = DayCounter());
 
         // ctor from derived quotes for specific date

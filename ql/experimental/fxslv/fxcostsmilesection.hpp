@@ -76,7 +76,7 @@ namespace QuantLib {
                            const Handle<YieldTermStructure>& domesticDiscount,
                            DeltaVolQuote::DeltaType deltaType,
                            DeltaVolQuote::AtmType atmType,
-                           fxSmileSection::FlyType flyType,
+                           FxSmileSection::FlyType flyType,
                            Real alpha = 0.5,
                            const DayCounter& dayCounter = DayCounter(),
                            const Date& referenceDate = Date(),
@@ -93,7 +93,7 @@ namespace QuantLib {
                            const Handle<YieldTermStructure>& domesticDiscount,
                            DeltaVolQuote::DeltaType deltaType,
                            DeltaVolQuote::AtmType atmType,
-                           fxSmileSection::FlyType flyType,
+                           FxSmileSection::FlyType flyType,
                            Real alpha = 0.5,
                            const DayCounter& dayCounter = DayCounter(),
                            bool weightedCalibrationFlag = true);
@@ -168,7 +168,7 @@ namespace QuantLib {
                                        const Handle<YieldTermStructure>& domesticDiscount,
                                        DeltaVolQuote::DeltaType deltaType,
                                        DeltaVolQuote::AtmType atmType,
-                                       fxSmileSection::FlyType flyType,
+                                       FxSmileSection::FlyType flyType,
                                        const DayCounter& dayCounter = DayCounter(),
                                        const Date& referenceDate = Date(),
                                        bool weightedCalibrationFlag = true);
@@ -184,7 +184,7 @@ namespace QuantLib {
                                        const Handle<YieldTermStructure>& domesticDiscount,
                                        DeltaVolQuote::DeltaType deltaType,
                                        DeltaVolQuote::AtmType atmType,
-                                       fxSmileSection::FlyType flyType,
+                                       FxSmileSection::FlyType flyType,
                                        const DayCounter& dayCounter = DayCounter(),
                                        bool weightedCalibrationFlag = true);
 
@@ -241,7 +241,7 @@ namespace QuantLib {
                                          const Handle<YieldTermStructure>& domesticDiscount,
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
-                                         fxSmileSection::FlyType flyType,
+                                         FxSmileSection::FlyType flyType,
                                          const DayCounter& dayCounter = DayCounter(),
                                          const Date& referenceDate = Date(),
                                          bool weightedCalibrationFlag = true);
@@ -257,7 +257,7 @@ namespace QuantLib {
                                          const Handle<YieldTermStructure>& domesticDiscount,
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
-                                         fxSmileSection::FlyType flyType,
+                                         FxSmileSection::FlyType flyType,
                                          const DayCounter& dayCounter = DayCounter(),
                                          bool weightedCalibrationFlag = true);
 
