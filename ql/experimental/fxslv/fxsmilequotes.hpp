@@ -38,7 +38,7 @@ namespace QuantLib {
     class FxSmileSection;
 
     //! A condition the calibrated smile should meet
-    /*! Each target gives one residual, in vol units, for the section's
+    /*! Each target gives a residual, in vol units, for the section's
         current smile.  During calibration the section holds trial
         parameters, so residual() measures that trial smile.
     */
@@ -49,9 +49,8 @@ namespace QuantLib {
         //! Residual of the section's current smile, in vol units.
         virtual Real residual(const FxSmileSection& section) const = 0;
 
-        //! The point (strike, vol) the smile must pass through, if this target is one.
-        /*! Lets models with closed-form fits to points (e.g. the cost
-            models) use them directly.
+        //! The point (strike, vol) the smile must pass through for this target
+        /*! Models the closed-form fits to points (e.g. the cost models).
         */
         virtual std::optional<std::pair<Rate, Volatility>> point() const { return std::nullopt; }
     };
@@ -99,15 +98,13 @@ namespace QuantLib {
     */
     class FxBrokerStrangleTarget : public FxSmileTarget {
       public:
-        FxBrokerStrangleTarget(const FxSmileSection& section,
-                               Volatility atmVol,
-                               Volatility brokerFly,
-                               Real delta);
+        FxBrokerStrangleTarget(Volatility atmVol, Volatility brokerFly, Real delta)
+        : atmVol_(atmVol), brokerFly_(brokerFly), delta_(delta) {}
         Real residual(const FxSmileSection& section) const override;
 
       private:
-        Rate callStrike_, putStrike_;
-        Real marketPrice_, marketVega_;
+        Volatility atmVol_, brokerFly_;
+        Real delta_;
     };
 
     typedef std::vector<ext::shared_ptr<FxSmileTarget>> FxSmileTargets;

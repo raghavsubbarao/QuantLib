@@ -37,39 +37,30 @@ namespace QuantLib {
                riskReversal_;
     }
 
-    FxBrokerStrangleTarget::FxBrokerStrangleTarget(const FxSmileSection& section,
-                                                   Volatility atmVol,
-                                                   Volatility brokerFly,
-                                                   Real delta) {
+    Real FxBrokerStrangleTarget::residual(const FxSmileSection& section) const {
         const Time tau = section.exerciseTime();
-        const Real w = (atmVol + brokerFly) * std::sqrt(tau);
+        const Real htau = std::sqrt(tau);
 
         const Real spot = section.spot()->value();
         const Real ddom = section.domesticDiscountFactor();
         const Real dfor = section.foreignDiscountFactor();
         const Real fwd = section.forward();
+
+        const Real w = (atmVol_ + brokerFly_) * htau;
         const DeltaVolQuote::DeltaType dt = section.deltaType();
+        
+        const Rate callStrike = BlackDeltaCalculator(Option::Call, dt, spot, ddom, dfor, w).strikeFromDelta(delta_);
+        const Rate putStrike = BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, w).strikeFromDelta(delta_);
+        const BlackCalculator call(Option::Call, callStrike, fwd, w);
+        const BlackCalculator put(Option::Put, putStrike, fwd, w);
+        Real marketPrice = call.value() + put.value();
+        Real marketVega = call.vega(tau) + put.vega(tau);
 
-        callStrike_ = BlackDeltaCalculator(Option::Call, dt, spot, ddom, dfor, w)
-                          .strikeFromDelta(delta);
-        putStrike_ = BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, w)
-                         .strikeFromDelta(-delta);
-
-        const BlackCalculator call(Option::Call, callStrike_, fwd, w);
-        const BlackCalculator put(Option::Put, putStrike_, fwd, w);
-        marketPrice_ = call.value() + put.value();
-        marketVega_ = call.vega(tau) + put.vega(tau);
-        QL_REQUIRE(marketVega_ > 0.0, "market strangle has no vega for delta " << delta);
-    }
-
-    Real FxBrokerStrangleTarget::residual(const FxSmileSection& section) const {
-        const Real htau = std::sqrt(section.exerciseTime());
-        const Real fwd = section.forward();
-        const Real vc = section.volByStrike(callStrike_);
-        const Real vp = section.volByStrike(putStrike_);
-        const Real smilePrice = BlackCalculator(Option::Call, callStrike_, fwd, vc * htau).value() +
-                                BlackCalculator(Option::Put, putStrike_, fwd, vp * htau).value();
-        return (smilePrice - marketPrice_) / marketVega_;
+        const Real vc = section.volByStrike(callStrike);
+        const Real vp = section.volByStrike(putStrike);
+        const Real smilePrice = BlackCalculator(Option::Call, callStrike, fwd, vc * htau).value() +
+                                BlackCalculator(Option::Put, putStrike, fwd, vp * htau).value();
+        return (smilePrice - marketPrice) / marketVega;
     }
 
 
@@ -118,8 +109,9 @@ namespace QuantLib {
         const DeltaVolQuote::DeltaType deltaType = section.deltaType();
 
         FxSmileTargets targets;
-        targets.push_back(
-            volTarget(section, DeltaVolQuote(atm_, deltaType, tau, section.atmType())));
+
+        // atm vol target
+        targets.push_back(volTarget(section, DeltaVolQuote(atm_, deltaType, tau, section.atmType())));
 
         for (Size i = 0; i < deltas_.size(); ++i) {
             const Real d = std::fabs(deltas_[i]);
@@ -130,16 +122,13 @@ namespace QuantLib {
                 // smile strangles convert algebraically to points on the smile
                 const Volatility cVol = atm_->value() + bf + rr / 2.;
                 const Volatility pVol = atm_->value() + bf - rr / 2.;
-                targets.push_back(volTarget(
-                    section, DeltaVolQuote(d, makeQuoteHandle(cVol), tau, deltaType)));
-                targets.push_back(volTarget(
-                    section, DeltaVolQuote(-d, makeQuoteHandle(pVol), tau, deltaType)));
+                targets.push_back(volTarget(section, DeltaVolQuote(d, makeQuoteHandle(cVol), tau, deltaType)));
+                targets.push_back(volTarget(section, DeltaVolQuote(-d, makeQuoteHandle(pVol), tau, deltaType)));
             } else {
-                // broker strangles: risk reversal at the smile's deltas plus the
-                // strangle premium, fitted jointly with the ATM
+                // broker strangles: risk reversal at the smile's deltas plus 
+                // the strangle premium, fitted jointly with the ATM
                 targets.push_back(ext::make_shared<FxRiskReversalTarget>(d, rr));
-                targets.push_back(
-                    ext::make_shared<FxBrokerStrangleTarget>(section, atm_->value(), bf, d));
+                targets.push_back(ext::make_shared<FxBrokerStrangleTarget>(atm_->value(), bf, d));
             }
         }
 
