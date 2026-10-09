@@ -92,60 +92,6 @@ namespace QuantLib {
         return k;
     }
 
-    void FxSmileSectionByStrike::calibrate() const
-    {
-        QL_REQUIRE(!quotes_.empty(), "no delta-vol quotes to calibrate against");
-
-        const Real htau = std::sqrt(exerciseTime());
-        const Real spotVal = spot()->value();
-        const Real fwd = fwd_;
-        const Real ddom = ddom_;
-        const Real dfor = dfor_;
-        const DeltaVolQuote::DeltaType dt = deltaType();
-        const Time tau = exerciseTime();
-
-        // Precompute target vols and strikes from delta-vol quotes
-        std::vector<Real> targetVols(quotes_.size());
-        std::vector<Real> strikes(quotes_.size());
-
-        for (Size i = 0; i < quotes_.size(); ++i) 
-        {
-            Real vol = quotes_[i]->value();
-            Real w = vol * htau;
-            targetVols[i] = vol;
-
-            if (quotes_[i]->atmType() == DeltaVolQuote::AtmNull) 
-            {
-                Option::Type ot = (quotes_[i]->delta() < 0) ? Option::Put : Option::Call;
-                strikes[i] = BlackDeltaCalculator(ot, dt, spotVal, ddom, dfor, w).strikeFromDelta(quotes_[i]->delta());
-            } else {
-                strikes[i] = BlackDeltaCalculator(Option::Call, dt, spotVal, ddom, dfor, w).atmStrike(quotes_[i]->atmType());
-            }
-        }
-
-        // Cost function: residual = model_vol(strike_i) - target_vol_i
-        auto costValues = [&](const Array& x) -> Array {
-            std::vector<Real> p(x.begin(), x.end());
-            Array residuals(quotes_.size());
-            for (Size i = 0; i < quotes_.size(); ++i) 
-            {
-                residuals[i] = _volByStrike(strikes[i], fwd, tau, p) - targetVols[i];
-            }
-            return residuals;
-        };
-
-        SimpleCostFunction<decltype(costValues)> costFunction(costValues);
-        NoConstraint constraint;
-        Array guess = initialParams();
-
-        Problem problem(costFunction, constraint, guess);
-        LevenbergMarquardt lm;
-        EndCriteria endCriteria(1000, 100, 1.0e-12, 1.0e-12, 1.0e-12);
-        lm.minimize(problem, endCriteria);
-
-        const Array& solution = problem.currentValue();
-        params_.assign(solution.begin(), solution.end());
-    }
 
 
     //! \name Polynomial smile section

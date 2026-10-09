@@ -36,6 +36,8 @@ namespace QuantLib {
         Volatility volByDelta(Real delta, Option::Type parity) const;
         Real deltaByStrike(Rate strike, Option::Type parity) const;
         Rate strikeByDelta(Real delta, Option::Type parity) const;
+        //! Residual at the point's put delta, the natural coordinate here.
+        Real volResidual(Rate strike, Volatility vol) const override;
         //@}
 
       private:
@@ -44,14 +46,14 @@ namespace QuantLib {
                                        Time tau,
                                        const std::vector<Real>& params) const = 0;
 
-        //! \name fxSmileSection interface
-        //@{
-        virtual void calibrate() const;
-        //@}
 
       protected:
-        //! Initial parameter guess for calibration.
-        virtual Array initialParams() const = 0;
+        //! \name FxSmileSection interface
+        //@{
+        void setParams(const Array& params) const override {
+            params_.assign(params.begin(), params.end());
+        }
+        //@}
 
         /*! Strike of the put with the given put delta (in this section's
             delta convention) and standard deviation.  Unlike

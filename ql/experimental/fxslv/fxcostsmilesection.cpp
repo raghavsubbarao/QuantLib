@@ -270,19 +270,17 @@ namespace QuantLib {
 
         std::vector<Real> ts;
         Real w, k, wt;
-        Option::Type ot;
         CumulativeNormalDistribution f;
 
-        for (Size i = 0; i < quotes_.size(); i++) {
-            w = quotes_[i]->value() * htau;
-            if (quotes_[i]->atmType() == DeltaVolQuote::AtmNull) {
-                ot = (quotes_[i]->delta() < 0) ? Option::Type::Put : Option::Type::Call;
-                k = BlackDeltaCalculator(ot, deltaType(), spot()->value(), ddom_, dfor_, w)
-                        .strikeFromDelta(quotes_[i]->delta());
-            } else {
-                k = BlackDeltaCalculator(Option::Type::Call, deltaType(), spot()->value(), ddom_, dfor_, w)
-                        .atmStrike(quotes_[i]->atmType());
-            }
+        for (Size i = 0; i < targets_.size(); i++) {
+            // the closed form needs points on the smile (delta-vol quotes or
+            // smile strangles); broker strangles are not points
+            const auto point = targets_[i]->point();
+            QL_REQUIRE(point, "cost smile sections can only be calibrated to points on the "
+                              "smile (delta-vol quotes or smile strangles), not to broker "
+                              "strangles");
+            k = point->first;
+            w = point->second * htau;
 
             wt = weightedCalibration() ? f.derivative(dp(k, w)) : 1.0;
 
@@ -297,7 +295,7 @@ namespace QuantLib {
             ts.push_back(dp(k, w) * dm(k, w) * std::pow(w, 2.0 * alpha_) * wt);
         }
 
-        Matrix A(quotes_.size(), 4, ts.begin(), ts.end());
+        Matrix A(targets_.size(), 4, ts.begin(), ts.end());
         SVD svd(A);
 
         const Matrix V = svd.V();

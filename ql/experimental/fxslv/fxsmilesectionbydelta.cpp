@@ -201,70 +201,14 @@ namespace QuantLib {
         return d;
     }
 
-    void FxSmileSectionByDelta::calibrate() const
+    Real FxSmileSectionByDelta::volResidual(Rate strike, Volatility vol) const
     {
-        QL_REQUIRE(!quotes_.empty(), "no delta-vol quotes to calibrate against");
-
-        const Real fwd = fwd_;
-        const Time tau = exerciseTime();
-
-        // Precompute target vols and deltas from delta-vol quotes.
-        // For a delta-parameterized smile the natural coordinates are
-        // put deltas, so convert call deltas to the put-delta equivalent.
-        std::vector<Real> targetVols(quotes_.size());
-        std::vector<Real> deltas(quotes_.size());
-
-        // Each quote carries its own vol, so its strike is known exactly:
-        // invert (delta, vol) -> strike, or use the ATM convention, and then
-        // take the put delta at that strike. This is exact for all four delta
-        // conventions; for premium-adjusted deltas the call/put relation
-        // depends on the strike and is not a constant shift.
-        const Real stdDevScale = std::sqrt(tau);
-        for (Size i = 0; i < quotes_.size(); ++i)
-        {
-            targetVols[i] = quotes_[i]->value();
-            const Real stdDev = targetVols[i] * stdDevScale;
-
-            Real strike;
-            if (quotes_[i]->atmType() != DeltaVolQuote::AtmNull) {
-                strike = BlackDeltaCalculator(Option::Call, deltaType(), spot()->value(), ddom_,
-                                              dfor_, stdDev)
-                             .atmStrike(quotes_[i]->atmType());
-            } else {
-                const Real d = quotes_[i]->delta();
-                const Option::Type type = d > 0.0 ? Option::Call : Option::Put;
-                strike = BlackDeltaCalculator(type, deltaType(), spot()->value(), ddom_, dfor_,
-                                              stdDev)
-                             .strikeFromDelta(d);
-            }
-
-            deltas[i] = BlackDeltaCalculator(Option::Put, deltaType(), spot()->value(), ddom_,
-                                             dfor_, stdDev)
-                            .deltaFromStrike(strike);
-        }
-
-        // Cost function: residual = model_vol(delta_i) - target_vol_i
-        auto costValues = [&](const Array& x) -> Array {
-            std::vector<Real> p(x.begin(), x.end());
-            Array residuals(quotes_.size());
-            for (Size i = 0; i < quotes_.size(); ++i) 
-            {
-                residuals[i] = _volByDelta(deltas[i], fwd, tau, p) - targetVols[i];
-            }
-            return residuals;
-        };
-
-        SimpleCostFunction<decltype(costValues)> costFunction(costValues);
-        NoConstraint constraint;
-        Array guess = initialParams();
-
-        Problem problem(costFunction, constraint, guess);
-        LevenbergMarquardt lm;
-        EndCriteria endCriteria(1000, 100, 1.0e-12, 1.0e-12, 1.0e-12);
-        lm.minimize(problem, endCriteria);
-
-        const Array& solution = problem.currentValue();
-        params_.assign(solution.begin(), solution.end());
+        // the model vol at the point's put delta, computed with the point's own vol
+        const Real stdDev = vol * std::sqrt(exerciseTime());
+        const Real putDelta = BlackDeltaCalculator(Option::Put, deltaType(), spot()->value(),
+                                                   ddom_, dfor_, stdDev)
+                                  .deltaFromStrike(strike);
+        return volByDelta(putDelta, Option::Put) - vol;
     }
 
 

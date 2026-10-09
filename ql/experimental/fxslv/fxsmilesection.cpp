@@ -1,4 +1,9 @@
 #include <ql/math/distributions/normaldistribution.hpp>
+#include <ql/math/optimization/constraint.hpp>
+#include <ql/math/optimization/costfunction.hpp>
+#include <ql/math/optimization/endcriteria.hpp>
+#include <ql/math/optimization/levenbergmarquardt.hpp>
+#include <ql/math/optimization/problem.hpp>
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
 #include <cmath>
@@ -158,11 +163,38 @@ namespace QuantLib {
         calculateAtm();
     }
 
-    void FxSmileSection::fitToQuotes(std::vector<Handle<DeltaVolQuote>> quotes) const {
+    void FxSmileSection::fitToTargets(FxSmileTargets targets) const {
         QL_REQUIRE(calibrating_, "smile section can only be fitted while its quotes calibrate it");
-        quotes_ = std::move(quotes);
+        QL_REQUIRE(!targets.empty(), "no calibration targets");
+        targets_ = std::move(targets);
         calibrate();
         fitted_ = true;
+    }
+
+    void FxSmileSection::calibrate() const {
+        // Least squares over the model parameters: each evaluation loads
+        // the trial parameters, so the targets measure the trial smile
+        // through the section's own functions.
+        auto residuals = [&](const Array& params) -> Array {
+            setParams(params);
+            Array r(targets_.size());
+            for (Size i = 0; i < targets_.size(); ++i)
+                r[i] = targets_[i]->residual(*this);
+            return r;
+        };
+
+        SimpleCostFunction<decltype(residuals)> costFunction(residuals);
+        NoConstraint constraint;
+        Problem problem(costFunction, constraint, initialParams());
+        LevenbergMarquardt lm;
+        EndCriteria endCriteria(1000, 100, 1.0e-12, 1.0e-12, 1.0e-12);
+        lm.minimize(problem, endCriteria);
+
+        setParams(problem.currentValue());
+    }
+
+    Real FxSmileSection::volResidual(Rate strike, Volatility vol) const {
+        return volByStrike(strike) - vol;
     }
 
     void FxSmileSection::adjustStrikes() const {

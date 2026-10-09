@@ -12,6 +12,7 @@
 #include <ql/termstructures/yieldtermstructure.hpp>
 #include <ql/termstructures/volatility/smilesection.hpp>
 #include <ql/option.hpp>
+#include <ql/math/array.hpp>
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/shared_ptr.hpp>
 #include <ql/utilities/null.hpp>
@@ -129,6 +130,13 @@ namespace QuantLib {
         virtual Real deltaByStrike(Rate strike, Option::Type parity) const = 0;
         virtual Rate strikeByDelta(Real delta, Option::Type parity) const = 0;
 
+        //! Residual for a calibration point (strike, vol), in vol units.
+        /*! Measured in the model's natural coordinate: by default the vol
+            at the strike; delta-parameterised smiles measure it at the
+            point's put delta instead.
+        */
+        virtual Real volResidual(Rate strike, Volatility vol) const;
+
         // Interpolation
         //! Derivative of the vol with respect to strike.
         /*! Central finite differences by default; models with a
@@ -161,14 +169,20 @@ namespace QuantLib {
         void calculateAtm() const;
         void stripDeltaVolQuotes() const;
 
-        // FxSmileQuotes::fit() is the only caller of fitTo().
+        // FxSmileQuotes::fit() is the only caller of fitToTargets().
         friend class FxSmileQuotes;
-        //! Fits the smile to the given quotes; only valid while the quotes calibrate the section.
-        void fitToQuotes(std::vector<Handle<DeltaVolQuote>> quotes) const;
+        //! Fits the smile to the given targets; only valid while the quotes calibrate the section.
+        void fitToTargets(FxSmileTargets targets) const;
         mutable bool calibrating_ = false;  // the quotes are calibrating this section
-        mutable bool fitted_ = false;       // fitTo() ran during the current calibration
+        mutable bool fitted_ = false;       // fitToTargets() ran during the current calibration
         virtual void adjustStrikes() const;
-        virtual void calibrate() const = 0;
+
+        //! Fits the smile to targets_.
+        /*! By default a least-squares fit of the target residuals over the
+            model parameters, starting from initialParams(); models with a
+            closed-form fit can override it.
+        */
+        virtual void calibrate() const;
         
         virtual Volatility volatilityImpl(Rate strike) const { return volByStrike(strike); };
 
@@ -183,6 +197,11 @@ namespace QuantLib {
         mutable Date spotDate_, deliveryDate_;
 
       protected:
+        //! Initial parameter guess for calibration.
+        virtual Array initialParams() const = 0;
+        //! Sets the model parameters; used with trial values during calibration.
+        virtual void setParams(const Array& params) const = 0;
+
         mutable Real ddom_ = Null<Real>();
         mutable Real dfor_ = Null<Real>();
         mutable Real fwd_ = Null<Real>();
@@ -194,9 +213,9 @@ namespace QuantLib {
         // Computed state: rebuilt on every calibration in stripDeltaVolQuotes().
         // atm_ is seeded with the quotes' reference vol before calibrating
         // and set to the fitted smile's ATM vol by calculateAtm() after.
-        // quotes_ is always a workspace populated before each call to calibrate().
+        // targets_ holds the calibration targets while calibrate() runs.
         mutable Handle<Quote> atm_;
-        mutable std::vector<Handle<DeltaVolQuote>> quotes_;
+        mutable FxSmileTargets targets_;
 
     };
 

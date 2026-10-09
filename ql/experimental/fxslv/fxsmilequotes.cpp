@@ -23,76 +23,75 @@
 #include <ql/pricingengines/blackcalculator.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <ql/quotes/simplequote.hpp>
-#include <algorithm>
 #include <cmath>
 #include <utility>
 
 namespace QuantLib {
 
-    namespace {
+    Real FxVolTarget::residual(const FxSmileSection& section) const {
+        return section.volResidual(strike_, vol_);
+    }
 
-        //! Broker-strangle residual for one delta level, in price.
-        /*! The market strangle has both legs struck, and priced, at the
-            broker vol \f$ \sigma_{ATM} + BF \f$; it is priced once.  The
-            residual is the premium of the same strangle priced on the
-            section's current smile minus the market premium, divided by
-            the market strangle's vega so that it reads as a vol and a
-            tolerance means the same at any expiry.  Dividing by a constant
-            does not move the root.
-        */
-        class StrangleHelper {
-          public:
-            StrangleHelper(const FxSmileSection& section,
-                           Volatility marketAtm,
-                           Real brokerFly,
-                           Real delta)
-            : section_(section) {
-                const Time tau = section_.exerciseTime();
-                const Real w = (marketAtm + brokerFly) * std::sqrt(tau);
+    Real FxRiskReversalTarget::residual(const FxSmileSection& section) const {
+        return section.volByDelta(delta_, Option::Call) - section.volByDelta(-delta_, Option::Put) -
+               riskReversal_;
+    }
 
-                const Real spot = section_.spot()->value();
-                const Real ddom = section_.domesticDiscountFactor();
-                const Real dfor = section_.foreignDiscountFactor();
-                const Real fwd = section_.forward();
-                const DeltaVolQuote::DeltaType dt = section_.deltaType();
+    FxBrokerStrangleTarget::FxBrokerStrangleTarget(const FxSmileSection& section,
+                                                   Volatility atmVol,
+                                                   Volatility brokerFly,
+                                                   Real delta) {
+        const Time tau = section.exerciseTime();
+        const Real w = (atmVol + brokerFly) * std::sqrt(tau);
 
-                callStrike_ = BlackDeltaCalculator(Option::Call, dt, spot, ddom, dfor, w)
-                                  .strikeFromDelta(delta);
-                putStrike_ = BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, w)
-                                 .strikeFromDelta(-delta);
+        const Real spot = section.spot()->value();
+        const Real ddom = section.domesticDiscountFactor();
+        const Real dfor = section.foreignDiscountFactor();
+        const Real fwd = section.forward();
+        const DeltaVolQuote::DeltaType dt = section.deltaType();
 
-                const BlackCalculator call(Option::Call, callStrike_, fwd, w);
-                const BlackCalculator put(Option::Put, putStrike_, fwd, w);
-                marketPrice_ = call.value() + put.value();
-                marketVega_ = call.vega(tau) + put.vega(tau);
-                QL_REQUIRE(marketVega_ > 0.0,
-                           "market strangle has no vega for delta " << delta);
-            }
+        callStrike_ = BlackDeltaCalculator(Option::Call, dt, spot, ddom, dfor, w)
+                          .strikeFromDelta(delta);
+        putStrike_ = BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, w)
+                         .strikeFromDelta(-delta);
 
-            //! Smile strangle premium minus market premium, over the market vega.
-            Real residual() const {
-                const Real htau = std::sqrt(section_.exerciseTime());
-                const Real fwd = section_.forward();
-                const Real vc = section_.volByStrike(callStrike_);
-                const Real vp = section_.volByStrike(putStrike_);
-                const Real smilePrice =
-                    BlackCalculator(Option::Call, callStrike_, fwd, vc * htau).value() +
-                    BlackCalculator(Option::Put, putStrike_, fwd, vp * htau).value();
-                return (smilePrice - marketPrice_) / marketVega_;
-            }
+        const BlackCalculator call(Option::Call, callStrike_, fwd, w);
+        const BlackCalculator put(Option::Put, putStrike_, fwd, w);
+        marketPrice_ = call.value() + put.value();
+        marketVega_ = call.vega(tau) + put.vega(tau);
+        QL_REQUIRE(marketVega_ > 0.0, "market strangle has no vega for delta " << delta);
+    }
 
-          private:
-            const FxSmileSection& section_;
-            Real callStrike_, putStrike_;
-            Real marketPrice_, marketVega_;
-        };
-
+    Real FxBrokerStrangleTarget::residual(const FxSmileSection& section) const {
+        const Real htau = std::sqrt(section.exerciseTime());
+        const Real fwd = section.forward();
+        const Real vc = section.volByStrike(callStrike_);
+        const Real vp = section.volByStrike(putStrike_);
+        const Real smilePrice = BlackCalculator(Option::Call, callStrike_, fwd, vc * htau).value() +
+                                BlackCalculator(Option::Put, putStrike_, fwd, vp * htau).value();
+        return (smilePrice - marketPrice_) / marketVega_;
     }
 
 
-    void FxSmileQuotes::fit(const FxSmileSection& section,
-                            std::vector<Handle<DeltaVolQuote>> quotes) {
-        section.fitToQuotes(std::move(quotes));
+    void FxSmileQuotes::fit(const FxSmileSection& section, FxSmileTargets targets) {
+        section.fitToTargets(std::move(targets));
+    }
+
+    ext::shared_ptr<FxSmileTarget> FxSmileQuotes::volTarget(const FxSmileSection& section,
+                                                            const DeltaVolQuote& quote) {
+        // the quote's own vol fixes its strike
+        const Volatility vol = quote.value();
+        const Real w = vol * std::sqrt(section.exerciseTime());
+        BlackDeltaCalculator calc(quote.atmType() == DeltaVolQuote::AtmNull && quote.delta() < 0 ?
+                                      Option::Put :
+                                      Option::Call,
+                                  section.deltaType(), section.spot()->value(),
+                                  section.domesticDiscountFactor(),
+                                  section.foreignDiscountFactor(), w);
+        const Rate strike = quote.atmType() == DeltaVolQuote::AtmNull ?
+                                calc.strikeFromDelta(quote.delta()) :
+                                calc.atmStrike(quote.atmType());
+        return ext::make_shared<FxVolTarget>(strike, vol);
     }
 
 
@@ -114,94 +113,37 @@ namespace QuantLib {
             registerWith(bf);
     }
 
-    std::vector<Handle<DeltaVolQuote>>
-    FxRrBfQuotes::deltaVolQuotes(const FxSmileSection& section,
-                                 const std::vector<Real>& smileStrangles) const {
+    void FxRrBfQuotes::calibrate(const FxSmileSection& section) const {
         const Time tau = section.exerciseTime();
         const DeltaVolQuote::DeltaType deltaType = section.deltaType();
 
-        std::vector<Handle<DeltaVolQuote>> quotes;
-        quotes.reserve(1 + 2 * deltas_.size());
-        quotes.emplace_back(ext::make_shared<DeltaVolQuote>(atm_, deltaType, tau, section.atmType()));
+        FxSmileTargets targets;
+        targets.push_back(
+            volTarget(section, DeltaVolQuote(atm_, deltaType, tau, section.atmType())));
 
-        for (Size j = 0; j < deltas_.size(); ++j) {
-            const Real d = std::fabs(deltas_[j]);
-            const Real rr = riskReversals_[j]->value();
-            const Real bf = smileStrangles[j];
+        for (Size i = 0; i < deltas_.size(); ++i) {
+            const Real d = std::fabs(deltas_[i]);
+            const Real rr = riskReversals_[i]->value();
+            const Real bf = butterflies_[i]->value();
 
-            const Volatility cVol = atm_->value() + bf + rr / 2.;
-            const Volatility pVol = atm_->value() + bf - rr / 2.;
-
-            quotes.emplace_back(ext::make_shared<DeltaVolQuote>(d, makeQuoteHandle(cVol), tau, deltaType));
-            quotes.emplace_back(ext::make_shared<DeltaVolQuote>(-d, makeQuoteHandle(pVol), tau, deltaType));
-        }
-        return quotes;
-    }
-
-    void FxRrBfQuotes::calibrate(const FxSmileSection& section) const {
-        if (flyType_ == MarketStrangle) {
-            calibrateToMarketStrangles(section);
-            return;
-        }
-
-        // Smile strangles convert algebraically to delta-vol quotes.
-        std::vector<Real> smileStrangles(deltas_.size());
-        for (Size i = 0; i < deltas_.size(); ++i)
-            smileStrangles[i] = butterflies_[i]->value();
-        fit(section, deltaVolQuotes(section, smileStrangles));
-    }
-
-    void FxRrBfQuotes::calibrateToMarketStrangles(const FxSmileSection& section) const {
-        // one premium residual per delta level, priced at the market ATM
-        std::vector<StrangleHelper> helpers;
-        helpers.reserve(deltas_.size());
-        for (Size i = 0; i < deltas_.size(); ++i)
-            helpers.emplace_back(section, atm_->value(), butterflies_[i]->value(),
-                                 std::fabs(deltas_[i]));
-
-        // initial guess: smile strangles = broker flies
-        std::vector<Real> smileStrangles(deltas_.size());
-        for (Size i = 0; i < deltas_.size(); ++i)
-            smileStrangles[i] = butterflies_[i]->value();
-
-        // Solve for each smile strangle in turn, the others fixed, and
-        // sweep until all strangles reprice.  With one delta a single
-        // sweep suffices.  The residuals are measured after each sweep on
-        // the smile fitted to the swept strangles, which is also the fit
-        // the section keeps.
-        const Size maxSweeps = 20;
-        const Real tolerance = 1.0e-10; // vol-equivalent premium error
-        const Real accuracy = 1.0e-12;
-        const Real step = 1.0e-3;       // initial bracket step, in vol
-
-        Real maxError = QL_MAX_REAL;
-        for (Size sweep = 0; sweep < maxSweeps && maxError >= tolerance; ++sweep) {
-            for (Size i = 0; i < deltas_.size(); ++i) {
-                auto error = [&](Real ss) -> Real {
-                    smileStrangles[i] = ss;
-                    fit(section, deltaVolQuotes(section, smileStrangles));
-                    return helpers[i].residual();
-                };
-                // No sign is assumed, so zero and negative strangles work;
-                // the search only keeps both wing vols positive and the
-                // strangle below the ATM vol (wings at twice the ATM).
-                const Volatility atm = atm_->value();
-                Brent solver;
-                solver.setMaxEvaluations(1000);
-                solver.setLowerBound(std::fabs(riskReversals_[i]->value()) / 2.0 - atm + accuracy);
-                solver.setUpperBound(atm);
-                smileStrangles[i] = solver.solve(error, accuracy, smileStrangles[i], step);
+            if (flyType_ == SmileStrangle) {
+                // smile strangles convert algebraically to points on the smile
+                const Volatility cVol = atm_->value() + bf + rr / 2.;
+                const Volatility pVol = atm_->value() + bf - rr / 2.;
+                targets.push_back(volTarget(
+                    section, DeltaVolQuote(d, makeQuoteHandle(cVol), tau, deltaType)));
+                targets.push_back(volTarget(
+                    section, DeltaVolQuote(-d, makeQuoteHandle(pVol), tau, deltaType)));
+            } else {
+                // broker strangles: risk reversal at the smile's deltas plus the
+                // strangle premium, fitted jointly with the ATM
+                targets.push_back(ext::make_shared<FxRiskReversalTarget>(d, rr));
+                targets.push_back(
+                    ext::make_shared<FxBrokerStrangleTarget>(section, atm_->value(), bf, d));
             }
-
-            fit(section, deltaVolQuotes(section, smileStrangles));
-            maxError = 0.0;
-            for (const auto& h : helpers)
-                maxError = std::max(maxError, std::fabs(h.residual()));
         }
 
-        QL_ENSURE(maxError < tolerance,
-                  "broker strangles not repriced after " << maxSweeps
-                      << " sweeps: largest vol-equivalent premium error " << maxError);
+        fit(section, std::move(targets));
     }
 
 
@@ -221,7 +163,11 @@ namespace QuantLib {
     }
 
     void FxDeltaVolQuotes::calibrate(const FxSmileSection& section) const {
-        fit(section, quotes_);
+        FxSmileTargets targets;
+        targets.reserve(quotes_.size());
+        for (const auto& q : quotes_)
+            targets.push_back(volTarget(section, **q));
+        fit(section, std::move(targets));
     }
 
 }

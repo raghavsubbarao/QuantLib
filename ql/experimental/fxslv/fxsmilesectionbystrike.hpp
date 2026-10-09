@@ -44,14 +44,14 @@ namespace QuantLib {
                                         Time tau,
                                         const std::vector<Real>& params) const = 0;
 
-        //! \name fxSmileSection interface
-        //@{
-        virtual void calibrate() const;
-        //@}
 
       protected:
-        //! Initial parameter guess for calibration.
-        virtual Array initialParams() const = 0;
+        //! \name FxSmileSection interface
+        //@{
+        void setParams(const Array& params) const override {
+            params_.assign(params.begin(), params.end());
+        }
+        //@}
 
         mutable std::vector<Real> params_;
 

@@ -684,11 +684,17 @@ namespace {
         explicit QuotesThatFitLater(std::vector<Handle<DeltaVolQuote>> quotes)
         : quotes_(std::move(quotes)) {}
         Volatility referenceVol() const override { return 0.1; }
-        void fitAgain() const { fit(*section_, quotes_); }
+        void fitAgain() const { fit(*section_, targets(*section_)); }
       private:
         void calibrate(const FxSmileSection& section) const override {
             section_ = &section;
-            fit(section, quotes_);
+            fit(section, targets(section));
+        }
+        FxSmileTargets targets(const FxSmileSection& section) const {
+            FxSmileTargets t;
+            for (const auto& q : quotes_)
+                t.push_back(volTarget(section, **q));
+            return t;
         }
         std::vector<Handle<DeltaVolQuote>> quotes_;
         mutable const FxSmileSection* section_ = nullptr;
@@ -720,49 +726,69 @@ BOOST_AUTO_TEST_CASE(testSmileQuotesMustFitDuringCalibration) {
 }
 
 BOOST_AUTO_TEST_CASE(testMarketStrangleCalibration) {
-    BOOST_TEST_MESSAGE("Testing FX smile calibration to broker (market) strangles...");
+    BOOST_TEST_MESSAGE("Testing joint FX smile calibration to broker (market) strangles...");
 
     MarketData md;
     const DeltaVolQuote::DeltaType dt = DeltaVolQuote::Spot;
     const DeltaVolQuote::AtmType at = DeltaVolQuote::AtmDeltaNeutral;
+    const Real delta = 0.25;
 
-    for (Real flyScale : {1.0, 0.0}) {   // quoted flies, and zero (flat-wing) flies
-        std::vector<Handle<Quote>> bfs = {makeQuoteHandle(flyScale * md.v_25bf->value()),
-                                          makeQuoteHandle(flyScale * md.v_10bf->value())};
+    // One delta level: ATM, risk reversal and broker strangle are three
+    // targets for the quadratic's three parameters, so the joint fit is
+    // exact and each condition can be checked on its own.
+    for (Real flyScale : {1.0, 0.0}) {   // quoted fly, and a zero (flat-wing) fly
+        const Volatility atm = md.v_atm->value(), rr = md.v_25rr->value();
+        const Volatility bf = flyScale * md.v_25bf->value();
         QuadraticSmileSection ss(md.expiryDate, md.spot,
                                  ext::make_shared<FxRrBfQuotes>(
-                                     md.v_atm, std::vector<Handle<Quote>>{md.v_25rr, md.v_10rr},
-                                     bfs, md.deltas, FxRrBfQuotes::MarketStrangle),
+                                     md.v_atm, std::vector<Handle<Quote>>{md.v_25rr},
+                                     std::vector<Handle<Quote>>{makeQuoteHandle(bf)},
+                                     std::vector<Real>{delta}, FxRrBfQuotes::MarketStrangle),
                                  md.forDiscount, md.domDiscount, dt, at, Actual365Fixed(),
                                  md.settlement);
 
-        // each market strangle, struck and priced at atm + bf, is repriced by the smile
         const Time tau = ss.exerciseTime();
-        const Real F = ss.forward();
-        for (Size i = 0; i < md.deltas.size(); ++i) {
-            const Real w = (md.v_atm->value() + bfs[i]->value()) * std::sqrt(tau);
-            BlackDeltaCalculator callCalc(Option::Call, dt, md.spot->value(),
-                                          ss.domesticDiscountFactor(),
-                                          ss.foreignDiscountFactor(), w);
-            BlackDeltaCalculator putCalc(Option::Put, dt, md.spot->value(),
-                                         ss.domesticDiscountFactor(),
-                                         ss.foreignDiscountFactor(), w);
-            const Real Kc = callCalc.strikeFromDelta(md.deltas[i]);
-            const Real Kp = putCalc.strikeFromDelta(-md.deltas[i]);
-            const BlackCalculator mc(Option::Call, Kc, F, w), mp(Option::Put, Kp, F, w);
-            const Real market = mc.value() + mp.value();
-            const Real smile =
-                BlackCalculator(Option::Call, Kc, F, ss.volByStrike(Kc) * std::sqrt(tau)).value() +
-                BlackCalculator(Option::Put, Kp, F, ss.volByStrike(Kp) * std::sqrt(tau)).value();
-            const Real volError = (smile - market) / (mc.vega(tau) + mp.vega(tau));
-            if (std::fabs(volError) > 1.0e-9)
-                BOOST_ERROR("fly scale " << flyScale << ", delta " << md.deltas[i]
-                            << ": strangle not repriced, vol-equivalent error " << volError);
-        }
+        const Real F = ss.forward(), S = md.spot->value();
+        const Real ddom = ss.domesticDiscountFactor(), dfor = ss.foreignDiscountFactor();
 
-        // the ATM convention holds on this path too
+        // the broker strangle, struck and priced at atm + bf, is repriced by the smile
+        const Real w = (atm + bf) * std::sqrt(tau);
+        const Real Kc = BlackDeltaCalculator(Option::Call, dt, S, ddom, dfor, w).strikeFromDelta(delta);
+        const Real Kp = BlackDeltaCalculator(Option::Put, dt, S, ddom, dfor, w).strikeFromDelta(-delta);
+        const BlackCalculator mc(Option::Call, Kc, F, w), mp(Option::Put, Kp, F, w);
+        const Real smile =
+            BlackCalculator(Option::Call, Kc, F, ss.volByStrike(Kc) * std::sqrt(tau)).value() +
+            BlackCalculator(Option::Put, Kp, F, ss.volByStrike(Kp) * std::sqrt(tau)).value();
+        BOOST_CHECK_SMALL((smile - mc.value() - mp.value()) / (mc.vega(tau) + mp.vega(tau)), 1.0e-8);
+
+        // the risk reversal holds at the smile's own deltas
+        BOOST_CHECK_SMALL(ss.volByDelta(delta, Option::Call) - ss.volByDelta(-delta, Option::Put) - rr,
+                          1.0e-8);
+
+        // the ATM quote holds, and atm() lies on the smile
+        BOOST_CHECK_SMALL(ss.atm()->value() - atm, 1.0e-8);
         BOOST_CHECK_SMALL(ss.atm()->value() - ss.volByStrike(ss.atmLevel()), 1.0e-12);
     }
+
+    // Two delta levels: five targets for three parameters, fitted jointly
+    // in the least-squares sense; the ATM convention still holds.
+    QuadraticSmileSection ss(md.expiryDate, md.spot,
+                             ext::make_shared<FxRrBfQuotes>(
+                                 md.v_atm, std::vector<Handle<Quote>>{md.v_25rr, md.v_10rr},
+                                 std::vector<Handle<Quote>>{md.v_25bf, md.v_10bf}, md.deltas,
+                                 FxRrBfQuotes::MarketStrangle),
+                             md.forDiscount, md.domDiscount, dt, at, Actual365Fixed(),
+                             md.settlement);
+    BOOST_CHECK_SMALL(ss.atm()->value() - ss.volByStrike(ss.atmLevel()), 1.0e-12);
+
+    // cost models have a closed form for points on the smile only
+    FxCostSmileSectionFlatDynamics cost(
+        md.expiryDate, md.spot,
+        ext::make_shared<FxRrBfQuotes>(md.v_atm, std::vector<Handle<Quote>>{md.v_25rr},
+                                       std::vector<Handle<Quote>>{md.v_25bf},
+                                       std::vector<Real>{delta}, FxRrBfQuotes::MarketStrangle),
+        md.forDiscount, md.domDiscount, dt, at, Actual365Fixed(), md.settlement);
+    BOOST_CHECK_THROW(cost.volByStrike(md.spot->value()), Error);
 }
 
 BOOST_AUTO_TEST_CASE(testProbabilitySpaceFunctions) {
