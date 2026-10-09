@@ -60,10 +60,12 @@ namespace QuantLib {
     };
 
     //! The smile matches a delta-vol quote
-    /*! The quote's strike follows from its own delta and vol, or from
-        the ATM convention, and the section's forward and conventions; it
-        is worked out when the target is evaluated, so a target is not
-        tied to one section.  The residual is measured in the section's
+    /*! The quote's strike follows from its own delta, delta type and
+        vol, or from its own ATM convention, and the section's spot,
+        discount factors and expiry; it is worked out when the target is
+        evaluated, so a target is not tied to one section.  Quotes may
+        therefore use conventions other than the section's.  The quote's
+        maturity is not used: the section's expiry applies.  The residual is measured in the section's
         natural coordinate, see FxSmileSection::volResidual().
     */
     class FxDeltaVolTarget : public FxSmileTarget {
@@ -187,6 +189,10 @@ namespace QuantLib {
                      std::vector<Handle<Quote>> butterflies,
                      std::vector<Real> deltas,
                      FlyType flyType);
+        /*!< The deltas must be distinct and in (0, 0.5); they are
+             interpreted in the section's delta type, and the ATM quote
+             in its ATM convention.
+        */
 
         //! \name FxSmileQuotes interface
         //@{
@@ -214,8 +220,9 @@ namespace QuantLib {
 
 
     //! Generic set of delta-vol quotes
-    /*! The quotes are fitted as given; the ATM quote, if any, is fitted
-        like the others.
+    /*! The quotes are fitted as given, each in its own delta and ATM
+        conventions (see FxDeltaVolTarget); the ATM quote, if any, is
+        fitted like the others.
     */
     class FxDeltaVolQuotes : public FxSmileQuotes {
       public:

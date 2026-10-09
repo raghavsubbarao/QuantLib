@@ -40,6 +40,8 @@
 #include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/time/date.hpp>
 #include <ql/settings.hpp>
+#include <functional>
+#include <string>
 
 using namespace QuantLib;
 using namespace boost::unit_test_framework;
@@ -442,14 +444,38 @@ BOOST_AUTO_TEST_CASE(testMarketDataReactivity) {
         md.forDiscount, md.domDiscount,
         md.deltaType, md.atmType, Actual365Fixed(), md.settlement);
 
-    Real atm_before = ss.atmLevel();
+    // Each input must move the smile.  Under AtmFwd the ATM strike is the
+    // forward whatever the vol, so vol changes are checked on vols.
+    const Real F = ss.forward();
+    const Rate kPut = 0.9 * F, kCall = 1.1 * F;
 
-    // Shift the ATM vol up and verify that the smile section reacts.
-    atmQuote->setValue(md.v_atm->value() + 0.01);
-    Real atm_after = ss.atmLevel();
+    auto checkMoves = [&](SimpleQuote& quote, Real bump, const std::string& name,
+                          const std::function<Real()>& result) {
+        const Real before = result(), base = quote.value();
+        quote.setValue(base + bump);
+        const Real after = result();
+        quote.setValue(base);
+        BOOST_CHECK_MESSAGE(std::fabs(after - before) > 1.0e-6,
+                            "smile section did not react to a change in the " << name);
+        BOOST_CHECK_CLOSE(result(), before, 1.0e-8);   // and comes back
+    };
 
-    BOOST_CHECK_MESSAGE(std::fabs(atm_after - atm_before) > 1.0e-6,
-        "Smile section did not react to ATM vol change");
+    checkMoves(*atmQuote, 0.01, "ATM vol", [&] { return ss.atmVol(); });
+    checkMoves(*rr25Quote, 0.01, "25D risk reversal",
+               [&] { return ss.volByStrike(kCall) - ss.volByStrike(kPut); });
+    checkMoves(*rr10Quote, 0.01, "10D risk reversal",
+               [&] { return ss.volByStrike(kCall) - ss.volByStrike(kPut); });
+    checkMoves(*bf25Quote, 0.005, "25D butterfly",
+               [&] { return ss.volByStrike(kCall) + ss.volByStrike(kPut); });
+    checkMoves(*bf10Quote, 0.005, "10D butterfly",
+               [&] { return ss.volByStrike(kCall) + ss.volByStrike(kPut); });
+    checkMoves(*spotQuote, 0.01, "spot", [&] { return ss.forward(); });
+    checkMoves(*spotQuote, 0.01, "spot (ATM strike)", [&] { return ss.atmLevel(); });
+
+    // an ATM vol bump moves the calibrated ATM vol by about as much
+    const Real atmBefore = ss.atmVol();
+    atmQuote->setValue(atmQuote->value() + 0.01);
+    BOOST_CHECK_SMALL(ss.atmVol() - atmBefore - 0.01, 1.0e-3);
 }
 
 namespace {
@@ -611,6 +637,31 @@ BOOST_AUTO_TEST_CASE(testSmileQuotesValidationAndNotification) {
     BOOST_CHECK_THROW(FxRrBfQuotes(md.v_atm, {md.v_25rr, md.v_10rr}, {md.v_25bf}, md.deltas,
                                    FxRrBfQuotes::SmileStrangle),
                       Error);
+    // deltas must be distinct and in (0, 0.5), and every quote given
+    for (Real badDelta : {0.0, 0.5, -0.25, 0.6})
+        BOOST_CHECK_THROW(FxRrBfQuotes(md.v_atm, {md.v_25rr}, {md.v_25bf}, {badDelta},
+                                       FxRrBfQuotes::SmileStrangle),
+                          Error);
+    BOOST_CHECK_THROW(FxRrBfQuotes(md.v_atm, {md.v_25rr, md.v_10rr}, {md.v_25bf, md.v_10bf},
+                                   {0.25, 0.25}, FxRrBfQuotes::SmileStrangle),
+                      Error);
+    BOOST_CHECK_THROW(FxRrBfQuotes(Handle<Quote>(), {md.v_25rr}, {md.v_25bf}, {0.25},
+                                   FxRrBfQuotes::SmileStrangle),
+                      Error);
+    BOOST_CHECK_THROW(FxRrBfQuotes(md.v_atm, {Handle<Quote>()}, {md.v_25bf}, {0.25},
+                                   FxRrBfQuotes::SmileStrangle),
+                      Error);
+    BOOST_CHECK_THROW(FxRrBfQuotes(md.v_atm, {md.v_25rr}, {Handle<Quote>()}, {0.25},
+                                   FxRrBfQuotes::SmileStrangle),
+                      Error);
+
+    // delta-vol quotes: at least one, none empty, and each with a delta or
+    // an ATM convention
+    BOOST_CHECK_THROW(FxDeltaVolQuotes({}), Error);
+    BOOST_CHECK_THROW(FxDeltaVolQuotes({Handle<DeltaVolQuote>()}), Error);
+    BOOST_CHECK_THROW(FxDeltaVolQuotes({Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(
+                          0.0, md.v_atm, 1.0, md.deltaType))}),
+                      Error);
 
     // the section is notified through the quotes object, which may be
     // shared by several sections
@@ -636,6 +687,42 @@ BOOST_AUTO_TEST_CASE(testSmileQuotesValidationAndNotification) {
                                             md.domDiscount, md.deltaType, md.atmType,
                                             Actual365Fixed(), md.settlement),
                       Error);
+}
+
+BOOST_AUTO_TEST_CASE(testDeltaVolQuotesUseTheirOwnConventions) {
+    BOOST_TEST_MESSAGE("Testing that FX delta-vol quotes are read in their own conventions...");
+
+    MarketData md;
+    // spot-delta quotes on a premium-adjusted section: three quotes for
+    // the quadratic's three parameters, so the fit is exact
+    const DeltaVolQuote::DeltaType quoteType = DeltaVolQuote::Spot;
+    BOOST_REQUIRE(md.deltaType != quoteType);
+    std::vector<Handle<DeltaVolQuote>> q = {
+        Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(md.v_atm, quoteType, 1.0,
+                                                              DeltaVolQuote::AtmDeltaNeutral)),
+        Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(0.25, makeQuoteHandle(md.v_25c), 1.0, quoteType)),
+        Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(-0.25, makeQuoteHandle(md.v_25p), 1.0, quoteType))};
+    QuadraticSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(q),
+                             md.forDiscount, md.domDiscount, md.deltaType, md.atmType,
+                             Actual365Fixed(), md.settlement);
+
+    const Real S = md.spot->value(), sqrtT = std::sqrt(ss.exerciseTime());
+    const Real ddom = ss.domesticDiscountFactor(), dfor = ss.foreignDiscountFactor();
+    auto strike = [&](Option::Type type, DeltaVolQuote::DeltaType dt, Real delta, Volatility v) {
+        return BlackDeltaCalculator(type, dt, S, ddom, dfor, v * sqrtT).strikeFromDelta(delta);
+    };
+    const Real kAtm = BlackDeltaCalculator(Option::Call, quoteType, S, ddom, dfor,
+                                           md.v_atm->value() * sqrtT)
+                          .atmStrike(DeltaVolQuote::AtmDeltaNeutral);
+    const Real kCall = strike(Option::Call, quoteType, 0.25, md.v_25c);
+    const Real kPut = strike(Option::Put, quoteType, -0.25, md.v_25p);
+
+    // the smile passes through each quote at the strike of the quote's own convention...
+    BOOST_CHECK_SMALL(ss.volByStrike(kAtm) - md.v_atm->value(), 1.0e-8);
+    BOOST_CHECK_SMALL(ss.volByStrike(kCall) - md.v_25c, 1.0e-8);
+    BOOST_CHECK_SMALL(ss.volByStrike(kPut) - md.v_25p, 1.0e-8);
+    // ...which is not the strike the section's convention would give
+    BOOST_CHECK(std::fabs(strike(Option::Call, md.deltaType, 0.25, md.v_25c) - kCall) > 1.0e-3);
 }
 
 BOOST_AUTO_TEST_CASE(testCalibrationDoesNotDependOnHistory) {

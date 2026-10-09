@@ -29,14 +29,14 @@ namespace QuantLib {
 
     std::optional<std::pair<Rate, Volatility>>
     FxDeltaVolTarget::point(const FxSmileSection& section) const {
-        // the quote's own vol fixes its strike
+        // the quote's own vol and conventions fix its strike
         const DeltaVolQuote& q = **quote_;
         const Volatility vol = q.value();
         const Real w = vol * std::sqrt(section.exerciseTime());
         BlackDeltaCalculator calc(q.atmType() == DeltaVolQuote::AtmNull && q.delta() < 0 ?
                                       Option::Put :
                                       Option::Call,
-                                  section.deltaType(), section.spot()->value(),
+                                  q.deltaType(), section.spot()->value(),
                                   section.domesticDiscountFactor(),
                                   section.foreignDiscountFactor(), w);
         const Rate strike = q.atmType() == DeltaVolQuote::AtmNull ?
@@ -94,10 +94,21 @@ namespace QuantLib {
                                FlyType flyType)
     : atm_(std::move(atm)), riskReversals_(std::move(riskReversals)),
       butterflies_(std::move(butterflies)), deltas_(std::move(deltas)), flyType_(flyType) {
+        QL_REQUIRE(!atm_.empty(), "no ATM quote given");
         QL_REQUIRE(riskReversals_.size() == deltas_.size(),
                    "risk reversal quotes must be the same size as deltas");
         QL_REQUIRE(butterflies_.size() == deltas_.size(),
                    "butterfly quotes must be the same size as deltas");
+        for (Size i = 0; i < deltas_.size(); ++i) {
+            QL_REQUIRE(deltas_[i] > 0.0 && deltas_[i] < 0.5,
+                       "deltas must be in (0, 0.5): " << deltas_[i]);
+            for (Size j = 0; j < i; ++j)
+                QL_REQUIRE(deltas_[i] != deltas_[j], "duplicate delta: " << deltas_[i]);
+            QL_REQUIRE(!riskReversals_[i].empty(),
+                       "no risk reversal quote given for delta " << deltas_[i]);
+            QL_REQUIRE(!butterflies_[i].empty(),
+                       "no butterfly quote given for delta " << deltas_[i]);
+        }
         registerWith(atm_);
         for (const auto& rr : riskReversals_)
             registerWith(rr);
@@ -116,7 +127,7 @@ namespace QuantLib {
             ext::make_shared<DeltaVolQuote>(atm_, deltaType, tau, section.atmType()))));
 
         for (Size i = 0; i < deltas_.size(); ++i) {
-            const Real d = std::fabs(deltas_[i]);
+            const Real d = deltas_[i];
             const Real rr = riskReversals_[i]->value();
             const Real bf = butterflies_[i]->value();
 
@@ -142,13 +153,16 @@ namespace QuantLib {
 
     FxDeltaVolQuotes::FxDeltaVolQuotes(std::vector<Handle<DeltaVolQuote>> quotes)
     : quotes_(std::move(quotes)) {
-        for (const auto& q : quotes_)
+        QL_REQUIRE(!quotes_.empty(), "no delta-vol quotes given");
+        for (const auto& q : quotes_) {
+            QL_REQUIRE(!q.empty(), "empty delta-vol quote handle given");
+            QL_REQUIRE(q->atmType() != DeltaVolQuote::AtmNull || q->delta() != 0.0,
+                       "delta-vol quote needs a non-zero delta or an ATM convention");
             registerWith(q);
+        }
     }
 
     Volatility FxDeltaVolQuotes::referenceVol() const {
-        if (quotes_.empty())
-            return 0.1;
         Real sumVol = 0.0;
         for (const auto& q : quotes_)
             sumVol += q->value();
