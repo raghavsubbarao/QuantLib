@@ -29,6 +29,8 @@
 #include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
 #include <ql/experimental/fxslv/fxcostsmilesection.hpp>
+#include <ql/pricingengines/blackcalculator.hpp>
+#include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <ql/quotes/deltavolquote.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
@@ -714,6 +716,52 @@ BOOST_AUTO_TEST_CASE(testSmileQuotesMustFitDuringCalibration) {
     const Real K = 1.05 * ss.forward(), v = ss.volByStrike(K);
     BOOST_CHECK_THROW(later->fitAgain(), Error);   // outside calibration: rejected...
     BOOST_CHECK_EQUAL(ss.volByStrike(K), v);       // ...and the smile is untouched
+}
+
+BOOST_AUTO_TEST_CASE(testMarketStrangleCalibration) {
+    BOOST_TEST_MESSAGE("Testing FX smile calibration to broker (market) strangles...");
+
+    MarketData md;
+    const DeltaVolQuote::DeltaType dt = DeltaVolQuote::Spot;
+    const DeltaVolQuote::AtmType at = DeltaVolQuote::AtmDeltaNeutral;
+
+    for (Real flyScale : {1.0, 0.0}) {   // quoted flies, and zero (flat-wing) flies
+        std::vector<Handle<Quote>> bfs = {makeQuoteHandle(flyScale * md.v_25bf->value()),
+                                          makeQuoteHandle(flyScale * md.v_10bf->value())};
+        quadraticSmileSection ss(md.expiryDate, md.spot,
+                                 ext::make_shared<FxRrBfQuotes>(
+                                     md.v_atm, std::vector<Handle<Quote>>{md.v_25rr, md.v_10rr},
+                                     bfs, md.deltas, FxRrBfQuotes::MarketStrangle),
+                                 md.forDiscount, md.domDiscount, dt, at, Actual365Fixed(),
+                                 md.settlement);
+
+        // each market strangle, struck and priced at atm + bf, is repriced by the smile
+        const Time tau = ss.exerciseTime();
+        const Real F = ss.forward();
+        for (Size i = 0; i < md.deltas.size(); ++i) {
+            const Real w = (md.v_atm->value() + bfs[i]->value()) * std::sqrt(tau);
+            BlackDeltaCalculator callCalc(Option::Call, dt, md.spot->value(),
+                                          ss.domesticDiscountFactor(),
+                                          ss.foreignDiscountFactor(), w);
+            BlackDeltaCalculator putCalc(Option::Put, dt, md.spot->value(),
+                                         ss.domesticDiscountFactor(),
+                                         ss.foreignDiscountFactor(), w);
+            const Real Kc = callCalc.strikeFromDelta(md.deltas[i]);
+            const Real Kp = putCalc.strikeFromDelta(-md.deltas[i]);
+            const BlackCalculator mc(Option::Call, Kc, F, w), mp(Option::Put, Kp, F, w);
+            const Real market = mc.value() + mp.value();
+            const Real smile =
+                BlackCalculator(Option::Call, Kc, F, ss.volByStrike(Kc) * std::sqrt(tau)).value() +
+                BlackCalculator(Option::Put, Kp, F, ss.volByStrike(Kp) * std::sqrt(tau)).value();
+            const Real volError = (smile - market) / (mc.vega(tau) + mp.vega(tau));
+            if (std::fabs(volError) > 1.0e-9)
+                BOOST_ERROR("fly scale " << flyScale << ", delta " << md.deltas[i]
+                            << ": strangle not repriced, vol-equivalent error " << volError);
+        }
+
+        // the ATM convention holds on this path too
+        BOOST_CHECK_SMALL(ss.atm()->value() - ss.volByStrike(ss.atmLevel()), 1.0e-12);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

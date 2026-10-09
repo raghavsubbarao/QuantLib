@@ -31,11 +31,14 @@ namespace QuantLib {
 
     namespace {
 
-        //! Broker-fly residual for one delta level.
-        /*! Prices the market strangle (both legs struck at the broker
-            vol \f$ \sigma_{ATM} + BF \f$) once, then for each candidate
-            smile compares it with the strangle priced on the smile and
-            converts the difference back to a broker-fly vol.
+        //! Broker-strangle residual for one delta level, in price.
+        /*! The market strangle has both legs struck, and priced, at the
+            broker vol \f$ \sigma_{ATM} + BF \f$; it is priced once.  The
+            residual is the premium of the same strangle priced on the
+            section's current smile minus the market premium, divided by
+            the market strangle's vega so that it reads as a vol and a
+            tolerance means the same at any expiry.  Dividing by a constant
+            does not move the root.
         */
         class StrangleHelper {
           public:
@@ -43,10 +46,9 @@ namespace QuantLib {
                            Volatility marketAtm,
                            Real brokerFly,
                            Real delta)
-            : section_(section), marketAtm_(marketAtm), brokerFly_(brokerFly) {
-                const Real strdVol = marketAtm_ + brokerFly_;
-                const Real htau = std::sqrt(section_.exerciseTime());
-                const Real w = strdVol * htau;
+            : section_(section) {
+                const Time tau = section_.exerciseTime();
+                const Real w = (marketAtm + brokerFly) * std::sqrt(tau);
 
                 const Real spot = section_.spot()->value();
                 const Real ddom = section_.domesticDiscountFactor();
@@ -59,45 +61,30 @@ namespace QuantLib {
                 putStrike_ = BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, w)
                                  .strikeFromDelta(-delta);
 
-                marketStranglePrice_ = BlackCalculator(Option::Call, callStrike_, fwd, w).value() +
-                                       BlackCalculator(Option::Put, putStrike_, fwd, w).value();
+                const BlackCalculator call(Option::Call, callStrike_, fwd, w);
+                const BlackCalculator put(Option::Put, putStrike_, fwd, w);
+                marketPrice_ = call.value() + put.value();
+                marketVega_ = call.vega(tau) + put.vega(tau);
+                QL_REQUIRE(marketVega_ > 0.0,
+                           "market strangle has no vega for delta " << delta);
             }
 
-            //! Broker fly implied by the section's current smile.
-            Real impliedQuote() const {
+            //! Smile strangle premium minus market premium, over the market vega.
+            Real residual() const {
                 const Real htau = std::sqrt(section_.exerciseTime());
                 const Real fwd = section_.forward();
-
-                // price the strangle on the calibrated smile
                 const Real vc = section_.volByStrike(callStrike_);
                 const Real vp = section_.volByStrike(putStrike_);
-                const Real smileStranglePrice =
+                const Real smilePrice =
                     BlackCalculator(Option::Call, callStrike_, fwd, vc * htau).value() +
                     BlackCalculator(Option::Put, putStrike_, fwd, vp * htau).value();
-
-                // convert back to a broker-fly vol: find bf such that the
-                // strangle priced at atm + bf gives the smile price
-                auto priceError = [&](Real bf) {
-                    const Real w = (marketAtm_ + bf) * htau;
-                    return BlackCalculator(Option::Call, callStrike_, fwd, w).value() +
-                           BlackCalculator(Option::Put, putStrike_, fwd, w).value() -
-                           smileStranglePrice;
-                };
-
-                Brent solver;
-                solver.setMaxEvaluations(1000);
-                const Real guess = brokerFly_;
-                return solver.solve(priceError, 1.0e-12, guess, guess * 0.5, guess * 2.0);
+                return (smilePrice - marketPrice_) / marketVega_;
             }
-
-            //! Residual: market broker fly minus implied broker fly.
-            Real flyError() const { return brokerFly_ - impliedQuote(); }
 
           private:
             const FxSmileSection& section_;
-            Volatility marketAtm_;
-            Real brokerFly_;
-            Real callStrike_, putStrike_, marketStranglePrice_;
+            Real callStrike_, putStrike_;
+            Real marketPrice_, marketVega_;
         };
 
     }
@@ -165,7 +152,7 @@ namespace QuantLib {
     }
 
     void FxRrBfQuotes::calibrateToMarketStrangles(const FxSmileSection& section) const {
-        // one broker-fly residual per delta level, priced at the market ATM
+        // one premium residual per delta level, priced at the market ATM
         std::vector<StrangleHelper> helpers;
         helpers.reserve(deltas_.size());
         for (Size i = 0; i < deltas_.size(); ++i)
@@ -177,38 +164,44 @@ namespace QuantLib {
         for (Size i = 0; i < deltas_.size(); ++i)
             smileStrangles[i] = butterflies_[i]->value();
 
-        // Solve for each smile strangle in turn.  With one delta this
-        // converges in a single pass; with two or more, iterate until all
-        // strangle errors are within tolerance.
-        const Size maxOuterIter = 20;
-        const Real tol = 1.0e-10;
+        // Solve for each smile strangle in turn, the others fixed, and
+        // sweep until all strangles reprice.  With one delta a single
+        // sweep suffices.  The residuals are measured after each sweep on
+        // the smile fitted to the swept strangles, which is also the fit
+        // the section keeps.
+        const Size maxSweeps = 20;
+        const Real tolerance = 1.0e-10; // vol-equivalent premium error
+        const Real accuracy = 1.0e-12;
+        const Real step = 1.0e-3;       // initial bracket step, in vol
 
-        for (Size iter = 0; iter < maxOuterIter; ++iter) {
-            Real maxErr = 0.0;
-
+        Real maxError = QL_MAX_REAL;
+        for (Size sweep = 0; sweep < maxSweeps && maxError >= tolerance; ++sweep) {
             for (Size i = 0; i < deltas_.size(); ++i) {
-                // find smileStrangles[i] such that the smile 
-                // reproduces the market strangle price
                 auto error = [&](Real ss) -> Real {
                     smileStrangles[i] = ss;
                     fit(section, deltaVolQuotes(section, smileStrangles));
-                    return helpers[i].flyError();
+                    return helpers[i].residual();
                 };
-
+                // No sign is assumed, so zero and negative strangles work;
+                // the search only keeps both wing vols positive and the
+                // strangle below the ATM vol (wings at twice the ATM).
+                const Volatility atm = atm_->value();
                 Brent solver;
                 solver.setMaxEvaluations(1000);
-                const Real guess = smileStrangles[i];
-                smileStrangles[i] = solver.solve(error, 1.0e-12, guess, guess * 0.1, guess * 5.0);
-
-                maxErr = std::max(maxErr, std::fabs(helpers[i].flyError()));
+                solver.setLowerBound(std::fabs(riskReversals_[i]->value()) / 2.0 - atm + accuracy);
+                solver.setUpperBound(atm);
+                smileStrangles[i] = solver.solve(error, accuracy, smileStrangles[i], step);
             }
 
-            if (maxErr < tol)
-                break;
+            fit(section, deltaVolQuotes(section, smileStrangles));
+            maxError = 0.0;
+            for (const auto& h : helpers)
+                maxError = std::max(maxError, std::fabs(h.residual()));
         }
 
-        // final fit with the converged smile strangles
-        fit(section, deltaVolQuotes(section, smileStrangles));
+        QL_ENSURE(maxError < tolerance,
+                  "broker strangles not repriced after " << maxSweeps
+                      << " sweeps: largest vol-equivalent premium error " << maxError);
     }
 
 
