@@ -1,23 +1,41 @@
+/* -*- mode: c++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+
+/*
+ Copyright (C) 2026 Raghav Subbarao
+
+ This file is part of QuantLib, a free-software/open-source library
+ for financial quantitative analysts and developers - http://quantlib.org/
+
+ QuantLib is free software: you can redistribute it and/or modify it
+ under the terms of the QuantLib license.  You should have received a
+ copy of the license along with this program; if not, please email
+ <quantlib-dev@lists.sf.net>. The license is also available online at
+ <https://www.quantlib.org/license.shtml>.
+
+ This program is distributed in the hope that it will be useful, but WITHOUT
+ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ FOR A PARTICULAR PURPOSE.  See the license for more details.
+*/
+
+/*! \file fxsmilesection.hpp
+    \brief Base class for FX smile sections calibrated to market quotes
+*/
+
 #ifndef quantlib_fx_smile_section_hpp
 #define quantlib_fx_smile_section_hpp
 
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxsmilequotes.hpp>
-#include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <ql/quotes/deltavolquote.hpp>
 #include <ql/patterns/lazyobject.hpp>
-#include <ql/pricingengines/blackcalculator.hpp>
 #include <ql/quote.hpp>
-#include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yieldtermstructure.hpp>
 #include <ql/termstructures/volatility/smilesection.hpp>
 #include <ql/option.hpp>
 #include <ql/math/array.hpp>
-#include <ql/math/solvers1d/brent.hpp>
 #include <ql/shared_ptr.hpp>
 #include <ql/utilities/null.hpp>
 #include <optional>
-
 
 namespace QuantLib {
 
@@ -90,38 +108,38 @@ namespace QuantLib {
 
         //! \name SmileSection interface
         //@{
-        virtual Real minStrike() const { calculate(); return minStrike_; };
-        virtual Real maxStrike() const { calculate(); return maxStrike_; };
-        virtual Real atmLevel() const { calculate(); return atmStrike_; };
+        Real minStrike() const override { calculate(); return minStrike_; }
+        Real maxStrike() const override { calculate(); return maxStrike_; }
+        Real atmLevel() const override { calculate(); return atmStrike_; }
         //@}
 
         // Conventions
-        DeltaVolQuote::DeltaType deltaType() const { return deltaType_; };
-        DeltaVolQuote::AtmType atmType() const { return atmType_; };
+        DeltaVolQuote::DeltaType deltaType() const { return deltaType_; }
+        DeltaVolQuote::AtmType atmType() const { return atmType_; }
         bool premiumAdjust() const {
             return (deltaType_ == DeltaVolQuote::PaSpot || deltaType_ == DeltaVolQuote::PaFwd);
-        };
+        }
 
         // Introspection
-        Handle<Quote> spot() const { return spot_; };
+        Handle<Quote> spot() const { return spot_; }
         //! ATM vol of the calibrated smile, under the section's ATM convention.
         /*! A value, not a quote: it changes whenever the section
             recalibrates, so observe the section to be notified.
         */
         Volatility atmVol() const { calculate(); return atmVol_; }
-        Real forward() const {calculate(); return fwd_; };
-        Handle<YieldTermStructure> foreignDiscount() const { return foreignDiscount_; };
-        Handle<YieldTermStructure> domesticDiscount() const { return domesticDiscount_; };
+        Real forward() const { calculate(); return fwd_; }
+        Handle<YieldTermStructure> foreignDiscount() const { return foreignDiscount_; }
+        Handle<YieldTermStructure> domesticDiscount() const { return domesticDiscount_; }
 
         //! Settlement convention; empty for sections built in time mode.
         const std::optional<FxSettlementConvention>& settleConvention() const { return settleConvention_; }
 
         Date spotDate() const;      //!< Spot date of the reference date (date mode only).
         Date deliveryDate() const;  //!< Delivery date of the expiry (date mode only).
-        
+
         //! Domestic discount factor from spot to delivery (time mode: to expiry time).
         DiscountFactor domesticDiscountFactor() const { calculate(); return ddom_; }
-        
+
         //! Foreign discount factor from spot to delivery (time mode: to expiry time).
         DiscountFactor foreignDiscountFactor() const { calculate(); return dfor_; }
 
@@ -178,7 +196,7 @@ namespace QuantLib {
         //! Fits the smile to the given targets; only valid while the quotes calibrate the section.
         void fitToTargets(FxSmileTargets targets) const;
         mutable bool calibrating_ = false;  // the quotes are calibrating this section
-        mutable bool fitted_ = false;       // fitToTargets() ran during the current calibration
+        mutable bool fitRequested_ = false; // the quotes called fitToTargets() during this calibration
         virtual void adjustStrikes() const;
 
         //! Fits the smile to targets_.
@@ -187,8 +205,8 @@ namespace QuantLib {
             closed-form fit can override it.
         */
         virtual void calibrate() const;
-        
-        virtual Volatility volatilityImpl(Rate strike) const { return volByStrike(strike); };
+
+        Volatility volatilityImpl(Rate strike) const override { return volByStrike(strike); }
 
         DeltaVolQuote::DeltaType deltaType_;
         DeltaVolQuote::AtmType atmType_;

@@ -1,3 +1,23 @@
+/* -*- mode: c++; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+
+/*
+ Copyright (C) 2026 Raghav Subbarao
+
+ This file is part of QuantLib, a free-software/open-source library
+ for financial quantitative analysts and developers - http://quantlib.org/
+
+ QuantLib is free software: you can redistribute it and/or modify it
+ under the terms of the QuantLib license.  You should have received a
+ copy of the license along with this program; if not, please email
+ <quantlib-dev@lists.sf.net>. The license is also available online at
+ <https://www.quantlib.org/license.shtml>.
+
+ This program is distributed in the hope that it will be useful, but WITHOUT
+ ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ FOR A PARTICULAR PURPOSE.  See the license for more details.
+*/
+
+#include <ql/experimental/fxslv/fxsmilesection.hpp>
 #include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/math/optimization/constraint.hpp>
 #include <ql/math/optimization/costfunction.hpp>
@@ -5,7 +25,8 @@
 #include <ql/math/optimization/levenbergmarquardt.hpp>
 #include <ql/math/optimization/problem.hpp>
 #include <ql/math/solvers1d/brent.hpp>
-#include <ql/experimental/fxslv/fxsmilesection.hpp>
+#include <ql/pricingengines/blackcalculator.hpp>
+#include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <cmath>
 #include <string>
 #include <utility>
@@ -147,7 +168,7 @@ namespace QuantLib {
         // The quotes drive the fit; check they actually fitted the section,
         // otherwise it would silently keep a previous calibration.
         calibrating_ = true;
-        fitted_ = false;
+        fitRequested_ = false;
         try {
             smileQuotes_->calibrate(*this);
         } catch (...) {
@@ -155,7 +176,7 @@ namespace QuantLib {
             throw;
         }
         calibrating_ = false;
-        QL_ENSURE(fitted_, "smile quotes did not fit the smile section");
+        QL_ENSURE(fitRequested_, "smile quotes did not fit the smile section");
 
         // the calibrated atm might differ from the quoted one, so take it
         // from the calibrated smile
@@ -167,7 +188,7 @@ namespace QuantLib {
         QL_REQUIRE(!targets.empty(), "no calibration targets");
         targets_ = std::move(targets);
         calibrate();
-        fitted_ = true;
+        fitRequested_ = true;
     }
 
     void FxSmileSection::calibrate() const {

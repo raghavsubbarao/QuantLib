@@ -21,6 +21,7 @@
 #include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/math/matrix.hpp>
 #include <ql/math/matrixutilities/svd.hpp>
+#include <ql/math/solvers1d/brent.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/experimental/fxslv/fxcostsmilesection.hpp>
 

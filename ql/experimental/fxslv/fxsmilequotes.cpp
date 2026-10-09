@@ -19,7 +19,6 @@
 
 #include <ql/experimental/fxslv/fxsmilequotes.hpp>
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
-#include <ql/math/solvers1d/brent.hpp>
 #include <ql/pricingengines/blackcalculator.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <ql/quotes/simplequote.hpp>

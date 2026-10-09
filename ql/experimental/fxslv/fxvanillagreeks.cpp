@@ -25,6 +25,7 @@
 #include <ql/termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp>
 #include <ql/methods/finitedifferences/solvers/fdmbackwardsolver.hpp>
 #include <ql/settings.hpp>
+#include <ql/quotes/simplequote.hpp>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
