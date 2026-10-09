@@ -534,8 +534,8 @@ BOOST_AUTO_TEST_CASE(testDateModeIgnoresCurveReferenceDate) {
     auto fromToday = dateModeSection(md, md.forDiscount, md.domDiscount);
     auto fromSpot = dateModeSection(md, forFromSpot, domFromSpot);
     BOOST_CHECK_CLOSE(fromToday->forward(), fromSpot->forward(), 1.0e-12);
-    BOOST_CHECK_CLOSE(fromToday->foreignDiscountFactor(), fromSpot->foreignDiscountFactor(), 1.0e-12);
-    BOOST_CHECK_CLOSE(fromToday->domesticDiscountFactor(), fromSpot->domesticDiscountFactor(), 1.0e-12);
+    BOOST_CHECK_CLOSE(fromToday->forDf(), fromSpot->forDf(), 1.0e-12);
+    BOOST_CHECK_CLOSE(fromToday->domDf(), fromSpot->domDf(), 1.0e-12);
 
     // a curve starting after the spot date cannot give P(spot, delivery)
     Handle<YieldTermStructure> late(
@@ -598,8 +598,8 @@ BOOST_AUTO_TEST_CASE(testTimeModeForwardAndConsistencyChecks) {
     Handle<YieldTermStructure> shifted(
         ext::make_shared<FlatForward>(md.todaysDate + 1, 0.03, Actual365Fixed()));
     BOOST_CHECK_THROW(section(md.forDiscount, shifted, Actual365Fixed())->forward(), Error);
-    // ...and the section's day counter, if given, must be theirs
-    BOOST_CHECK_THROW(section(md.forDiscount, md.domDiscount, Actual360())->forward(), Error);
+    // ...but the section's own day counter plays no part in time mode
+    BOOST_CHECK_NO_THROW(section(md.forDiscount, md.domDiscount, Actual360())->forward());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

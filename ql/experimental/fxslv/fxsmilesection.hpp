@@ -140,7 +140,7 @@ namespace QuantLib {
     template <class SS>
     Real FxStrangleHelper<SS>::impliedQuote() const 
     {
-        QL_REQUIRE(initialized_, "fxStrangleHelper not initialized");
+        QL_REQUIRE(initialized_, "FxStrangleHelper not initialized");
 
         Real htau = std::sqrt(smileSection_->exerciseTime());
         Real fwd = smileSection_->fwd_;
@@ -196,8 +196,9 @@ namespace QuantLib {
         used as vol time and as rate time, i.e.
         \f$ F = S \, P_f(\tau) / P_d(\tau) \f$ on the curves' time
         axis.  For this to be meaningful both curves must share a
-        reference date and a day counter, and the section's day counter,
-        if given, must match theirs; this is checked on calculation.
+        reference date and a day counter; this is checked on
+        calculation.  The section's own day counter is not used in this
+        mode, since no date has to be converted to a time.
 
         Quotes are either an ATM vol with risk reversals and butterflies
         (smile or broker strangles) per delta, or a generic set of
@@ -294,8 +295,8 @@ namespace QuantLib {
         //! Settlement convention; empty for sections built in time mode.
         const std::optional<FxSettlementConvention>& settlement() const { return settleConvention_; }
 
-        Date spotDate() const;  //! Spot date of the reference date (date mode only).
-        Date deliveryDate() const;  //! Delivery date of the expiry (date mode only).
+        Date spotDate() const;      //!< Spot date of the reference date (date mode only).
+        Date deliveryDate() const;  //!< Delivery date of the expiry (date mode only).
         
         //! Domestic discount factor from spot to delivery (time mode: to expiry time).
         DiscountFactor domDf() const { calculate(); return ddom_; }
@@ -374,8 +375,6 @@ namespace QuantLib {
         SmileSection::update();
         LazyObject::update();
     }
-
-    //typedef ext::shared_ptr<FxSmileSection> fxSmileSectionPtr;
 
 }  // namespace QuantLib
 

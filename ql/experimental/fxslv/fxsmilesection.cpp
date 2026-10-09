@@ -172,10 +172,6 @@ namespace QuantLib {
                        "same day counter: foreign "
                            << foreignDiscount_->dayCounter() << ", domestic "
                            << domesticDiscount_->dayCounter());
-            /*QL_REQUIRE(dayCounter().empty() || dayCounter() == foreignDiscount_->dayCounter(),
-                       "time-based FX smile section day counter ("
-                           << dayCounter() << ") differs from the discount curves' ("
-                           << foreignDiscount_->dayCounter() << ")");*/
             dfor_ = foreignDiscount_->discount(exerciseTime());
             ddom_ = domesticDiscount_->discount(exerciseTime());
         }
