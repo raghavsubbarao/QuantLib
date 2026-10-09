@@ -144,6 +144,13 @@ namespace QuantLib {
         void calculateForward() const;
         void calculateAtm() const;
         void stripDeltaVolQuotes() const;
+
+        // FxSmileQuotes::fit() is the only caller of fitTo().
+        friend class FxSmileQuotes;
+        //! Fits the smile to the given quotes; only valid while the quotes calibrate the section.
+        void fitTo(std::vector<Handle<DeltaVolQuote>> quotes) const;
+        mutable bool calibrating_ = false;  // the quotes are calibrating this section
+        mutable bool fitted_ = false;       // fitTo() ran during the current calibration
         virtual void adjustStrikes() const;
         virtual void calibrate() const = 0;
         

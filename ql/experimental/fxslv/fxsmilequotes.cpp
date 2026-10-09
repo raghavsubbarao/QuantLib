@@ -103,6 +103,12 @@ namespace QuantLib {
     }
 
 
+    void FxSmileQuotes::fit(const FxSmileSection& section,
+                            std::vector<Handle<DeltaVolQuote>> quotes) {
+        section.fitTo(std::move(quotes));
+    }
+
+
     FxRrBfQuotes::FxRrBfQuotes(Handle<Quote> atm,
                                std::vector<Handle<Quote>> riskReversals,
                                std::vector<Handle<Quote>> butterflies,
@@ -145,9 +151,9 @@ namespace QuantLib {
         return quotes;
     }
 
-    void FxRrBfQuotes::calibrate(const FxSmileSection& section, const Fitter& fit) const {
+    void FxRrBfQuotes::calibrate(const FxSmileSection& section) const {
         if (flyType_ == MarketStrangle) {
-            calibrateToMarketStrangles(section, fit);
+            calibrateToMarketStrangles(section);
             return;
         }
 
@@ -155,11 +161,10 @@ namespace QuantLib {
         std::vector<Real> smileStrangles(deltas_.size());
         for (Size i = 0; i < deltas_.size(); ++i)
             smileStrangles[i] = butterflies_[i]->value();
-        fit(deltaVolQuotes(section, smileStrangles));
+        fit(section, deltaVolQuotes(section, smileStrangles));
     }
 
-    void FxRrBfQuotes::calibrateToMarketStrangles(const FxSmileSection& section,
-                                                  const Fitter& fit) const {
+    void FxRrBfQuotes::calibrateToMarketStrangles(const FxSmileSection& section) const {
         // one broker-fly residual per delta level, priced at the market ATM
         std::vector<StrangleHelper> helpers;
         helpers.reserve(deltas_.size());
@@ -186,7 +191,7 @@ namespace QuantLib {
                 // reproduces the market strangle price
                 auto error = [&](Real ss) -> Real {
                     smileStrangles[i] = ss;
-                    fit(deltaVolQuotes(section, smileStrangles));
+                    fit(section, deltaVolQuotes(section, smileStrangles));
                     return helpers[i].flyError();
                 };
 
@@ -203,7 +208,7 @@ namespace QuantLib {
         }
 
         // final fit with the converged smile strangles
-        fit(deltaVolQuotes(section, smileStrangles));
+        fit(section, deltaVolQuotes(section, smileStrangles));
     }
 
 
@@ -222,8 +227,8 @@ namespace QuantLib {
         return sumVol / static_cast<Real>(quotes_.size());
     }
 
-    void FxDeltaVolQuotes::calibrate(const FxSmileSection&, const Fitter& fit) const {
-        fit(quotes_);
+    void FxDeltaVolQuotes::calibrate(const FxSmileSection& section) const {
+        fit(section, quotes_);
     }
 
 }

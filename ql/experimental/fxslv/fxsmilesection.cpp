@@ -134,14 +134,29 @@ namespace QuantLib {
         // initialParams().
         atm_ = makeQuoteHandle(smileQuotes_->referenceVol());
 
-        smileQuotes_->calibrate(*this, [this](std::vector<Handle<DeltaVolQuote>> quotes) {
-            quotes_ = std::move(quotes);
-            calibrate();
-        });
+        // The quotes drive the fit; check they actually fitted the section,
+        // otherwise it would silently keep a previous calibration.
+        calibrating_ = true;
+        fitted_ = false;
+        try {
+            smileQuotes_->calibrate(*this);
+        } catch (...) {
+            calibrating_ = false;
+            throw;
+        }
+        calibrating_ = false;
+        QL_ENSURE(fitted_, "smile quotes did not fit the smile section");
 
         // the calibrated atm might differ from the quoted one, so take it
         // from the calibrated smile
         calculateAtm();
+    }
+
+    void FxSmileSection::fitTo(std::vector<Handle<DeltaVolQuote>> quotes) const {
+        QL_REQUIRE(calibrating_, "smile section can only be fitted while its quotes calibrate it");
+        quotes_ = std::move(quotes);
+        calibrate();
+        fitted_ = true;
     }
 
     void FxSmileSection::adjustStrikes() const {

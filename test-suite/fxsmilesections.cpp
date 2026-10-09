@@ -666,6 +666,56 @@ BOOST_AUTO_TEST_CASE(testCalibrationDoesNotDependOnHistory) {
     }
 }
 
+namespace {
+
+    // Quote objects that break the calibration contract.
+    class QuotesThatNeverFit : public FxSmileQuotes {
+      public:
+        Volatility referenceVol() const override { return 0.1; }
+      private:
+        void calibrate(const FxSmileSection&) const override {}
+    };
+
+    class QuotesThatFitLater : public FxSmileQuotes {
+      public:
+        explicit QuotesThatFitLater(std::vector<Handle<DeltaVolQuote>> quotes)
+        : quotes_(std::move(quotes)) {}
+        Volatility referenceVol() const override { return 0.1; }
+        void fitAgain() const { fit(*section_, quotes_); }
+      private:
+        void calibrate(const FxSmileSection& section) const override {
+            section_ = &section;
+            fit(section, quotes_);
+        }
+        std::vector<Handle<DeltaVolQuote>> quotes_;
+        mutable const FxSmileSection* section_ = nullptr;
+    };
+
+}
+
+BOOST_AUTO_TEST_CASE(testSmileQuotesMustFitDuringCalibration) {
+    BOOST_TEST_MESSAGE("Testing that FX smile quotes can only fit a section while calibrating it...");
+
+    MarketData md;
+
+    quadraticSmileSection unfitted(md.expiryDate, md.spot,
+                                   ext::make_shared<QuotesThatNeverFit>(), md.forDiscount,
+                                   md.domDiscount, md.deltaType, md.atmType, Actual365Fixed(),
+                                   md.settlement);
+    BOOST_CHECK_THROW(unfitted.volByStrike(md.spot->value()), Error);
+
+    std::vector<Handle<DeltaVolQuote>> q = {
+        Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(md.v_atm, md.deltaType, 1.0, md.atmType)),
+        Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(0.25, makeQuoteHandle(md.v_25c), 1.0, md.deltaType)),
+        Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(-0.25, makeQuoteHandle(md.v_25p), 1.0, md.deltaType))};
+    auto later = ext::make_shared<QuotesThatFitLater>(q);
+    quadraticSmileSection ss(md.expiryDate, md.spot, later, md.forDiscount, md.domDiscount,
+                             md.deltaType, md.atmType, Actual365Fixed(), md.settlement);
+    const Real K = 1.05 * ss.forward(), v = ss.volByStrike(K);
+    BOOST_CHECK_THROW(later->fitAgain(), Error);   // outside calibration: rejected...
+    BOOST_CHECK_EQUAL(ss.volByStrike(K), v);       // ...and the smile is untouched
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -28,7 +28,6 @@
 #include <ql/patterns/observable.hpp>
 #include <ql/quote.hpp>
 #include <ql/quotes/deltavolquote.hpp>
-#include <functional>
 #include <vector>
 
 namespace QuantLib {
@@ -48,9 +47,6 @@ namespace QuantLib {
     */
     class FxSmileQuotes : public Observer, public Observable {
       public:
-        //! Fits the section's smile to the given delta-vol quotes.
-        typedef std::function<void(std::vector<Handle<DeltaVolQuote>>)> Fitter;
-
         ~FxSmileQuotes() override = default;
 
         //! \name Observer interface
@@ -64,13 +60,24 @@ namespace QuantLib {
         */
         virtual Volatility referenceVol() const = 0;
 
-        //! Calibrates the section to the quotes.
-        /*! Calls \c fit one or more times; on return the section's
-            smile must be fitted to the final set of delta-vol quotes.
-            The section's forward, discount factors and conventions are
-            available while this runs.
+      protected:
+        //! Fits the section's smile to the given delta-vol quotes.
+        /*! For use inside calibrate() only; the section rejects fits
+            requested at any other time.
         */
-        virtual void calibrate(const FxSmileSection& section, const Fitter& fit) const = 0;
+        static void fit(const FxSmileSection& section, std::vector<Handle<DeltaVolQuote>> quotes);
+
+      private:
+        // Only the section can start its own calibration.
+        friend class FxSmileSection;
+
+        //! Calibrates the section to the quotes.
+        /*! Calls fit() one or more times; on return the section's smile
+            must be fitted to the final set of delta-vol quotes, which the
+            section checks.  The section's forward, discount factors and
+            conventions are available while this runs.
+        */
+        virtual void calibrate(const FxSmileSection& section) const = 0;
     };
 
 
@@ -100,7 +107,6 @@ namespace QuantLib {
         //! \name FxSmileQuotes interface
         //@{
         Volatility referenceVol() const override { return atm_->value(); }
-        void calibrate(const FxSmileSection& section, const Fitter& fit) const override;
         //@}
 
         //! \name Inspectors
@@ -113,10 +119,12 @@ namespace QuantLib {
         //@}
 
       private:
+        void calibrate(const FxSmileSection& section) const override;
+
         //! Delta-vol quotes implied by the ATM, the risk reversals and the given smile strangles.
         std::vector<Handle<DeltaVolQuote>> deltaVolQuotes(const FxSmileSection& section, 
                                                           const std::vector<Real>& smileStrangles) const;
-        void calibrateToMarketStrangles(const FxSmileSection& section, const Fitter& fit) const;
+        void calibrateToMarketStrangles(const FxSmileSection& section) const;
 
         Handle<Quote> atm_;
         std::vector<Handle<Quote>> riskReversals_;
@@ -138,12 +146,13 @@ namespace QuantLib {
         //@{
         //! Average of the quoted vols.
         Volatility referenceVol() const override;
-        void calibrate(const FxSmileSection& section, const Fitter& fit) const override;
         //@}
 
         const std::vector<Handle<DeltaVolQuote>>& quotes() const { return quotes_; }
 
       private:
+        void calibrate(const FxSmileSection& section) const override;
+
         std::vector<Handle<DeltaVolQuote>> quotes_;
     };
 
