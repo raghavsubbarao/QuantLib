@@ -29,6 +29,7 @@
 #include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
 #include <ql/experimental/fxslv/fxcostsmilesection.hpp>
+#include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/pricingengines/blackcalculator.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <ql/quotes/deltavolquote.hpp>
@@ -762,6 +763,44 @@ BOOST_AUTO_TEST_CASE(testMarketStrangleCalibration) {
         // the ATM convention holds on this path too
         BOOST_CHECK_SMALL(ss.atm()->value() - ss.volByStrike(ss.atmLevel()), 1.0e-12);
     }
+}
+
+BOOST_AUTO_TEST_CASE(testProbabilitySpaceFunctions) {
+    BOOST_TEST_MESSAGE("Testing FX smile normed call prices and exercise probabilities...");
+
+    MarketData md;
+    const DeltaVolQuote::DeltaType dt = DeltaVolQuote::Spot;
+    const DeltaVolQuote::AtmType at = DeltaVolQuote::AtmDeltaNeutral;
+
+    // flat smile: closed forms are Black's
+    std::vector<Handle<Quote>> zero = {makeQuoteHandle(0.0), makeQuoteHandle(0.0)};
+    quadraticSmileSection flat(md.expiryDate, md.spot,
+                               ext::make_shared<FxRrBfQuotes>(md.v_atm, zero, zero, md.deltas,
+                                                              FxRrBfQuotes::SmileStrangle),
+                               md.forDiscount, md.domDiscount, dt, at, Actual365Fixed(),
+                               md.settlement);
+    const Real w = md.v_atm->value() * std::sqrt(flat.exerciseTime());
+    CumulativeNormalDistribution N;
+    for (Real k = 0.7; k <= 1.4001; k += 0.05) {
+        const Real d2 = (-std::log(k) - 0.5 * w * w) / w;
+        BOOST_CHECK_SMALL(flat.exerciseProbability(k) - N(d2), 1.0e-10);
+        BOOST_CHECK_SMALL(flat.normedCallPrice(k) -
+                              BlackCalculator(Option::Call, k, 1.0, w).value(),
+                          1.0e-12);
+    }
+
+    // a skewed smile: the inverse recovers the moneyness
+    quadraticSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount,
+                             md.domDiscount, dt, at, Actual365Fixed(), md.settlement);
+    for (Real p : {0.02, 0.1, 0.25, 0.5, 0.75, 0.9, 0.98}) {
+        const Real k = ss.moneynessFromProbability(p);
+        BOOST_CHECK_SMALL(ss.exerciseProbability(k) - p, 1.0e-10);
+    }
+
+    BOOST_CHECK_THROW(ss.moneynessFromProbability(0.0), Error);
+    BOOST_CHECK_THROW(ss.moneynessFromProbability(1.0), Error);
+    BOOST_CHECK_THROW(ss.exerciseProbability(0.0), Error);
+    BOOST_CHECK_THROW(ss.normedCallPrice(-1.0), Error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

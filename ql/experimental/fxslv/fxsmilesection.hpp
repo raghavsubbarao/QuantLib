@@ -12,9 +12,9 @@
 #include <ql/termstructures/yieldtermstructure.hpp>
 #include <ql/termstructures/volatility/smilesection.hpp>
 #include <ql/option.hpp>
-#include <ql/math/solvers1d/bisection.hpp>
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/shared_ptr.hpp>
+#include <ql/utilities/null.hpp>
 #include <optional>
 
 
@@ -130,9 +130,25 @@ namespace QuantLib {
         virtual Rate strikeByDelta(Real delta, Option::Type parity) const = 0;
 
         // Interpolation
-        Real normedCallPrice(Rate strike) const;
-        Real normedProbability(Rate strike, Real eps=1.0e-10) const;
-        Rate strikeFromNormProb(Real q) const;
+        //! Derivative of the vol with respect to strike.
+        /*! Central finite differences by default; models with a
+            closed form should override it.
+        */
+        virtual Real volDerivative(Rate strike) const;
+
+        //! \name Interpolation in probability space
+        /*! Functions of the moneyness \f$ k = K/F \f$, used to
+            interpolate smiles across expiries.  The inverse requires a
+            smile without butterfly arbitrage, which it checks.
+        */
+        //@{
+        //! Undiscounted call price in units of the forward, \f$ c(k) = E[(S_T/F - k)^+] \f$.
+        Real normedCallPrice(Real moneyness) const;
+        //! Probability of exercise, \f$ P(S_T > kF) = -c'(k) \f$, computed analytically.
+        Probability exerciseProbability(Real moneyness) const;
+        //! Moneyness at which the exercise probability equals \f$ p \f$.
+        Real moneynessFromProbability(Probability p) const;
+        //@}
 
       private:
         //! \name LazyObject interface
@@ -167,11 +183,11 @@ namespace QuantLib {
         mutable Date spotDate_, deliveryDate_;
 
       protected:
-        mutable Real ddom_;
-        mutable Real dfor_;
-        mutable Real fwd_;
+        mutable Real ddom_ = Null<Real>();
+        mutable Real dfor_ = Null<Real>();
+        mutable Real fwd_ = Null<Real>();
 
-        mutable Real atmStrike_;
+        mutable Real atmStrike_ = Null<Real>();
         mutable Real maxStrike_;
         mutable Real minStrike_;
 

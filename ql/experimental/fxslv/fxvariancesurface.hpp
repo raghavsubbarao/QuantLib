@@ -461,13 +461,12 @@ namespace QuantLib {
         Real spt = this->spot()->value();
 
         auto interpNcp = [t, wInit, wFinal, ssInit, ssFinal, spt, ddom, dfor](Real k2) {
-            Real np = ssFinal.normedProbability(k2); // normed probability
-            Real k1 = ssInit.strikeFromNormProb(np); // strike on first smile with same norm prob
+            Real m2 = k2 / ssFinal.forward();                // long moneyness
+            Real p = ssFinal.exerciseProbability(m2);        // its exercise probability
+            Real m1 = ssInit.moneynessFromProbability(p);   // short moneyness, same probability
 
-            Real ncp1 = ssInit.normedCallPrice(k1);  // ncp at shorter smile
-            Real ncp2 = ssFinal.normedCallPrice(k2); // ncp at longer smile
-            Real m1 = k1 / ssInit.forward();         // short moneyness
-            Real m2 = k2 / ssFinal.forward();        // long moneyness
+            Real ncp1 = ssInit.normedCallPrice(m1);  // ncp at shorter smile
+            Real ncp2 = ssFinal.normedCallPrice(m2); // ncp at longer smile
 
             // interpolated values
             Real fwd = spt * dfor / ddom;

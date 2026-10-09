@@ -1,5 +1,7 @@
+#include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
+#include <cmath>
 #include <string>
 #include <utility>
 
@@ -108,22 +110,26 @@ namespace QuantLib {
     }
 
     void FxSmileSection::calculateAtm() const {
-        calculate(); // should not be necc but force calibration!
-
+        // Called from performCalculations() after the fit.  The ATM strike
+        // is the fixed point K = K_atm(vol(K)); search in log-strike from
+        // the forward, in steps of one ATM standard deviation, widening as
+        // needed, so that far-away strikes where a smile may be undefined
+        // are only visited if the root is really out there.
         const Real spot = spot_->value();
-        const Real fwd = fwd_;
+        const Real stdDev = atm_->value() * std::sqrt(exerciseTime()); // reference vol
 
-        auto atmStrkikeError = [&](Real strike) {
-            Volatility v = volByStrike(strike);
-            Real k_atm = BlackDeltaCalculator(Option::Call, deltaType(), spot, ddom_, dfor_,
-                                              v * sqrt(exerciseTime()))
-                             .atmStrike(atmType());
-            return strike - k_atm;
+        auto atmStrikeError = [&](Real logStrike) {
+            const Real strike = std::exp(logStrike);
+            const Volatility v = volByStrike(strike);
+            const Real kAtm = BlackDeltaCalculator(Option::Call, deltaType(), spot, ddom_, dfor_,
+                                                   v * std::sqrt(exerciseTime()))
+                                  .atmStrike(atmType());
+            return logStrike - std::log(kAtm);
         };
 
         Brent solver;
-        solver.setMaxEvaluations(10000);
-        Rate k = solver.solve([&](Real strike) { return atmStrkikeError(strike); }, 1e-12, fwd, fwd / 10, 10 * fwd);
+        solver.setMaxEvaluations(1000);
+        const Rate k = std::exp(solver.solve(atmStrikeError, 1.0e-12, std::log(fwd_), stdDev));
 
         atm_ = makeQuoteHandle(volByStrike(k));
     }
@@ -198,40 +204,62 @@ namespace QuantLib {
         adjustStrikes();
     }
 
-    Real FxSmileSection::normedCallPrice(Rate strike) const {
-        calculate();
-
-        Real w = volByStrike(strike) * std::sqrt(exerciseTime());
-        BlackCalculator bc = BlackCalculator(Option::Call, strike, fwd_, w);
-        return bc.value() / fwd_;
+    Real FxSmileSection::volDerivative(Rate strike) const {
+        QL_REQUIRE(strike > 0.0, "positive strike required: " << strike);
+        // central difference; vols are far smoother than prices, so a
+        // relative step of 1e-4 balances truncation and rounding errors
+        const Real h = 1.0e-4 * strike;
+        return (volByStrike(strike + h) - volByStrike(strike - h)) / (2.0 * h);
     }
 
-    Real FxSmileSection::normedProbability(Rate strike, Real eps) const {
-        QL_REQUIRE((eps > 0) && (eps < 1.), "eps should be between 0 and 1");
-
+    Real FxSmileSection::normedCallPrice(Real moneyness) const {
+        QL_REQUIRE(moneyness > 0.0, "positive moneyness required: " << moneyness);
         calculate();
-        
-        Real ncp_dn = normedCallPrice(strike - fwd_ * eps);
-        Real ncp_up = normedCallPrice(strike + fwd_ * eps);
-        return (ncp_dn - ncp_up) / (2. * eps);
+
+        const Rate strike = moneyness * fwd_;
+        const Real w = volByStrike(strike) * std::sqrt(exerciseTime());
+        return BlackCalculator(Option::Call, strike, fwd_, w).value() / fwd_;
     }
 
-    Rate FxSmileSection::strikeFromNormProb(Real q) const {
-        QL_REQUIRE((q > 0.) && (q < 1.), "q should be between 0 and 1.");
-
+    Probability FxSmileSection::exerciseProbability(Real moneyness) const {
+        QL_REQUIRE(moneyness > 0.0, "positive moneyness required: " << moneyness);
         calculate();
 
-        auto normProbError = [&](Rate strike) { 
-            return 100 * (normedProbability(strike) - q);
-        };
+        // P(S_T > K) = -dC/dK for the undiscounted call C(K) = Black(F, K, vol(K)):
+        //            = N(d2) - F n(d1) sqrt(T) vol'(K)
+        const Rate strike = moneyness * fwd_;
+        const Time tau = exerciseTime();
+        const Real w = volByStrike(strike) * std::sqrt(tau);
+        QL_REQUIRE(w > 0.0, "positive standard deviation required at strike " << strike);
+        const Real d1 = (std::log(fwd_ / strike) + 0.5 * w * w) / w;
+        const Real d2 = d1 - w;
 
-        Bisection solver;
-        solver.setMaxEvaluations(10000);
-        /*Real cd = normedProbability(fwd_ / 10);
-        Real c0 = normedProbability(fwd_);
-        Real cu = normedProbability(fwd_ * 10);*/
-        return solver.solve([&](Rate strike) { return normProbError(strike); }, 
-                                1e-12, fwd_, fwd_ / 10., fwd_ * 10.);
+        CumulativeNormalDistribution N;
+        NormalDistribution n;
+        return N(d2) - fwd_ * n(d1) * std::sqrt(tau) * volDerivative(strike);
+    }
+
+    Real FxSmileSection::moneynessFromProbability(Probability p) const {
+        QL_REQUIRE(p > 0.0 && p < 1.0, "probability must be in (0, 1): " << p);
+        calculate();
+
+        // Solve in log-moneyness, starting from the flat-smile answer
+        // N(d2) = p at the reference vol and widening the bracket as needed.
+        const Real stdDev = atm_->value() * std::sqrt(exerciseTime());
+        const Real guess = -stdDev * InverseCumulativeNormal()(p) - 0.5 * stdDev * stdDev;
+        auto error = [&](Real x) { return exerciseProbability(std::exp(x)) - p; };
+
+        Brent solver;
+        solver.setMaxEvaluations(1000);
+        const Real k = std::exp(solver.solve(error, 1.0e-12, guess, stdDev));
+
+        // The inverse is only unique where the density is non-negative,
+        // i.e. the exercise probability decreases with moneyness.
+        const Real h = 1.0e-4 * k;
+        QL_ENSURE(exerciseProbability(k + h) <= exerciseProbability(k - h) + 1.0e-12,
+                  "negative density at moneyness " << k
+                      << ": the smile has butterfly arbitrage there");
+        return k;
     }
 
 }
