@@ -18,7 +18,7 @@
 */
 
 /*! \file fxsmilequotes.hpp
-    \brief Market quotes an FX smile section is calibrated to
+    \brief Market quotes for FX smile section calibration
 */
 
 #ifndef quantlib_fx_smile_quotes_hpp
@@ -35,15 +35,16 @@ namespace QuantLib {
 
     class FxSmileSection;
 
-    //! Market quotes an FX smile section is calibrated to
+    //! Market quotes for FX smile section calibration
     /*! Separates how the market quotes a smile from how a section
-        parameterises it.  A section only knows how to fit its smile to
-        a set of delta-vol quotes; an FxSmileQuotes object turns its
-        market quotes into such sets, possibly iterating, as for broker
-        (market) strangles.
+        parameterises it.  A section only knows how to fit its smile 
+        to a set of delta-vol quotes; an FxSmileQuotes object can store
+        market quotes as RRs/BFs or a set of DeltaVolQuotes. 
+        Market conventions on Broker and Market strangles are also 
+        handled here providing a uniform interface to FxSmileSection.
 
-        Instances observe their quotes and forward notifications, so a
-        section only needs to register with this object.
+        Instances observe their quotes and forward notifications, so the
+        smile section only needs to register with this object.
     */
     class FxSmileQuotes : public Observer, public Observable {
       public:
@@ -57,10 +58,9 @@ namespace QuantLib {
         void update() override { notifyObservers(); }
         //@}
 
-        //! Vol used to seed the calibration.
-        /*! It depends on the quotes only, never on a previous
-            calibration, so that the same quotes always give the same
-            smile.
+        //! Atm vol used to seed the calibration.
+        /*! It depends only on the quotes, never on a previous calibration, 
+            so that the same quotes always give the same smile.
         */
         virtual Volatility referenceVol() const = 0;
 
@@ -74,14 +74,15 @@ namespace QuantLib {
     };
 
 
-    //! ATM vol with a risk reversal and a butterfly per delta
-    /*! For each delta \f$ \Delta \f$ the risk reversal is
-        \f$ RR = \sigma_{call} - \sigma_{put} \f$.  The butterfly is
-        either a smile strangle,
-        \f$ BF = (\sigma_{call} + \sigma_{put})/2 - \sigma_{ATM} \f$,
-        or a broker (market) strangle: the vol \f$ \sigma_{ATM} + BF \f$
-        that prices the \f$ \Delta \f$ strangle, struck at that vol, to
-        the same premium as the smile does.
+    //! Market quote of ATM vol and a risk reversal and butterfly per delta
+    /*! For each delta \f$ \Delta \f$ 
+        the risk reversal is \f$ RR = \sigma_{call} - \sigma_{put} \f$  
+        The butterfly is either a 
+            smile strangle: \f$ BF = (\sigma_{call} + \sigma_{put})/2 - \sigma_{ATM} \f$
+            or broker (market) strangle: 
+                  the vol \f$ \sigma_{ATM} + BF \f$ that prices 
+                  the \f$ \Delta \f$ strangle, struck at that vol, 
+                  to the same premium as the smile does
     */
     class FxRrBfQuotes : public FxSmileQuotes {
       public:
@@ -113,8 +114,8 @@ namespace QuantLib {
 
       private:
         //! Delta-vol quotes implied by the ATM, the risk reversals and the given smile strangles.
-        std::vector<Handle<DeltaVolQuote>>
-        deltaVolQuotes(const FxSmileSection& section, const std::vector<Real>& smileStrangles) const;
+        std::vector<Handle<DeltaVolQuote>> deltaVolQuotes(const FxSmileSection& section, 
+                                                          const std::vector<Real>& smileStrangles) const;
         void calibrateToMarketStrangles(const FxSmileSection& section, const Fitter& fit) const;
 
         Handle<Quote> atm_;

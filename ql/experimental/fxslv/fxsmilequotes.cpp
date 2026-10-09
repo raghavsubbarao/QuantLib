@@ -182,8 +182,8 @@ namespace QuantLib {
             Real maxErr = 0.0;
 
             for (Size i = 0; i < deltas_.size(); ++i) {
-                // find smileStrangles[i] such that the smile reproduces
-                // the market strangle price
+                // find smileStrangles[i] such that the smile 
+                // reproduces the market strangle price
                 auto error = [&](Real ss) -> Real {
                     smileStrangles[i] = ss;
                     fit(deltaVolQuotes(section, smileStrangles));
