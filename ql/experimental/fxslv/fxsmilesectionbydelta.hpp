@@ -20,7 +20,8 @@ namespace QuantLib {
                               DeltaVolQuote::DeltaType deltaType,
                               DeltaVolQuote::AtmType atmType,
                               FxSmileSection::FlyType flyType,
-                              const DayCounter& dayCounter = DayCounter(),
+                              const DayCounter& dayCounter,
+                              const FxSettlementConvention& settlement,
                               const Date& referenceDate = Date());
 
         // ctor from market quotes with expiry time - floats with evaluation date
@@ -46,7 +47,8 @@ namespace QuantLib {
                               DeltaVolQuote::DeltaType deltaType,
                               DeltaVolQuote::AtmType atmType,
                               FlyType flyType,
-                              const DayCounter& dayCounter = DayCounter(),
+                              const DayCounter& dayCounter,
+                              const FxSettlementConvention& settlement,
                               const Date& referenceDate = Date());
 
         // ctor form derived quotes for expiry time - floats with evaluation date
@@ -116,7 +118,8 @@ namespace QuantLib {
                               DeltaVolQuote::DeltaType deltaType,
                               DeltaVolQuote::AtmType atmType,
                               FxSmileSection::FlyType flyType,
-                              const DayCounter& dayCounter = DayCounter(),
+                              const DayCounter& dayCounter,
+                              const FxSettlementConvention& settlement,
                               const Date& referenceDate = Date());
 
         // ctor from market quotes with expiry time - floats with evaluation date
@@ -142,7 +145,8 @@ namespace QuantLib {
                               DeltaVolQuote::DeltaType deltaType,
                               DeltaVolQuote::AtmType atmType,
                               FlyType flyType,
-                              const DayCounter& dayCounter = DayCounter(),
+                              const DayCounter& dayCounter,
+                              const FxSettlementConvention& settlement,
                               const Date& referenceDate = Date());
 
         // ctor from derived quotes for expiry time - floats with evaluation date

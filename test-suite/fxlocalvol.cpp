@@ -24,6 +24,7 @@
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
 
+#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
 #include <ql/termstructures/volatility/equityfx/localvolsurface.hpp>
@@ -149,6 +150,7 @@ namespace {
                 today, spot, pillars, atms, rrs, bfs, deltas,
                 eurTs, usdTs, timeTs,
                 deltaType, atmType, flyType,
+                FxSettlementConvention(WeekendsOnly(), 2),
                 WeekendsOnly(), Following, true);
             surface->enableExtrapolation();
 
@@ -592,6 +594,7 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
         today, spot, pillars, atms, rrs, bfs, deltas,
         eurTs, usdTs, timeTs,
         DeltaVolQuote::Fwd, DeltaVolQuote::AtmFwd, FxSmileSection::SmileStrangle,
+        FxSettlementConvention(calendar, 2),
         calendar, Following, true);
     volSurface->enableExtrapolation();
     Handle<BlackVolTermStructure> volHandle(volSurface);

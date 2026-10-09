@@ -210,11 +210,12 @@ namespace QuantLib {
                                            FxSmileSection::FlyType flyType,
                                            Real alpha,
                                            const DayCounter& dayCounter,
+                                           const FxSettlementConvention& settlement,
                                            const Date& referenceDate,
                                            bool weightedCalibrationFlag)
     : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, referenceDate),
+                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate),
         weightedCalibrationFlag_(weightedCalibrationFlag), alpha_(alpha)
     {
         QL_REQUIRE(alpha >= 0.0 && alpha <= 1.0, "alpha must be in [0,1], got " << alpha);
@@ -254,11 +255,12 @@ namespace QuantLib {
                                            FxSmileSection::FlyType flyType,
                                            Real alpha,
                                            const DayCounter& dayCounter,
+                                           const FxSettlementConvention& settlement,
                                            const Date& referenceDate,
                                            bool weightedCalibrationFlag)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, referenceDate),
+                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate),
         weightedCalibrationFlag_(weightedCalibrationFlag), alpha_(alpha)
     {
         QL_REQUIRE(alpha >= 0.0 && alpha <= 1.0, "alpha must be in [0,1], got " << alpha);
@@ -436,12 +438,13 @@ namespace QuantLib {
                                                                    DeltaVolQuote::AtmType atmType,
                                                                    FxSmileSection::FlyType flyType,
                                                                    const DayCounter& dayCounter,
+                                                                   const FxSettlementConvention& settlement,
                                                                    const Date& referenceDate,
                                                                    bool weightedCalibrationFlag)
     : fxCostSmileSection(exerciseDate, spot, atm, rrs, bfs, deltas,
                          foreignDiscount, domesticDiscount,
                          deltaType, atmType, flyType, 0.0,
-                         dayCounter, referenceDate, weightedCalibrationFlag) {}
+                         dayCounter, settlement, referenceDate, weightedCalibrationFlag) {}
 
     fxCostSmileSectionFlatDynamics::fxCostSmileSectionFlatDynamics(Time exerciseTime,
                                                                    const Handle<Quote>& spot,
@@ -470,12 +473,13 @@ namespace QuantLib {
                                                                    DeltaVolQuote::AtmType atmType,
                                                                    FxSmileSection::FlyType flyType,
                                                                    const DayCounter& dayCounter,
+                                                                   const FxSettlementConvention& settlement,
                                                                    const Date& referenceDate,
                                                                    bool weightedCalibrationFlag)
     : fxCostSmileSection(exerciseDate, spot, quotes,
                          foreignDiscount, domesticDiscount,
                          deltaType, atmType, flyType, 0.0,
-                         dayCounter, referenceDate, weightedCalibrationFlag) {}
+                         dayCounter, settlement, referenceDate, weightedCalibrationFlag) {}
 
     fxCostSmileSectionFlatDynamics::fxCostSmileSectionFlatDynamics(Time exerciseTime,
                                                                    const Handle<Quote>& spot,
@@ -544,12 +548,13 @@ namespace QuantLib {
                                                                        DeltaVolQuote::AtmType atmType,
                                                                        FxSmileSection::FlyType flyType,
                                                                        const DayCounter& dayCounter,
+                                                                       const FxSettlementConvention& settlement,
                                                                        const Date& referenceDate,
                                                                        bool weightedCalibrationFlag)
     : fxCostSmileSection(exerciseDate, spot, atm, rrs, bfs, deltas,
                          foreignDiscount, domesticDiscount,
                          deltaType, atmType, flyType, 1.0,
-                         dayCounter, referenceDate, weightedCalibrationFlag) {}
+                         dayCounter, settlement, referenceDate, weightedCalibrationFlag) {}
 
     fxCostSmileSectionScaledDynamics::fxCostSmileSectionScaledDynamics(Time exerciseTime,
                                                                        const Handle<Quote>& spot,
@@ -578,12 +583,13 @@ namespace QuantLib {
                                                                        DeltaVolQuote::AtmType atmType,
                                                                        FxSmileSection::FlyType flyType,
                                                                        const DayCounter& dayCounter,
+                                                                       const FxSettlementConvention& settlement,
                                                                        const Date& referenceDate,
                                                                        bool weightedCalibrationFlag)
     : fxCostSmileSection(exerciseDate, spot, quotes,
                          foreignDiscount, domesticDiscount,
                          deltaType, atmType, flyType, 1.0,
-                         dayCounter, referenceDate, weightedCalibrationFlag) {}
+                         dayCounter, settlement, referenceDate, weightedCalibrationFlag) {}
 
     fxCostSmileSectionScaledDynamics::fxCostSmileSectionScaledDynamics(Time exerciseTime,
                                                                        const Handle<Quote>& spot,

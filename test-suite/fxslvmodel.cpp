@@ -31,6 +31,7 @@
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
 
+#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
 #include <ql/experimental/fxslv/hestoncalibrator.hpp>
 #include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
@@ -194,6 +195,7 @@ namespace {
                 today, spot, pillars, atms, rrs, bfs, deltas,
                 eurTs, usdTs, timeTs,
                 deltaType, atmType, flyType,
+                FxSettlementConvention(calendar, 2),
                 calendar, Following, true);
             volSurface->enableExtrapolation();
             volSurfaceHandle = Handle<BlackVolTermStructure>(volSurface);

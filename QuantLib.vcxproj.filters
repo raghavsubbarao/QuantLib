@@ -3309,6 +3309,9 @@
     <ClInclude Include="ql\experimental\fxslv\fxcostsmilesection.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>
+    <ClInclude Include="ql\experimental\fxslv\fxsettlementconvention.hpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClInclude>
     <ClInclude Include="ql\experimental\fxslv\fxslvpricingcontext.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>

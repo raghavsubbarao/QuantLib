@@ -48,6 +48,7 @@ namespace QuantLib {
                           DeltaVolQuote::DeltaType deltaType,
                           DeltaVolQuote::AtmType atmType,
                           FxSmileSection::FlyType flyType,
+                          const FxSettlementConvention& settlement,
                           const Calendar& cal = WeekendsOnly(),
                           BusinessDayConvention bdc = Following,
                           bool forceMonotoneVariance = true);
@@ -70,6 +71,7 @@ namespace QuantLib {
 
         // Introspection
         Handle<Quote> spot() const { return spot_; };
+        const FxSettlementConvention& settlement() const { return settlement_; }
         Handle<YieldTermStructure> domesticDiscountCurve() const { return domTs_; };
         Handle<YieldTermStructure> foreignDiscountCurve() const { return forTs_; };
         
@@ -81,6 +83,7 @@ namespace QuantLib {
         Real blackVarianceImpl(Time t, Real strike) const;  // smile variance
 
         const Handle<Quote> spot_;
+        const FxSettlementConvention settlement_;
         const std::vector<Date> pillars_;
         const Handle<YieldTermStructure> forTs_;
         const Handle<YieldTermStructure> domTs_;
@@ -112,10 +115,12 @@ namespace QuantLib {
                                             DeltaVolQuote::DeltaType deltaType,
                                             DeltaVolQuote::AtmType atmType,
                                             FxSmileSection::FlyType flyType,
+                                            const FxSettlementConvention& settlement,
                                             const Calendar& cal,
                                             BusinessDayConvention bdc,
                                             bool forceMonotoneVariance)
     : BlackVarianceTermStructure(referenceDate, cal, bdc, Actual365Fixed()), spot_(spot),
+      settlement_(settlement),
       pillars_(pillars), forTs_(forTs), domTs_(domTs), timeTs_(timeTs), maxDate_(pillars.back()) {
         QL_REQUIRE(pillars.size() == atms.size(), "mismatch between date vector and vol vector");
         QL_REQUIRE(pillars.size() == rrs.size(), "mismatch between date vector and rr vector");
@@ -129,7 +134,7 @@ namespace QuantLib {
             // this will also register the smile section with spot, vol quotes and discount curves
             smileSections_.emplace_back(pillars[j], spot_, atms[j], rrs[j], bfs[j],
                                         deltas, forTs_, domTs_, deltaType, atmType, 
-                                        flyType, Actual365Fixed(), referenceDate);
+                                        flyType, Actual365Fixed(), settlement, referenceDate);
         }
 
         registerWithMarketData();
@@ -281,6 +286,7 @@ namespace QuantLib {
                                DeltaVolQuote::DeltaType deltaType,
                                DeltaVolQuote::AtmType atmType,
                                FxSmileSection::FlyType flyType,
+                               const FxSettlementConvention& settlement,
                                const Calendar& cal = WeekendsOnly(),
                                BusinessDayConvention bdc = Following,
                                bool forceMonotoneVariance = true);
@@ -302,11 +308,12 @@ namespace QuantLib {
                                                       DeltaVolQuote::DeltaType deltaType,
                                                       DeltaVolQuote::AtmType atmType,
                                                       FxSmileSection::FlyType flyType,
+                                                      const FxSettlementConvention& settlement,
                                                       const Calendar& cal,
                                                       BusinessDayConvention bdc,
                                                       bool forceMonotoneVariance)
     : fxVarianceSurface<T>(referenceDate, spot, pillars, atms, rrs, bfs, deltas, forTs, domTs,
-                           timeTs, deltaType, atmType, flyType, cal, bdc, forceMonotoneVariance) {}
+                           timeTs, deltaType, atmType, flyType, settlement, cal, bdc, forceMonotoneVariance) {}
 
 
     template <class T>
@@ -376,6 +383,7 @@ namespace QuantLib {
                              DeltaVolQuote::DeltaType deltaType,
                              DeltaVolQuote::AtmType atmType,
                              FxSmileSection::FlyType flyType,
+                             const FxSettlementConvention& settlement,
                              const Calendar& cal = WeekendsOnly(),
                              BusinessDayConvention bdc = Following,
                              bool forceMonotoneVariance = true);
@@ -398,11 +406,12 @@ namespace QuantLib {
                                                   DeltaVolQuote::DeltaType deltaType,
                                                   DeltaVolQuote::AtmType atmType,
                                                   FxSmileSection::FlyType flyType,
+                                                  const FxSettlementConvention& settlement,
                                                   const Calendar& cal,
                                                   BusinessDayConvention bdc,
                                                   bool forceMonotoneVariance)
     : fxVarianceSurface<T>(referenceDate, spot, pillars, atms, rrs, bfs, deltas, forTs, domTs,
-                           timeTs, deltaType, atmType, flyType, cal, bdc, forceMonotoneVariance) {}
+                           timeTs, deltaType, atmType, flyType, settlement, cal, bdc, forceMonotoneVariance) {}
 
 
     template <class T>

@@ -77,8 +77,9 @@ namespace QuantLib {
                            DeltaVolQuote::DeltaType deltaType,
                            DeltaVolQuote::AtmType atmType,
                            FxSmileSection::FlyType flyType,
-                           Real alpha = 0.5,
-                           const DayCounter& dayCounter = DayCounter(),
+                           Real alpha,
+                           const DayCounter& dayCounter,
+                           const FxSettlementConvention& settlement,
                            const Date& referenceDate = Date(),
                            bool weightedCalibrationFlag = true);
 
@@ -107,8 +108,9 @@ namespace QuantLib {
                            DeltaVolQuote::DeltaType deltaType,
                            DeltaVolQuote::AtmType atmType,
                            FlyType flyType,
-                           Real alpha = 0.5,
-                           const DayCounter& dayCounter = DayCounter(),
+                           Real alpha,
+                           const DayCounter& dayCounter,
+                           const FxSettlementConvention& settlement,
                            const Date& referenceDate = Date(),
                            bool weightedCalibrationFlag = true);
 
@@ -169,7 +171,8 @@ namespace QuantLib {
                                        DeltaVolQuote::DeltaType deltaType,
                                        DeltaVolQuote::AtmType atmType,
                                        FxSmileSection::FlyType flyType,
-                                       const DayCounter& dayCounter = DayCounter(),
+                                       const DayCounter& dayCounter,
+                                       const FxSettlementConvention& settlement,
                                        const Date& referenceDate = Date(),
                                        bool weightedCalibrationFlag = true);
 
@@ -197,7 +200,8 @@ namespace QuantLib {
                                        DeltaVolQuote::DeltaType deltaType,
                                        DeltaVolQuote::AtmType atmType,
                                        FlyType flyType,
-                                       const DayCounter& dayCounter = DayCounter(),
+                                       const DayCounter& dayCounter,
+                                       const FxSettlementConvention& settlement,
                                        const Date& referenceDate = Date(),
                                        bool weightedCalibrationFlag = true);
 
@@ -242,7 +246,8 @@ namespace QuantLib {
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
                                          FxSmileSection::FlyType flyType,
-                                         const DayCounter& dayCounter = DayCounter(),
+                                         const DayCounter& dayCounter,
+                                         const FxSettlementConvention& settlement,
                                          const Date& referenceDate = Date(),
                                          bool weightedCalibrationFlag = true);
 
@@ -270,7 +275,8 @@ namespace QuantLib {
                                          DeltaVolQuote::DeltaType deltaType,
                                          DeltaVolQuote::AtmType atmType,
                                          FlyType flyType,
-                                         const DayCounter& dayCounter = DayCounter(),
+                                         const DayCounter& dayCounter,
+                                         const FxSettlementConvention& settlement,
                                          const Date& referenceDate = Date(),
                                          bool weightedCalibrationFlag = true);
 

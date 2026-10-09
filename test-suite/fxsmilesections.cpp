@@ -23,6 +23,7 @@
 
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
+#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
@@ -30,6 +31,8 @@
 #include <ql/quotes/deltavolquote.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
+#include <ql/time/calendars/weekendsonly.hpp>
+#include <ql/time/daycounters/actual360.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/time/date.hpp>
 #include <ql/settings.hpp>
@@ -62,6 +65,7 @@ namespace {
         DeltaVolQuote::DeltaType deltaType;
         DeltaVolQuote::AtmType atmType;
         FxSmileSection::FlyType flyType;
+        FxSettlementConvention settlement{WeekendsOnly(), 2};
 
         // Derived market vols (smile-strangle convention)
         // 25D: call = atm + rr/2 + bf,  put = atm - rr/2 + bf
@@ -199,7 +203,7 @@ BOOST_AUTO_TEST_CASE(testPolynomialSmileSection) {
                               {md.v_25rr, md.v_10rr}, {md.v_25bf, md.v_10bf},
                               md.deltas, md.forDiscount, md.domDiscount,
                               md.deltaType, md.atmType, md.flyType,
-                              Actual365Fixed());
+                              Actual365Fixed(), md.settlement);
 
     // 3 parameters for 5 constraints => over-determined; expect best-fit
     // Use wider tolerances than the cost models.
@@ -221,7 +225,7 @@ BOOST_AUTO_TEST_CASE(testSabrSmileSection) {
                           {md.v_25rr, md.v_10rr}, {md.v_25bf, md.v_10bf},
                           md.deltas, md.forDiscount, md.domDiscount,
                           md.deltaType, md.atmType, md.flyType,
-                          Actual365Fixed());
+                          Actual365Fixed(), md.settlement);
 
     // SABR has 3 free params (alpha, nu, rho) for 5 constraints.
     checkSmileSection(ss, md, 5.0e-3, 5.0e-3, 5.0e-3, 5.0e-3);
@@ -248,7 +252,7 @@ BOOST_AUTO_TEST_CASE(testSviSmileSection) {
                          {md.v_25rr, md.v_10rr}, {md.v_25bf, md.v_10bf},
                          md.deltas, md.forDiscount, md.domDiscount,
                          md.deltaType, md.atmType, md.flyType,
-                         Actual365Fixed());
+                         Actual365Fixed(), md.settlement);
 
     // SVI has 5 params matching 5 constraints exactly in principle.
     checkSmileSection(ss, md, 1.0e-4, 1.0e-4, 1.0e-4, 1.0e-4);
@@ -269,7 +273,7 @@ BOOST_AUTO_TEST_CASE(testQuadraticSmileSection) {
                              {md.v_25rr, md.v_10rr}, {md.v_25bf, md.v_10bf},
                              md.deltas, md.forDiscount, md.domDiscount,
                              md.deltaType, md.atmType, md.flyType,
-                             Actual365Fixed());
+                             Actual365Fixed(), md.settlement);
 
     // 3 params for 5 constraints => over-determined, best-fit.
     checkSmileSection(ss, md, 5.0e-3, 5.0e-3, 5.0e-3, 5.0e-3);
@@ -290,7 +294,7 @@ BOOST_AUTO_TEST_CASE(testCostSmileSectionFlatDynamics) {
                                       {md.v_25rr, md.v_10rr}, {md.v_25bf, md.v_10bf},
                                       md.deltas, md.forDiscount, md.domDiscount,
                                       md.deltaType, md.atmType, md.flyType,
-                                      Actual365Fixed(), Date(), true);
+                                      Actual365Fixed(), md.settlement, Date(), true);
 
     // Cost-based models calibrate exactly; use tight tolerances.
     checkSmileSection(ss, md, 1.0e-6, 1.0e-6, 1.0e-6, 1.0e-6);
@@ -311,7 +315,7 @@ BOOST_AUTO_TEST_CASE(testCostSmileSectionScaledDynamics) {
                                         {md.v_25rr, md.v_10rr}, {md.v_25bf, md.v_10bf},
                                         md.deltas, md.forDiscount, md.domDiscount,
                                         md.deltaType, md.atmType, md.flyType,
-                                        Actual365Fixed(), Date(), true);
+                                        Actual365Fixed(), md.settlement, Date(), true);
 
     // Cost-based models calibrate exactly; use tight tolerances.
     checkSmileSection(ss, md, 1.0e-6, 1.0e-6, 1.0e-6, 1.0e-6);
@@ -350,7 +354,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
         polynomialSmileSection ss(md.expiryDate, md.spot, quotes,
                                   md.forDiscount, md.domDiscount,
                                   md.deltaType, md.atmType, md.flyType,
-                                  Actual365Fixed());
+                                  Actual365Fixed(), md.settlement);
         Real atm_computed = ss.volByStrike(ss.atmLevel());
         BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 5.0e-3,
             "Polynomial (DeltaVolQuote path) ATM vol error too large");
@@ -361,7 +365,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
         fxSabrSmileSection ss(md.expiryDate, md.spot, quotes,
                               md.forDiscount, md.domDiscount,
                               md.deltaType, md.atmType, md.flyType,
-                              Actual365Fixed());
+                              Actual365Fixed(), md.settlement);
         Real atm_computed = ss.volByStrike(ss.atmLevel());
         BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 5.0e-3,
             "SABR (DeltaVolQuote path) ATM vol error too large");
@@ -372,7 +376,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
         fxSviSmileSection ss(md.expiryDate, md.spot, quotes,
                              md.forDiscount, md.domDiscount,
                              md.deltaType, md.atmType, md.flyType,
-                             Actual365Fixed());
+                             Actual365Fixed(), md.settlement);
         Real atm_computed = ss.volByStrike(ss.atmLevel());
         BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 1.0e-4,
             "SVI (DeltaVolQuote path) ATM vol error too large");
@@ -383,7 +387,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
         quadraticSmileSection ss(md.expiryDate, md.spot, quotes,
                                  md.forDiscount, md.domDiscount,
                                  md.deltaType, md.atmType, md.flyType,
-                                 Actual365Fixed());
+                                 Actual365Fixed(), md.settlement);
         Real atm_computed = ss.volByStrike(ss.atmLevel());
         BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 5.0e-3,
             "Quadratic (DeltaVolQuote path) ATM vol error too large");
@@ -394,7 +398,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
         fxCostSmileSectionFlatDynamics ss(md.expiryDate, md.spot, quotes,
                                           md.forDiscount, md.domDiscount,
                                           md.deltaType, md.atmType, md.flyType,
-                                          Actual365Fixed());
+                                          Actual365Fixed(), md.settlement);
         Real atm_computed = ss.volByStrike(ss.atmLevel());
         BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 1.0e-4,
             "CostFlatDynamics (DeltaVolQuote path) ATM vol error too large");
@@ -405,7 +409,7 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
         fxCostSmileSectionScaledDynamics ss(md.expiryDate, md.spot, quotes,
                                             md.forDiscount, md.domDiscount,
                                             md.deltaType, md.atmType, md.flyType,
-                                            Actual365Fixed());
+                                            Actual365Fixed(), md.settlement);
         Real atm_computed = ss.volByStrike(ss.atmLevel());
         BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 1.0e-4,
             "CostScaledDynamics (DeltaVolQuote path) ATM vol error too large");
@@ -436,7 +440,7 @@ BOOST_AUTO_TEST_CASE(testMarketDataReactivity) {
         {Handle<Quote>(rr25Quote), Handle<Quote>(rr10Quote)},
         {Handle<Quote>(bf25Quote), Handle<Quote>(bf10Quote)},
         md.deltas, md.forDiscount, md.domDiscount,
-        md.deltaType, md.atmType, md.flyType, Actual365Fixed());
+        md.deltaType, md.atmType, md.flyType, Actual365Fixed(), md.settlement);
 
     Real atm_before = ss.atmLevel();
 
@@ -446,6 +450,156 @@ BOOST_AUTO_TEST_CASE(testMarketDataReactivity) {
 
     BOOST_CHECK_MESSAGE(std::fabs(atm_after - atm_before) > 1.0e-6,
         "Smile section did not react to ATM vol change");
+}
+
+namespace {
+
+    // Section used by the settlement tests: the quadratic is the cheapest
+    // model to calibrate, and the forward does not depend on the model.
+    ext::shared_ptr<FxSmileSection>
+    dateModeSection(const MarketData& md,
+                    const Handle<YieldTermStructure>& forDiscount,
+                    const Handle<YieldTermStructure>& domDiscount,
+                    const Date& referenceDate = Date()) {
+        return ext::make_shared<quadraticSmileSection>(
+            md.expiryDate, md.spot, md.v_atm,
+            std::vector<Handle<Quote>>{md.v_25rr, md.v_10rr},
+            std::vector<Handle<Quote>>{md.v_25bf, md.v_10bf}, md.deltas,
+            forDiscount, domDiscount, md.deltaType, md.atmType, md.flyType,
+            Actual365Fixed(), md.settlement, referenceDate);
+    }
+
+    Real expectedForward(Real spot,
+                         const Handle<YieldTermStructure>& forDiscount,
+                         const Handle<YieldTermStructure>& domDiscount,
+                         const Date& spotDate,
+                         const Date& deliveryDate) {
+        return spot * (forDiscount->discount(deliveryDate) / forDiscount->discount(spotDate)) /
+               (domDiscount->discount(deliveryDate) / domDiscount->discount(spotDate));
+    }
+
+}
+
+BOOST_AUTO_TEST_CASE(testSettlementConventionDates) {
+    BOOST_TEST_MESSAGE("Testing FX spot and delivery dates...");
+
+    FxSettlementConvention conv(WeekendsOnly(), 2);
+    // Tuesday -> Thursday
+    BOOST_CHECK_EQUAL(conv.spotDate(Date(2, January, 2024)), Date(4, January, 2024));
+    // Thursday -> Monday: the lag skips the weekend
+    BOOST_CHECK_EQUAL(conv.deliveryDate(Date(2, January, 2025)), Date(6, January, 2025));
+    // T+1 pairs
+    BOOST_CHECK_EQUAL(FxSettlementConvention(WeekendsOnly(), 1).spotDate(Date(5, January, 2024)),
+                      Date(8, January, 2024));
+
+    BOOST_CHECK_THROW(FxSettlementConvention(Calendar(), 2), Error);
+}
+
+BOOST_AUTO_TEST_CASE(testDateModeForwardUsesSpotToDelivery) {
+    BOOST_TEST_MESSAGE("Testing that date-based FX smile sections discount from spot to delivery...");
+
+    MarketData md;
+    auto ss = dateModeSection(md, md.forDiscount, md.domDiscount);
+
+    const Date spotDate(4, January, 2024), deliveryDate(6, January, 2025);
+    BOOST_CHECK_EQUAL(ss->spotDate(), spotDate);
+    BOOST_CHECK_EQUAL(ss->deliveryDate(), deliveryDate);
+
+    const Real expected =
+        expectedForward(md.spot->value(), md.forDiscount, md.domDiscount, spotDate, deliveryDate);
+    BOOST_CHECK_CLOSE(ss->forward(), expected, 1.0e-12);
+
+    // vol time still runs from the trade date to the expiry date
+    BOOST_CHECK_CLOSE(ss->exerciseTime(),
+                      Actual365Fixed().yearFraction(md.todaysDate, md.expiryDate), 1.0e-12);
+
+    // the spot-to-delivery forward differs from the naive one to the expiry time
+    const Real naive = md.spot->value() * md.forDiscount->discount(ss->exerciseTime()) /
+                       md.domDiscount->discount(ss->exerciseTime());
+    BOOST_CHECK(std::fabs(ss->forward() - naive) > 1.0e-8);
+}
+
+BOOST_AUTO_TEST_CASE(testDateModeIgnoresCurveReferenceDate) {
+    BOOST_TEST_MESSAGE("Testing that date-based FX smile sections do not depend on the curves' "
+                       "reference dates...");
+
+    MarketData md;
+    const Date spotDate = md.settlement.spotDate(md.todaysDate);
+    // same continuously-compounded rates, but curves starting on the spot date
+    Handle<YieldTermStructure> forFromSpot(
+        ext::make_shared<FlatForward>(spotDate, 0.05, Actual365Fixed()));
+    Handle<YieldTermStructure> domFromSpot(
+        ext::make_shared<FlatForward>(spotDate, 0.03, Actual365Fixed()));
+
+    auto fromToday = dateModeSection(md, md.forDiscount, md.domDiscount);
+    auto fromSpot = dateModeSection(md, forFromSpot, domFromSpot);
+    BOOST_CHECK_CLOSE(fromToday->forward(), fromSpot->forward(), 1.0e-12);
+    BOOST_CHECK_CLOSE(fromToday->foreignDiscountFactor(), fromSpot->foreignDiscountFactor(), 1.0e-12);
+    BOOST_CHECK_CLOSE(fromToday->domesticDiscountFactor(), fromSpot->domesticDiscountFactor(), 1.0e-12);
+
+    // a curve starting after the spot date cannot give P(spot, delivery)
+    Handle<YieldTermStructure> late(
+        ext::make_shared<FlatForward>(spotDate + 1, 0.05, Actual365Fixed()));
+    BOOST_CHECK_THROW(dateModeSection(md, late, md.domDiscount)->forward(), Error);
+}
+
+BOOST_AUTO_TEST_CASE(testDateModeFloatsWithEvaluationDate) {
+    BOOST_TEST_MESSAGE("Testing that date-based FX smile sections float with the evaluation date...");
+
+    MarketData md;
+    auto floating = dateModeSection(md, md.forDiscount, md.domDiscount);
+    auto fixed = dateModeSection(md, md.forDiscount, md.domDiscount, md.todaysDate);
+    const Real fixedForward = fixed->forward();
+    BOOST_CHECK_EQUAL(floating->spotDate(), Date(4, January, 2024));
+
+    // move from Tuesday to Wednesday: the new spot date is Friday
+    Settings::instance().evaluationDate() = Date(3, January, 2024);
+    BOOST_CHECK_EQUAL(floating->spotDate(), Date(5, January, 2024));
+    BOOST_CHECK_EQUAL(floating->deliveryDate(), Date(6, January, 2025));
+    BOOST_CHECK_CLOSE(floating->forward(),
+                      expectedForward(md.spot->value(), md.forDiscount, md.domDiscount,
+                                      Date(5, January, 2024), Date(6, January, 2025)),
+                      1.0e-12);
+
+    // a section with an explicit reference date stays where it was
+    BOOST_CHECK_EQUAL(fixed->spotDate(), Date(4, January, 2024));
+    BOOST_CHECK_CLOSE(fixed->forward(), fixedForward, 1.0e-12);
+}
+
+BOOST_AUTO_TEST_CASE(testTimeModeForwardAndConsistencyChecks) {
+    BOOST_TEST_MESSAGE("Testing time-based FX smile sections...");
+
+    MarketData md;
+    const Time tau = 1.0;
+    auto section = [&](const Handle<YieldTermStructure>& forDiscount,
+                       const Handle<YieldTermStructure>& domDiscount,
+                       const DayCounter& dc) {
+        return ext::make_shared<quadraticSmileSection>(
+            tau, md.spot, md.v_atm, std::vector<Handle<Quote>>{md.v_25rr, md.v_10rr},
+            std::vector<Handle<Quote>>{md.v_25bf, md.v_10bf}, md.deltas, forDiscount,
+            domDiscount, md.deltaType, md.atmType, md.flyType, dc);
+    };
+
+    auto ss = section(md.forDiscount, md.domDiscount, Actual365Fixed());
+    BOOST_CHECK_CLOSE(ss->forward(),
+                      md.spot->value() * md.forDiscount->discount(tau) /
+                          md.domDiscount->discount(tau),
+                      1.0e-12);
+    BOOST_CHECK(!ss->settlement());
+    BOOST_CHECK_THROW(ss->spotDate(), Error);
+
+    // an empty day counter is fine in time mode
+    BOOST_CHECK_NO_THROW(section(md.forDiscount, md.domDiscount, DayCounter())->forward());
+
+    // the curves must share a time axis...
+    Handle<YieldTermStructure> act360(
+        ext::make_shared<FlatForward>(md.todaysDate, 0.03, Actual360()));
+    BOOST_CHECK_THROW(section(md.forDiscount, act360, Actual365Fixed())->forward(), Error);
+    Handle<YieldTermStructure> shifted(
+        ext::make_shared<FlatForward>(md.todaysDate + 1, 0.03, Actual365Fixed()));
+    BOOST_CHECK_THROW(section(md.forDiscount, shifted, Actual365Fixed())->forward(), Error);
+    // ...and the section's day counter, if given, must be theirs
+    BOOST_CHECK_THROW(section(md.forDiscount, md.domDiscount, Actual360())->forward(), Error);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -1194,6 +1194,7 @@ set(QL_HEADERS
     experimental/fx/fxresetcashflows.hpp
     experimental/fx/mtmcrosscurrencybasisswap.hpp
     experimental/fxslv/fxcostsmilesection.hpp
+    experimental/fxslv/fxsettlementconvention.hpp
     experimental/fxslv/fxslvpricingcontext.hpp
     experimental/fxslv/fxsmilesection.hpp
     experimental/fxslv/fxsmilesectionbydelta.hpp
