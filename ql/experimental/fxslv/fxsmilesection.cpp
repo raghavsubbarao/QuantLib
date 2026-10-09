@@ -171,7 +171,7 @@ namespace QuantLib {
             atm_ = atmInput_;
 
             // Create a strangle helper for each delta level.
-            std::vector<fxStrangleHelper<FxSmileSection>> helpers;
+            std::vector<FxStrangleHelper<FxSmileSection>> helpers;
             helpers.reserve(deltas_.size());
             for (Size i = 0; i < deltas_.size(); ++i) {
                 helpers.emplace_back(bfs_[i], std::fabs(deltas_[i]));
@@ -361,7 +361,7 @@ namespace QuantLib {
         calculate();
 
         auto normProbError = [&](Rate strike) { 
-            return 100 * (normedProbability(strike) - abs(q));
+            return 100 * (normedProbability(strike) - q);
         };
 
         Bisection solver;

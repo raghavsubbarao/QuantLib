@@ -32,11 +32,11 @@ namespace QuantLib {
                  i.e., the smile section itself.
     */
     template <class SS>
-    class fxStrangleHelper : public Observer, public Observable {
+    class FxStrangleHelper : public Observer, public Observable {
       public:
-        fxStrangleHelper(Handle<Quote> brokerFlyQuote, Real delta);
-        fxStrangleHelper(Real brokerFlyQuote, Real delta);
-        ~fxStrangleHelper() override = default;
+        FxStrangleHelper(Handle<Quote> brokerFlyQuote, Real delta);
+        FxStrangleHelper(Real brokerFlyQuote, Real delta);
+        ~FxStrangleHelper() override = default;
 
         //! \name Observer interface
         //@{
@@ -87,7 +87,7 @@ namespace QuantLib {
     // ---------------------------------------------------------------
 
     template <class SS>
-    fxStrangleHelper<SS>::fxStrangleHelper(Handle<Quote> brokerFlyQuote, Real delta)
+    FxStrangleHelper<SS>::FxStrangleHelper(Handle<Quote> brokerFlyQuote, Real delta)
     : quote_(std::move(brokerFlyQuote)), delta_(delta), smileSection_(nullptr),
       callStrike_(0.0), putStrike_(0.0), marketStranglePrice_(0.0), initialized_(false) 
     {
@@ -95,13 +95,13 @@ namespace QuantLib {
     }
 
     template <class SS>
-    fxStrangleHelper<SS>::fxStrangleHelper(Real brokerFlyQuote, Real delta)
+    FxStrangleHelper<SS>::FxStrangleHelper(Real brokerFlyQuote, Real delta)
     : quote_(makeQuoteHandle(brokerFlyQuote)), delta_(delta), smileSection_(nullptr), 
       callStrike_(0.0), putStrike_(0.0), marketStranglePrice_(0.0), initialized_(false) 
     {}
 
     template <class SS>
-    void fxStrangleHelper<SS>::setSmileSection(SS* ss) 
+    void FxStrangleHelper<SS>::setSmileSection(SS* ss) 
     {
         QL_REQUIRE(ss != nullptr, "null smile section given");
         smileSection_ = ss;
@@ -109,7 +109,7 @@ namespace QuantLib {
     }
 
     template <class SS>
-    void fxStrangleHelper<SS>::initialize() 
+    void FxStrangleHelper<SS>::initialize() 
     {
         QL_REQUIRE(smileSection_ != nullptr, "smile section not set");
 
@@ -136,7 +136,7 @@ namespace QuantLib {
     }
 
     template <class SS>
-    Real fxStrangleHelper<SS>::impliedQuote() const 
+    Real FxStrangleHelper<SS>::impliedQuote() const 
     {
         QL_REQUIRE(initialized_, "fxStrangleHelper not initialized");
 
@@ -174,7 +174,7 @@ namespace QuantLib {
             MarketStrangle // Broker Fly
         };
 
-        // ctor from market quotes for specific date
+        // ctor from market quotes for by date - floats when exerciseDate = evaluation date
         FxSmileSection(const Date& exerciseDate,
                        const Handle<Quote>& spot,
                        const Handle<Quote>& atm,
@@ -186,10 +186,10 @@ namespace QuantLib {
                        DeltaVolQuote::DeltaType deltaType,
                        DeltaVolQuote::AtmType atmType,
                        FlyType flyType,
-                       const DayCounter& dayCounter = DayCounter(),
+                       const DayCounter& dayCounter,
                        const Date& referenceDate = Date());
 
-        // ctor from market quotes with expiry time - floats with evaluation date
+        // ctor from market quotes with expiry time
         FxSmileSection(Time exerciseTime,
                        const Handle<Quote>& spot,
                        const Handle<Quote>& atm,
@@ -203,7 +203,7 @@ namespace QuantLib {
                        FlyType flyType,
                        const DayCounter& dayCounter = DayCounter());
 
-        // ctor from derived quotes for specific date
+        // ctor from derived quotes for specific date - floats when exerciseDate = evaluation date
         FxSmileSection(const Date& exerciseDate,
                        const Handle<Quote>& spot,
                        const std::vector<Handle<DeltaVolQuote>>& quotes,
@@ -212,10 +212,10 @@ namespace QuantLib {
                        DeltaVolQuote::DeltaType deltaType,
                        DeltaVolQuote::AtmType atmType,
                        FlyType flyType,
-                       const DayCounter& dayCounter = DayCounter(),
+                       const DayCounter& dayCounter,
                        const Date& referenceDate = Date());
 
-        // ctor form derived quotes for expiry time - floats with evaluation date
+        // ctor form derived quotes for expiry time
         FxSmileSection(Time exerciseTime,
                        const Handle<Quote>& spot,
                        const std::vector<Handle<DeltaVolQuote>>& quotes,
@@ -298,7 +298,7 @@ namespace QuantLib {
         const Handle<Quote> atmInput_;
         const std::vector<Handle<DeltaVolQuote>> quotesInput_;
 
-        friend class fxStrangleHelper<FxSmileSection>;
+        friend class FxStrangleHelper<FxSmileSection>;
 
       protected:
         mutable Real ddom_;
@@ -322,7 +322,7 @@ namespace QuantLib {
         LazyObject::update();
     }
 
-    typedef ext::shared_ptr<FxSmileSection> fxSmileSectionPtr;
+    //typedef ext::shared_ptr<FxSmileSection> fxSmileSectionPtr;
 
 }  // namespace QuantLib
 
