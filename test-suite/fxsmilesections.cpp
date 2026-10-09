@@ -534,8 +534,8 @@ BOOST_AUTO_TEST_CASE(testDateModeIgnoresCurveReferenceDate) {
     auto fromToday = dateModeSection(md, md.forDiscount, md.domDiscount);
     auto fromSpot = dateModeSection(md, forFromSpot, domFromSpot);
     BOOST_CHECK_CLOSE(fromToday->forward(), fromSpot->forward(), 1.0e-12);
-    BOOST_CHECK_CLOSE(fromToday->forDf(), fromSpot->forDf(), 1.0e-12);
-    BOOST_CHECK_CLOSE(fromToday->domDf(), fromSpot->domDf(), 1.0e-12);
+    BOOST_CHECK_CLOSE(fromToday->foreignDiscountFactor(), fromSpot->foreignDiscountFactor(), 1.0e-12);
+    BOOST_CHECK_CLOSE(fromToday->domesticDiscountFactor(), fromSpot->domesticDiscountFactor(), 1.0e-12);
 
     // a curve starting after the spot date cannot give P(spot, delivery)
     Handle<YieldTermStructure> late(
@@ -585,7 +585,7 @@ BOOST_AUTO_TEST_CASE(testTimeModeForwardAndConsistencyChecks) {
                       md.spot->value() * md.forDiscount->discount(tau) /
                           md.domDiscount->discount(tau),
                       1.0e-12);
-    BOOST_CHECK(!ss->settlement());
+    BOOST_CHECK(!ss->settleConvention());
     BOOST_CHECK_THROW(ss->spotDate(), Error);
 
     // an empty day counter is fine in time mode
