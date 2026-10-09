@@ -293,16 +293,16 @@ namespace QuantLib {
         Handle<YieldTermStructure> domesticDiscount() const { return domesticDiscount_; };
 
         //! Settlement convention; empty for sections built in time mode.
-        const std::optional<FxSettlementConvention>& settlement() const { return settleConvention_; }
+        const std::optional<FxSettlementConvention>& settleConvention() const { return settleConvention_; }
 
         Date spotDate() const;      //!< Spot date of the reference date (date mode only).
         Date deliveryDate() const;  //!< Delivery date of the expiry (date mode only).
         
         //! Domestic discount factor from spot to delivery (time mode: to expiry time).
-        DiscountFactor domDf() const { calculate(); return ddom_; }
+        DiscountFactor domesticDiscountFactor() const { calculate(); return ddom_; }
         
         //! Foreign discount factor from spot to delivery (time mode: to expiry time).
-        DiscountFactor forDf() const { calculate(); return dfor_; }
+        DiscountFactor foreignDiscountFactor() const { calculate(); return dfor_; }
 
         bool isDeltaVolQuote() const { return isDeltaVolQuote_; };
 
