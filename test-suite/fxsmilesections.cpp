@@ -693,7 +693,7 @@ namespace {
         FxSmileTargets targets(const FxSmileSection& section) const {
             FxSmileTargets t;
             for (const auto& q : quotes_)
-                t.push_back(volTarget(section, **q));
+                t.push_back(ext::make_shared<FxDeltaVolTarget>(q));
             return t;
         }
         std::vector<Handle<DeltaVolQuote>> quotes_;

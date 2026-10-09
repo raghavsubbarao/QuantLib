@@ -275,7 +275,7 @@ namespace QuantLib {
         for (Size i = 0; i < targets_.size(); i++) {
             // the closed form needs points on the smile (delta-vol quotes or
             // smile strangles); broker strangles are not points
-            const auto point = targets_[i]->point();
+            const auto point = targets_[i]->point(*this);
             QL_REQUIRE(point, "cost smile sections can only be calibrated to points on the "
                               "smile (delta-vol quotes or smile strangles), not to broker "
                               "strangles");

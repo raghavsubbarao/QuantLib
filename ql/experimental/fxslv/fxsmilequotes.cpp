@@ -28,8 +28,27 @@
 
 namespace QuantLib {
 
-    Real FxVolTarget::residual(const FxSmileSection& section) const {
-        return section.volResidual(strike_, vol_);
+    std::optional<std::pair<Rate, Volatility>>
+    FxDeltaVolTarget::point(const FxSmileSection& section) const {
+        // the quote's own vol fixes its strike
+        const DeltaVolQuote& q = **quote_;
+        const Volatility vol = q.value();
+        const Real w = vol * std::sqrt(section.exerciseTime());
+        BlackDeltaCalculator calc(q.atmType() == DeltaVolQuote::AtmNull && q.delta() < 0 ?
+                                      Option::Put :
+                                      Option::Call,
+                                  section.deltaType(), section.spot()->value(),
+                                  section.domesticDiscountFactor(),
+                                  section.foreignDiscountFactor(), w);
+        const Rate strike = q.atmType() == DeltaVolQuote::AtmNull ?
+                                calc.strikeFromDelta(q.delta()) :
+                                calc.atmStrike(q.atmType());
+        return std::make_pair(strike, vol);
+    }
+
+    Real FxDeltaVolTarget::residual(const FxSmileSection& section) const {
+        const auto p = *point(section);
+        return section.volResidual(p.first, p.second);
     }
 
     Real FxRiskReversalTarget::residual(const FxSmileSection& section) const {
@@ -50,7 +69,7 @@ namespace QuantLib {
         const DeltaVolQuote::DeltaType dt = section.deltaType();
         
         const Rate callStrike = BlackDeltaCalculator(Option::Call, dt, spot, ddom, dfor, w).strikeFromDelta(delta_);
-        const Rate putStrike = BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, w).strikeFromDelta(delta_);
+        const Rate putStrike = BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, w).strikeFromDelta(-delta_);
         const BlackCalculator call(Option::Call, callStrike, fwd, w);
         const BlackCalculator put(Option::Put, putStrike, fwd, w);
         Real marketPrice = call.value() + put.value();
@@ -67,24 +86,6 @@ namespace QuantLib {
     void FxSmileQuotes::fit(const FxSmileSection& section, FxSmileTargets targets) {
         section.fitToTargets(std::move(targets));
     }
-
-    ext::shared_ptr<FxSmileTarget> FxSmileQuotes::volTarget(const FxSmileSection& section,
-                                                            const DeltaVolQuote& quote) {
-        // the quote's own vol fixes its strike
-        const Volatility vol = quote.value();
-        const Real w = vol * std::sqrt(section.exerciseTime());
-        BlackDeltaCalculator calc(quote.atmType() == DeltaVolQuote::AtmNull && quote.delta() < 0 ?
-                                      Option::Put :
-                                      Option::Call,
-                                  section.deltaType(), section.spot()->value(),
-                                  section.domesticDiscountFactor(),
-                                  section.foreignDiscountFactor(), w);
-        const Rate strike = quote.atmType() == DeltaVolQuote::AtmNull ?
-                                calc.strikeFromDelta(quote.delta()) :
-                                calc.atmStrike(quote.atmType());
-        return ext::make_shared<FxVolTarget>(strike, vol);
-    }
-
 
     FxRrBfQuotes::FxRrBfQuotes(Handle<Quote> atm,
                                std::vector<Handle<Quote>> riskReversals,
@@ -111,7 +112,8 @@ namespace QuantLib {
         FxSmileTargets targets;
 
         // atm vol target
-        targets.push_back(volTarget(section, DeltaVolQuote(atm_, deltaType, tau, section.atmType())));
+        targets.push_back(ext::make_shared<FxDeltaVolTarget>(Handle<DeltaVolQuote>(
+            ext::make_shared<DeltaVolQuote>(atm_, deltaType, tau, section.atmType()))));
 
         for (Size i = 0; i < deltas_.size(); ++i) {
             const Real d = std::fabs(deltas_[i]);
@@ -122,8 +124,10 @@ namespace QuantLib {
                 // smile strangles convert algebraically to points on the smile
                 const Volatility cVol = atm_->value() + bf + rr / 2.;
                 const Volatility pVol = atm_->value() + bf - rr / 2.;
-                targets.push_back(volTarget(section, DeltaVolQuote(d, makeQuoteHandle(cVol), tau, deltaType)));
-                targets.push_back(volTarget(section, DeltaVolQuote(-d, makeQuoteHandle(pVol), tau, deltaType)));
+                targets.push_back(ext::make_shared<FxDeltaVolTarget>(Handle<DeltaVolQuote>(
+                    ext::make_shared<DeltaVolQuote>(d, makeQuoteHandle(cVol), tau, deltaType))));
+                targets.push_back(ext::make_shared<FxDeltaVolTarget>(Handle<DeltaVolQuote>(
+                    ext::make_shared<DeltaVolQuote>(-d, makeQuoteHandle(pVol), tau, deltaType))));
             } else {
                 // broker strangles: risk reversal at the smile's deltas plus 
                 // the strangle premium, fitted jointly with the ATM
@@ -155,7 +159,7 @@ namespace QuantLib {
         FxSmileTargets targets;
         targets.reserve(quotes_.size());
         for (const auto& q : quotes_)
-            targets.push_back(volTarget(section, **q));
+            targets.push_back(ext::make_shared<FxDeltaVolTarget>(q));
         fit(section, std::move(targets));
     }
 
