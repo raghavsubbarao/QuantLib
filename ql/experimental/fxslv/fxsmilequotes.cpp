@@ -50,11 +50,12 @@ namespace QuantLib {
         const DeltaVolQuote::DeltaType dt = section.deltaType();
         
         const Rate callStrike = BlackDeltaCalculator(Option::Call, dt, spot, ddom, dfor, w).strikeFromDelta(delta_);
-        const Rate putStrike = BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, w).strikeFromDelta(delta_);
+        const Rate putStrike = BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, w).strikeFromDelta(-delta_);
         const BlackCalculator call(Option::Call, callStrike, fwd, w);
         const BlackCalculator put(Option::Put, putStrike, fwd, w);
         Real marketPrice = call.value() + put.value();
         Real marketVega = call.vega(tau) + put.vega(tau);
+        QL_REQUIRE(marketVega > 0.0, "market strangle has no vega for delta " << delta);
 
         const Real vc = section.volByStrike(callStrike);
         const Real vp = section.volByStrike(putStrike);
