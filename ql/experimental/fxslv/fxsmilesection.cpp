@@ -1,5 +1,6 @@
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
+#include <string>
 
 namespace QuantLib {
 
@@ -15,10 +16,12 @@ namespace QuantLib {
                                    DeltaVolQuote::AtmType atmType,
                                    FlyType flyType,
                                    const DayCounter& dayCounter,
+                                   const FxSettlementConvention& settlement,
                                    const Date& referenceDate)
     : SmileSection(exerciseDate, dayCounter, referenceDate, ShiftedLognormal, 0.0),
       spot_(spot), rrs_(rrs), bfs_(bfs), deltas_(deltas),
       foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
+      settlement_(settlement),
       deltaType_(deltaType), atmType_(atmType), flyType_(flyType), isDeltaVolQuote_(false),
       atmInput_(atm), quotesInput_(),
       atm_(), quotes_(), maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON)
@@ -63,10 +66,12 @@ namespace QuantLib {
                                    DeltaVolQuote::AtmType atmType,
                                    FlyType flyType,
                                    const DayCounter& dayCounter,
+                                   const FxSettlementConvention& settlement,
                                    const Date& referenceDate)
     : SmileSection(exerciseDate, dayCounter, referenceDate, ShiftedLognormal, 0.0), 
       spot_(spot), rrs_(), bfs_(), deltas_(),
       foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
+      settlement_(settlement),
       deltaType_(deltaType), atmType_(atmType), flyType_(flyType), isDeltaVolQuote_(true),
       atmInput_(), quotesInput_(quotes),
       atm_(), quotes_(), maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON)
@@ -109,23 +114,82 @@ namespace QuantLib {
         }
     }
 
+    namespace {
+
+        void checkCurveCovers(const Handle<YieldTermStructure>& curve,
+                              const std::string& name,
+                              const Date& spotDate,
+                              const Date& deliveryDate) {
+            QL_REQUIRE(!curve.empty(), name << " discount curve is empty");
+            QL_REQUIRE(curve->referenceDate() <= spotDate,
+                       name << " discount curve reference date (" << curve->referenceDate()
+                            << ") is after the spot date (" << spotDate << ")");
+            QL_REQUIRE(curve->allowsExtrapolation() || deliveryDate <= curve->maxDate(),
+                       name << " discount curve ends (" << curve->maxDate()
+                            << ") before the delivery date (" << deliveryDate << ")");
+        }
+
+    }
+
+    Date FxSmileSection::spotDate() const {
+        QL_REQUIRE(settlement_, "spot date is only defined for sections built from dates");
+        calculate();
+        return spotDate_;
+    }
+
+    Date FxSmileSection::deliveryDate() const {
+        QL_REQUIRE(settlement_, "delivery date is only defined for sections built from dates");
+        calculate();
+        return deliveryDate_;
+    }
+
     void FxSmileSection::calculateForward() const {
-        ddom_ = domesticDiscount_->discount(exerciseTime());
-        dfor_ = foreignDiscount_->discount(exerciseTime());
+        if (settlement_) {
+            // Date mode: rates run from the spot date of the trade date to
+            // the delivery date of the expiry.  Taking ratios of discount
+            // factors by date makes the result independent of the curves'
+            // own reference dates and day counters.
+            spotDate_ = settlement_->spotDate(referenceDate());
+            deliveryDate_ = settlement_->deliveryDate(exerciseDate());
+            checkCurveCovers(foreignDiscount_, "foreign", spotDate_, deliveryDate_);
+            checkCurveCovers(domesticDiscount_, "domestic", spotDate_, deliveryDate_);
+            dfor_ = foreignDiscount_->discount(deliveryDate_) / foreignDiscount_->discount(spotDate_);
+            ddom_ = domesticDiscount_->discount(deliveryDate_) /
+                    domesticDiscount_->discount(spotDate_);
+        } else {
+            // Time mode: the expiry time is read on the curves' time axis,
+            // which is only well defined if both curves share it.
+            QL_REQUIRE(!foreignDiscount_.empty() && !domesticDiscount_.empty(),
+                       "empty discount curve");
+            QL_REQUIRE(foreignDiscount_->referenceDate() == domesticDiscount_->referenceDate(),
+                       "time-based FX smile section requires both discount curves to have the "
+                       "same reference date: foreign "
+                           << foreignDiscount_->referenceDate() << ", domestic "
+                           << domesticDiscount_->referenceDate());
+            QL_REQUIRE(foreignDiscount_->dayCounter() == domesticDiscount_->dayCounter(),
+                       "time-based FX smile section requires both discount curves to have the "
+                       "same day counter: foreign "
+                           << foreignDiscount_->dayCounter() << ", domestic "
+                           << domesticDiscount_->dayCounter());
+            QL_REQUIRE(dayCounter().empty() || dayCounter() == foreignDiscount_->dayCounter(),
+                       "time-based FX smile section day counter ("
+                           << dayCounter() << ") differs from the discount curves' ("
+                           << foreignDiscount_->dayCounter() << ")");
+            dfor_ = foreignDiscount_->discount(exerciseTime());
+            ddom_ = domesticDiscount_->discount(exerciseTime());
+        }
         fwd_ = spot_->value() * dfor_ / ddom_;
     }
 
     void FxSmileSection::calculateAtm() const {
         calculate(); // should not be necc but force calibration!
 
-        Real spot = spot_->value();
-        Real ddom = domesticDiscount_->discount(exerciseTime());
-        Real dfor = foreignDiscount_->discount(exerciseTime());
-        Real fwd = spot * dfor / ddom;
+        const Real spot = spot_->value();
+        const Real fwd = fwd_;
 
         auto atmStrkikeError = [&](Real strike) {
             Volatility v = volByStrike(strike);
-            Real k_atm = BlackDeltaCalculator(Option::Call, deltaType(), spot, ddom, dfor,
+            Real k_atm = BlackDeltaCalculator(Option::Call, deltaType(), spot, ddom_, dfor_,
                                               v * sqrt(exerciseTime()))
                              .atmStrike(atmType());
             return strike - k_atm;
@@ -323,9 +387,7 @@ namespace QuantLib {
         }
 
         // assumes the atm vol is known: either via market input or calibration!
-        atmStrike_ = BlackDeltaCalculator(Option::Call, deltaType(), spot()->value(),
-                                          domesticDiscount_->discount(exerciseTime()),
-                                          foreignDiscount_->discount(exerciseTime()),
+        atmStrike_ = BlackDeltaCalculator(Option::Call, deltaType(), spot()->value(), ddom_, dfor_,
                                           atm()->value() * sqrt(exerciseTime()))
                          .atmStrike(atmType());
 

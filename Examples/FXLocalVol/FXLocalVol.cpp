@@ -48,6 +48,7 @@
 #endif
 
 // FX vol surface
+#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
@@ -221,6 +222,7 @@ int main(int, char*[]) {
         // ──────────────────────────────────────────────────────────────────────
         auto fxVolSurface = ext::make_shared<fxVarianceSurfaceNCP<fxSabrSmileSection>>(today, spot, pillars, atms, rrs, bfs, deltas,
                                                                                        eurTs, usdTs, timeTs, deltaType, atmType, flyType,
+                                                                                       FxSettlementConvention(calendar, 2),
                                                                                        calendar, Following, true);
 
         fxVolSurface->enableExtrapolation();

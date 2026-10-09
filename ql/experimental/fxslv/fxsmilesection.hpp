@@ -1,6 +1,7 @@
 #ifndef quantlib_axl_fx_smile_section_hpp
 #define quantlib_axl_fx_smile_section_hpp
 
+#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <ql/quotes/deltavolquote.hpp>
 #include <ql/patterns/lazyobject.hpp>
@@ -12,6 +13,7 @@
 #include <ql/option.hpp>
 #include <ql/math/solvers1d/bisection.hpp>
 #include <ql/math/solvers1d/brent.hpp>
+#include <optional>
 
 
 namespace QuantLib {
@@ -167,6 +169,40 @@ namespace QuantLib {
     }
 
 
+    //! Base class for FX smile sections calibrated to delta-quoted vols
+    /*! A section can be built in one of two modes.
+
+        <b>Date mode</b> (constructors taking an expiry date and an
+        FxSettlementConvention).  The reference date \f$ t_0 \f$ is the
+        trade date: by default the evaluation date, in which case the
+        section floats with it; if a reference date is passed, it is
+        fixed.  The exercise date is the expiry date \f$ T_e \f$.  Two
+        clocks are used:
+        - vol time \f$ \tau = \mathrm{yf}(t_0, T_e) \f$, measured with
+          the given day counter, which is exerciseTime() and is used for
+          the Black standard deviation \f$ \sigma\sqrt{\tau} \f$;
+        - the rate period from the spot date \f$ s_0 \f$ to the delivery
+          date \f$ T_d \f$, both given by the settlement convention.  The
+          discount factors \f$ P(s_0, T_d) = P(t, T_d) / P(t, s_0) \f$
+          used in the forward, in the delta conventions and in premium
+          adjustment are taken from each curve by date, so they do not
+          depend on the curves' reference dates or day counters.
+        The forward is \f$ F = S \, P_f(s_0, T_d) / P_d(s_0, T_d) \f$.
+
+        <b>Time mode</b> (constructors taking an expiry time).  An
+        idealised setup for model work, tests and interpolation at
+        arbitrary times: the time to expiry is fixed (the section does
+        not float), there is no settlement lag, and the same time is
+        used as vol time and as rate time, i.e.
+        \f$ F = S \, P_f(\tau) / P_d(\tau) \f$ on the curves' time
+        axis.  For this to be meaningful both curves must share a
+        reference date and a day counter, and the section's day counter,
+        if given, must match theirs; this is checked on calculation.
+
+        Quotes are either an ATM vol with risk reversals and butterflies
+        (smile or broker strangles) per delta, or a generic set of
+        delta-vol quotes.
+    */
     class FxSmileSection : public SmileSection, public LazyObject {
       public:
         enum FlyType {
@@ -174,7 +210,7 @@ namespace QuantLib {
             MarketStrangle // Broker Fly
         };
 
-        // ctor from market quotes for by date - floats when exerciseDate = evaluation date
+        //! Date mode, from ATM, risk-reversal and butterfly quotes.
         FxSmileSection(const Date& exerciseDate,
                        const Handle<Quote>& spot,
                        const Handle<Quote>& atm,
@@ -187,9 +223,10 @@ namespace QuantLib {
                        DeltaVolQuote::AtmType atmType,
                        FlyType flyType,
                        const DayCounter& dayCounter,
+                       const FxSettlementConvention& settlement,
                        const Date& referenceDate = Date());
 
-        // ctor from market quotes with expiry time
+        //! Time mode, from ATM, risk-reversal and butterfly quotes.
         FxSmileSection(Time exerciseTime,
                        const Handle<Quote>& spot,
                        const Handle<Quote>& atm,
@@ -203,7 +240,7 @@ namespace QuantLib {
                        FlyType flyType,
                        const DayCounter& dayCounter = DayCounter());
 
-        // ctor from derived quotes for specific date - floats when exerciseDate = evaluation date
+        //! Date mode, from generic delta-vol quotes.
         FxSmileSection(const Date& exerciseDate,
                        const Handle<Quote>& spot,
                        const std::vector<Handle<DeltaVolQuote>>& quotes,
@@ -213,9 +250,10 @@ namespace QuantLib {
                        DeltaVolQuote::AtmType atmType,
                        FlyType flyType,
                        const DayCounter& dayCounter,
+                       const FxSettlementConvention& settlement,
                        const Date& referenceDate = Date());
 
-        // ctor form derived quotes for expiry time
+        //! Time mode, from generic delta-vol quotes.
         FxSmileSection(Time exerciseTime,
                        const Handle<Quote>& spot,
                        const std::vector<Handle<DeltaVolQuote>>& quotes,
@@ -252,6 +290,16 @@ namespace QuantLib {
         Real forward() const {calculate(); return fwd_; };
         Handle<YieldTermStructure> foreignDiscount() const { return foreignDiscount_; };
         Handle<YieldTermStructure> domesticDiscount() const { return domesticDiscount_; };
+        //! Settlement convention; empty for sections built in time mode.
+        const std::optional<FxSettlementConvention>& settlement() const { return settlement_; }
+        //! Spot date of the reference date (date mode only).
+        Date spotDate() const;
+        //! Delivery date of the expiry (date mode only).
+        Date deliveryDate() const;
+        //! Domestic discount factor from spot to delivery (time mode: to expiry time).
+        DiscountFactor domesticDiscountFactor() const { calculate(); return ddom_; }
+        //! Foreign discount factor from spot to delivery (time mode: to expiry time).
+        DiscountFactor foreignDiscountFactor() const { calculate(); return dfor_; }
         bool isDeltaVolQuote() const { return isDeltaVolQuote_; };
 
         // Calibration
@@ -291,6 +339,8 @@ namespace QuantLib {
         std::vector<Real> deltas_;
         Handle<YieldTermStructure> foreignDiscount_;
         Handle<YieldTermStructure> domesticDiscount_;
+        std::optional<FxSettlementConvention> settlement_;
+        mutable Date spotDate_, deliveryDate_;
 
         // Immutable inputs: set once at construction, never modified.
         // atmInput_ holds the market ATM quote for the RR/BF input path.

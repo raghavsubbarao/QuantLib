@@ -21,10 +21,11 @@ namespace QuantLib {
                                                    DeltaVolQuote::AtmType atmType,
                                                    FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter,
+                                                   const FxSettlementConvention& settlement,
                                                    const Date& referenceDate)
     : FxSmileSection(exerciseDate, spot, atm, rrs, bfs, deltas,
                      foreignDiscount, domesticDiscount,
-                     deltaType, atmType, flyType, dayCounter, referenceDate),
+                     deltaType, atmType, flyType, dayCounter, settlement, referenceDate),
       params_() {}
 
     fxSmileSectionByStrike::fxSmileSectionByStrike(Time exerciseTime,
@@ -53,10 +54,11 @@ namespace QuantLib {
                                                    DeltaVolQuote::AtmType atmType,
                                                    FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter,
+                                                   const FxSettlementConvention& settlement,
                                                    const Date& referenceDate)
     : FxSmileSection(exerciseDate, spot, quotes,
                      foreignDiscount, domesticDiscount,
-                     deltaType, atmType, flyType, dayCounter, referenceDate),
+                     deltaType, atmType, flyType, dayCounter, settlement, referenceDate),
       params_() {}
 
     fxSmileSectionByStrike::fxSmileSectionByStrike(Time exerciseTime,
@@ -200,10 +202,11 @@ namespace QuantLib {
                                                    DeltaVolQuote::AtmType atmType,
                                                    FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter,
+                                                   const FxSettlementConvention& settlement,
                                                    const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, referenceDate) 
+                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate) 
     {
         params_.reserve(3);
     }
@@ -236,10 +239,11 @@ namespace QuantLib {
                                                    DeltaVolQuote::AtmType atmType,
                                                    FxSmileSection::FlyType flyType,
                                                    const DayCounter& dayCounter,
+                                                   const FxSettlementConvention& settlement,
                                                    const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, referenceDate)
+                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate)
     {
         params_.reserve(3);
     }
@@ -297,10 +301,11 @@ namespace QuantLib {
                                            DeltaVolQuote::AtmType atmType,
                                            FxSmileSection::FlyType flyType,
                                            const DayCounter& dayCounter,
+                                           const FxSettlementConvention& settlement,
                                            const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, referenceDate) 
+                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate) 
     {
         params_.reserve(3);
     }
@@ -333,10 +338,11 @@ namespace QuantLib {
                                            DeltaVolQuote::AtmType atmType,
                                            FxSmileSection::FlyType flyType,
                                            const DayCounter& dayCounter,
+                                           const FxSettlementConvention& settlement,
                                            const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, referenceDate) 
+                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate) 
     {
         params_.reserve(3);
     }
@@ -393,10 +399,11 @@ namespace QuantLib {
                                          DeltaVolQuote::AtmType atmType,
                                          FxSmileSection::FlyType flyType,
                                          const DayCounter& dayCounter,
+                                         const FxSettlementConvention& settlement,
                                          const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, atm, rrs, bfs, deltas,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, referenceDate)
+                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate)
     {
         params_.reserve(5);
     }
@@ -429,10 +436,11 @@ namespace QuantLib {
                                          DeltaVolQuote::AtmType atmType,
                                          FxSmileSection::FlyType flyType,
                                          const DayCounter& dayCounter,
+                                         const FxSettlementConvention& settlement,
                                          const Date& referenceDate)
     : fxSmileSectionByStrike(exerciseDate, spot, quotes,
                              foreignDiscount, domesticDiscount,
-                             deltaType, atmType, flyType, dayCounter, referenceDate)
+                             deltaType, atmType, flyType, dayCounter, settlement, referenceDate)
     {
         params_.reserve(5);
     }
