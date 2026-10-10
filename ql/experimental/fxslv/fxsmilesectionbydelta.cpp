@@ -24,6 +24,7 @@
 #include <ql/quotes/simplequote.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
+#include <algorithm>
 #include <cmath>
 
 namespace QuantLib {
@@ -84,24 +85,22 @@ namespace QuantLib {
 
             case DeltaVolQuote::PaSpot:
             case DeltaVolQuote::PaFwd:
-                Volatility v = volByStrike(minStrike());
+                const Rate kPeak = peakCallDeltaStrike();
+                Volatility v = volByStrike(kPeak);
                 Real maxCallDelta = BlackDeltaCalculator(Option::Call, deltaType(), spot()->value(),
                                                          ddom_, dfor_, v * sqrt(exerciseTime()))
-                                        .deltaFromStrike(minStrike());
+                                        .deltaFromStrike(kPeak);
                 QL_REQUIRE(delta <= maxCallDelta + QL_EPSILON, "Call delta out of range");
                 if (std::fabs(delta - maxCallDelta) <= QL_EPSILON) {
                     return v;
                 }
 
-                // for other strikes we need to adjust the call delta to a put delta
-                // however, we do not know the strike at which this conversion takes 
-                // place, so estimate that through another root finding procedure
-                Real k_atm = BlackDeltaCalculator(Option::Type::Put, deltaType(), spot()->value(),
-                                                  ddom_, dfor_, v * sqrt(exerciseTime())).atmStrike(atmType());
-                Real pdx = delta - (deltaType() == DeltaVolQuote::PaSpot
-                                    ? dfor_ * k_atm / fwd_
-                                    : k_atm / fwd_);
-
+                // Otherwise find the put delta d whose strike has the given
+                // call delta, by put-call parity
+                //   call delta - put delta = dfor K/F (PaSpot) or K/F (PaFwd).
+                // Below the peak each call delta is attained at two strikes;
+                // the quoted one is above the peak, i.e. at put deltas below
+                // the peak's, where the call delta falls from its maximum to 0.
                 auto deltaError = [&](Real d) {
                     Volatility v = volByDelta(d, Option::Type::Put);
                     Real k = putStrikeFromDelta(d, v * sqrt(exerciseTime()));
@@ -113,13 +112,22 @@ namespace QuantLib {
                     }
                 };
 
-                // The put delta is negative but unbounded below for
-                // premium-adjusted conventions, so let Brent expand the
-                // bracket from the guess, capped just below zero.
+                // the error is negative at the peak and positive far above it
+                const Real dPeak = BlackDeltaCalculator(Option::Put, deltaType(), spot()->value(),
+                                                        ddom_, dfor_, v * sqrt(exerciseTime()))
+                                       .deltaFromStrike(kPeak);
+                Real step = std::max(std::fabs(dPeak), 0.01), dFar = dPeak - step;
+                Size steps = 0;
+                while (deltaError(dFar) <= 0.0) {
+                    QL_REQUIRE(++steps < 100, "cannot convert call delta " << delta
+                                                  << " to a put delta");
+                    step *= 2.0;
+                    dFar = dPeak - step;
+                }
+
                 Brent solver;
                 solver.setMaxEvaluations(1000);
-                solver.setUpperBound(-QL_EPSILON);
-                delta = solver.solve(deltaError, 1e-12, pdx, 0.1 * std::fabs(pdx));
+                delta = solver.solve(deltaError, 1e-12, 0.5 * (dFar + dPeak), dFar, dPeak);
             }
         }
 

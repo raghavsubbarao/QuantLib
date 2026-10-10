@@ -27,6 +27,7 @@
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/pricingengines/blackcalculator.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <utility>
@@ -46,7 +47,7 @@ namespace QuantLib {
     : SmileSection(exerciseDate, dayCounter, referenceDate, ShiftedLognormal, 0.0),
       deltaType_(deltaType), atmType_(atmType), spot_(spot), smileQuotes_(quotes),
       foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
-      settleConvention_(settlement), maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON) {
+      settleConvention_(settlement) {
         QL_REQUIRE(smileQuotes_, "no smile quotes given");
         registerWithMarketData();
     }
@@ -61,8 +62,7 @@ namespace QuantLib {
                                    const DayCounter& dayCounter)
     : SmileSection(exerciseTime, dayCounter, ShiftedLognormal, 0.0),
       deltaType_(deltaType), atmType_(atmType), spot_(spot), smileQuotes_(quotes),
-      foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount),
-      maxStrike_(QL_MAX_REAL), minStrike_(QL_EPSILON) {
+      foreignDiscount_(foreignDiscount), domesticDiscount_(domesticDiscount) {
         QL_REQUIRE(smileQuotes_, "no smile quotes given");
         registerWithMarketData();
     }
@@ -157,6 +157,7 @@ namespace QuantLib {
         solver.setMaxEvaluations(1000);
         const Rate k = std::exp(solver.solve(atmStrikeError, 1.0e-12, std::log(fwd_), stdDev));
 
+        atmStrike_ = k;
         atmVol_ = volByStrike(k);
     }
 
@@ -164,6 +165,7 @@ namespace QuantLib {
         // No ATM vol until the new smile is fitted; the fit is seeded from
         // referenceVol(), so the same quotes always give the same smile.
         atmVol_ = Null<Volatility>();
+        atmStrike_ = Null<Real>();
         calibrationResiduals_ = Array();
 
         // The quotes drive the fit; check they actually fitted the section,
@@ -251,43 +253,91 @@ namespace QuantLib {
         return volByStrike(strike) - vol;
     }
 
-    void FxSmileSection::adjustStrikes() const {
-        if (premiumAdjust()) {
-            calculate();  // should not be necc but force calibration!
+    Rate FxSmileSection::peakCallDeltaStrike() const {
+        QL_REQUIRE(premiumAdjust(), "the call delta only peaks for premium-adjusted deltas");
 
-            CumulativeNormalDistribution f;
+        // call delta of the current smile as a function of log-strike
+        const Real spot = spot_->value(), sqrtT = std::sqrt(exerciseTime());
+        auto callDelta = [&](Real x) {
+            const Rate strike = std::exp(x);
+            const Volatility vol = volByStrike(strike);
+            QL_REQUIRE(std::isfinite(vol) && vol >= 0.0,
+                       "smile not defined at strike " << strike << " (vol " << vol
+                           << ") while looking for the peak premium-adjusted call delta");
+            return BlackDeltaCalculator(Option::Call, deltaType(), spot, ddom_, dfor_, vol * sqrtT)
+                .deltaFromStrike(strike);
+        };
 
-            auto ddelta_dk = [&](Real strike) {
-                Volatility w = volByStrike(strike) * std::sqrt(exerciseTime());
-                Real d = std::log(fwd_ / strike) / w - w / 2.;
-                return f(d) - f.derivative(d) / w;
-            };
-
-            QL_ASSERT((ddelta_dk(fwd_) < 0), "call delta should be well defined at the fwd");
-
-            Real k_min = fwd_ * std::exp(-atmVol_ * exerciseTime());
-            while (ddelta_dk(k_min) < 0) {
-                k_min = 0.95 * k_min;
-            }
-
-            Brent solver;
-            Rate k = solver.solve([&](Real strike) { return ddelta_dk(strike); }, 
-                                  1e-12, (k_min + fwd_) / 2., k_min, fwd_);
-
-            minStrike_ = k;
+        // bracket the peak, walking from the forward in steps of one
+        // reference standard deviation, growing as needed
+        Real h = referenceVol() * sqrtT;
+        Real b = std::log(fwd_), fb = callDelta(b);
+        Real a = b - h, fa = callDelta(a);
+        if (fa < fb) {
+            // the peak is above the forward: walk up instead
+            std::swap(a, b);
+            std::swap(fa, fb);
+            h = -h;
         }
+        Real c = a - h, fc = callDelta(c);
+        Size steps = 0;
+        while (fc > fa) {
+            QL_REQUIRE(++steps < 100, "no peak of the premium-adjusted call delta found");
+            b = a;
+            fb = fa;
+            a = c;
+            fa = fc;
+            h *= 1.5;
+            c = a - h;
+            fc = callDelta(c);
+        }
+        // the peak lies between c and b, with a inside and fa the highest
 
-        // assumes the atm vol is known: either via market input or calibration!
-        atmStrike_ = BlackDeltaCalculator(Option::Call, deltaType(), spot()->value(), ddom_, dfor_,
-                                          atmVol_ * sqrt(exerciseTime()))
-                         .atmStrike(atmType());
+        // golden-section search
+        const Real g = 0.5 * (3.0 - std::sqrt(5.0));
+        Real lo = std::min(b, c), hi = std::max(b, c);
+        Real x1 = lo + g * (hi - lo), x2 = hi - g * (hi - lo);
+        Real f1 = callDelta(x1), f2 = callDelta(x2);
+        while (hi - lo > 1.0e-10) {
+            if (f1 > f2) {
+                hi = x2;
+                x2 = x1;
+                f2 = f1;
+                x1 = lo + g * (hi - lo);
+                f1 = callDelta(x1);
+            } else {
+                lo = x1;
+                x1 = x2;
+                f1 = f2;
+                x2 = hi - g * (hi - lo);
+                f2 = callDelta(x2);
+            }
+        }
+        return std::exp(0.5 * (lo + hi));
+    }
 
+    Real FxSmileSection::maxCallDelta() const {
+        calculate();
+        switch (deltaType_) {
+          case DeltaVolQuote::Spot:
+            return dfor_;
+          case DeltaVolQuote::Fwd:
+            return 1.0;
+          case DeltaVolQuote::PaSpot:
+          case DeltaVolQuote::PaFwd: {
+              const Rate strike = peakCallDeltaStrike();
+              return BlackDeltaCalculator(Option::Call, deltaType_, spot_->value(), ddom_, dfor_,
+                                          volByStrike(strike) * std::sqrt(exerciseTime()))
+                  .deltaFromStrike(strike);
+          }
+          default:
+            QL_FAIL("unknown delta type");
+        }
     }
 
     void FxSmileSection::performCalculations() const {
         calculateForward();
         stripDeltaVolQuotes();
-        adjustStrikes();
     }
 
     Real FxSmileSection::volDerivative(Rate strike) const {

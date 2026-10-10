@@ -83,18 +83,22 @@ namespace QuantLib {
     {
         calculate();
 
-        if (parity == Option::Call && premiumAdjust()) {
-            Real maxCallDelta = deltaByStrike(minStrike(), Option::Call);
+        // premium-adjusted call deltas are attained twice below the peak;
+        // the strike above it is the one quoted
+        const bool paCall = parity == Option::Call && premiumAdjust();
+        const Rate kPeak = paCall ? peakCallDeltaStrike() : Null<Rate>();
+        if (paCall) {
+            Real maxCallDelta = deltaByStrike(kPeak, Option::Call);
             QL_REQUIRE(delta <= maxCallDelta + QL_EPSILON, "Call delta out of range");
             if (std::fabs(delta - maxCallDelta) <= QL_EPSILON) {
-                return minStrike();
+                return kPeak;
             }
         }
 
         Rate k0 = BlackDeltaCalculator(parity, deltaType(), spot()->value(), ddom_, dfor_,
                                        referenceVol() * sqrt(exerciseTime()))
                       .strikeFromDelta(delta);
-        Rate kmin = (premiumAdjust() && parity==Option::Call) ? minStrike() : QL_EPSILON;
+        Rate kmin = paCall ? kPeak : QL_EPSILON;
         Rate kmax = k0 * 10;
 
         auto deltaError = [&](Real strike) {

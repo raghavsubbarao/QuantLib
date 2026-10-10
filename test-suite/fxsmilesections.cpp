@@ -415,6 +415,126 @@ BOOST_AUTO_TEST_CASE(testAtmLevelIsTheForward) {
     }
 }
 
+namespace {
+
+    template <class Section>
+    class WithPeakCallDeltaStrike : public Section {
+      public:
+        using Section::Section;
+        Rate peakStrike() const {
+            this->calculate();
+            return this->peakCallDeltaStrike();
+        }
+    };
+
+    template <class Section>
+    ext::shared_ptr<FxSmileSection> paSection(const MarketData& md,
+                                              const ext::shared_ptr<SimpleQuote>& spot,
+                                              const ext::shared_ptr<FxSmileQuotes>& quotes,
+                                              DeltaVolQuote::DeltaType dt) {
+        return ext::make_shared<Section>(md.expiryDate, Handle<Quote>(spot), quotes,
+                                         md.forDiscount, md.domDiscount, dt,
+                                         DeltaVolQuote::AtmDeltaNeutral, Actual365Fixed(),
+                                         md.settlement);
+    }
+
+    Real callDelta(const FxSmileSection& ss, Rate strike) {
+        return BlackDeltaCalculator(Option::Call, ss.deltaType(), ss.spot()->value(),
+                                    ss.domesticDiscountFactor(), ss.foreignDiscountFactor(),
+                                    ss.volByStrike(strike) * std::sqrt(ss.exerciseTime()))
+            .deltaFromStrike(strike);
+    }
+
+}
+
+BOOST_AUTO_TEST_CASE(testPremiumAdjustedMarketStrangles) {
+    BOOST_TEST_MESSAGE("Testing FX smiles fitted to broker strangles with premium-adjusted deltas...");
+
+    MarketData md;
+    const Real delta = 0.25;
+    auto spot = ext::make_shared<SimpleQuote>(md.spot->value());
+
+    // ATM, risk reversal and broker strangle at one delta: three targets
+    // for three parameters, so the fit is exact.  The risk reversal needs
+    // call deltas of the trial smile, which for premium-adjusted deltas
+    // used to depend on the previous calibration and failed on the first.
+    for (auto dt : {DeltaVolQuote::PaSpot, DeltaVolQuote::PaFwd}) {
+        auto quotes = ext::make_shared<FxRrBfQuotes>(
+            md.v_atm, std::vector<Handle<Quote>>{md.v_25rr}, std::vector<Handle<Quote>>{md.v_25bf},
+            std::vector<Real>{delta}, FxRrBfQuotes::MarketStrangle);
+        const std::vector<std::pair<std::string, ext::shared_ptr<FxSmileSection>>> sections = {
+            {"Polynomial", paSection<PolynomialSmileSection>(md, spot, quotes, dt)},
+            {"Quadratic", paSection<QuadraticSmileSection>(md, spot, quotes, dt)},
+            {"SABR", paSection<FxSabrSmileSection>(md, spot, quotes, dt)}};
+        for (const auto& [name, ss] : sections) {
+            BOOST_CHECK_MESSAGE(ss->calibrationError() < 1.0e-8,
+                                name << " (" << dt << "): calibration error " << ss->calibrationError());
+            const Real rr = ss->volByDelta(delta, Option::Call) - ss->volByDelta(-delta, Option::Put);
+            BOOST_CHECK_SMALL(rr - md.v_25rr->value(), 1.0e-8);
+            BOOST_CHECK_SMALL(ss->atmVol() - md.v_atm->value(), 1.0e-8);
+
+            // the same quotes give the same smile after recalibrating
+            const Rate K = 1.05 * ss->forward();
+            const Volatility v = ss->volByStrike(K);
+            spot->setValue(1.80);
+            ss->volByStrike(K);
+            spot->setValue(md.spot->value());
+            BOOST_CHECK_CLOSE(ss->volByStrike(K), v, 1.0e-10);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testMaxCallDelta) {
+    BOOST_TEST_MESSAGE("Testing the largest call delta of FX smile sections...");
+
+    MarketData md;
+
+    for (auto dt : {DeltaVolQuote::PaSpot, DeltaVolQuote::PaFwd}) {
+        WithPeakCallDeltaStrike<QuadraticSmileSection> ss(
+            md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount, md.domDiscount, dt,
+            md.atmType, Actual365Fixed(), md.settlement);
+        const Rate kPeak = ss.peakStrike();
+        const Real maxDelta = ss.maxCallDelta();
+        BOOST_CHECK_SMALL(callDelta(ss, kPeak) - maxDelta, 1.0e-14);
+        // it is the peak of the smile's call delta...
+        for (Real m : {0.8, 0.95, 0.999, 1.001, 1.05, 1.25})
+            BOOST_CHECK_MESSAGE(callDelta(ss, m * kPeak) < maxDelta,
+                                dt << ": call delta at " << m << " x peak strike exceeds the peak");
+        // ...so every lower call delta is attained above it, and none higher
+        const Real d = maxDelta - 1.0e-4;
+        BOOST_CHECK(ss.strikeByDelta(d, Option::Call) > kPeak);
+        BOOST_CHECK_SMALL(callDelta(ss, ss.strikeByDelta(d, Option::Call)) - d, 1.0e-10);
+        BOOST_CHECK_THROW(ss.volByDelta(maxDelta + 1.0e-4, Option::Call), Error);
+        // and it does not limit the strikes the smile is defined for
+        BOOST_CHECK(ss.minStrike() < 1.0e-100);
+    }
+
+    // unadjusted deltas: the limit at zero strike
+    QuadraticSmileSection spotDelta(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount,
+                                    md.domDiscount, DeltaVolQuote::Spot, md.atmType,
+                                    Actual365Fixed(), md.settlement);
+    BOOST_CHECK_EQUAL(spotDelta.maxCallDelta(), spotDelta.foreignDiscountFactor());
+    QuadraticSmileSection fwdDelta(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount,
+                                   md.domDiscount, DeltaVolQuote::Fwd, md.atmType,
+                                   Actual365Fixed(), md.settlement);
+    BOOST_CHECK_EQUAL(fwdDelta.maxCallDelta(), 1.0);
+
+    // a total vol above about 1.25 puts the peak above the forward (here
+    // about 2; a 25D premium-adjusted call no longer exists, so 10D quotes)
+    const Date longExpiry = md.todaysDate + 11 * Years;
+    WithPeakCallDeltaStrike<QuadraticSmileSection> highVol(
+        longExpiry, md.spot,
+        ext::make_shared<FxRrBfQuotes>(makeQuoteHandle(0.60), std::vector<Handle<Quote>>{makeQuoteHandle(0.02)},
+                                       std::vector<Handle<Quote>>{makeQuoteHandle(0.01)},
+                                       std::vector<Real>{0.10}, FxRrBfQuotes::SmileStrangle),
+        md.forDiscount, md.domDiscount, DeltaVolQuote::PaFwd, md.atmType, Actual365Fixed(),
+        md.settlement);
+    const Rate kPeak = highVol.peakStrike();
+    BOOST_CHECK(kPeak > highVol.forward());
+    for (Real m : {0.999, 1.001})
+        BOOST_CHECK(callDelta(highVol, m * kPeak) < highVol.maxCallDelta());
+}
+
 BOOST_AUTO_TEST_CASE(testMarketDataReactivity) {
     BOOST_TEST_MESSAGE("Testing FX smile section reactivity to market data changes...");
 

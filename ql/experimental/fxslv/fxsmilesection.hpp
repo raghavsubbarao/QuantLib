@@ -108,8 +108,9 @@ namespace QuantLib {
 
         //! \name SmileSection interface
         //@{
-        Real minStrike() const override { calculate(); return minStrike_; }
-        Real maxStrike() const override { calculate(); return maxStrike_; }
+        //! The smile is defined for every positive strike.
+        Real minStrike() const override { return QL_MIN_POSITIVE_REAL; }
+        Real maxStrike() const override { return QL_MAX_REAL; }
         //! The forward, as SmileSection requires; see atmStrike() for the ATM strike.
         /*! SmileSection's pricing functions (optionPrice(), vega(),
             density(), ...) use this as the forward.
@@ -148,6 +149,16 @@ namespace QuantLib {
 
         //! Foreign discount factor from spot to delivery (time mode: to expiry time).
         DiscountFactor foreignDiscountFactor() const { calculate(); return dfor_; }
+
+        //! Largest call delta in the section's delta convention.
+        /*! For premium-adjusted deltas the call delta is not monotonic
+            in strike: it peaks at a strike below which every call delta
+            is attained twice, and higher call deltas are not attained at
+            all.  For unadjusted deltas it is the limit at zero strike:
+            the foreign discount factor for spot deltas, 1 for forward
+            deltas.
+        */
+        Real maxCallDelta() const;
 
         //! Market quotes the section is calibrated to.
         const ext::shared_ptr<FxSmileQuotes>& smileQuotes() const { return smileQuotes_; }
@@ -214,7 +225,6 @@ namespace QuantLib {
         void fitToTargets(FxSmileTargets targets) const;
         mutable bool calibrating_ = false;  // the quotes are calibrating this section
         mutable bool fitRequested_ = false; // the quotes called fitToTargets() during this calibration
-        virtual void adjustStrikes() const;
 
         //! Fits the smile to targets_.
         /*! By default a least-squares fit of the vega-weighted target
@@ -244,6 +254,16 @@ namespace QuantLib {
         */
         Volatility referenceVol() const { return smileQuotes_->referenceVol(); }
 
+        //! Strike at which the premium-adjusted call delta of the current smile peaks.
+        /*! Computed from the smile as it stands, so during calibration
+            it is the trial smile's; the delta includes the smile's slope.
+            If the delta has more than one local peak, the one found by
+            searching outward from the forward is returned.  Only defined
+            for premium-adjusted delta types, and only while or after the
+            section calculates, since it needs the forward.
+        */
+        Rate peakCallDeltaStrike() const;
+
         //! Initial parameter guess for calibration.
         virtual Array initialParams() const = 0;
         //! Sets the model parameters; used with trial values during calibration.
@@ -254,8 +274,6 @@ namespace QuantLib {
         mutable Real fwd_ = Null<Real>();
 
         mutable Real atmStrike_ = Null<Real>();
-        mutable Real maxStrike_;
-        mutable Real minStrike_;
 
         // Computed state: rebuilt on every calibration in stripDeltaVolQuotes().
         // atmVol_ is the fitted smile's ATM vol, set by calculateAtm(); it is

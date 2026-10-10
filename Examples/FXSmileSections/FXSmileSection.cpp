@@ -164,10 +164,12 @@ int main(int, char*[]) {
         Handle<Quote> v_atm = makeQuoteHandle(0.14483);
 
         // Risk-reversal and broker-fly quotes at two delta tenors
-        std::vector<Handle<Quote>> rrs = { makeQuoteHandle(0.05770),
-                                           makeQuoteHandle(0.101575) };
+        // 10D risk reversal about 1.8x and 10D fly about 3.2x the 25D ones,
+        // as is typical of FX smiles
+        std::vector<Handle<Quote>> rrs = { makeQuoteHandle(0.02770),
+                                           makeQuoteHandle(0.048752) };
         std::vector<Handle<Quote>> bfs = { makeQuoteHandle(0.007425),
-                                           makeQuoteHandle(0.016125) };
+                                           makeQuoteHandle(0.02376) };
         std::vector<Real> deltas = { 0.25, 0.10 };
 
         DeltaVolQuote::DeltaType deltaType = DeltaVolQuote::PaSpot;
