@@ -42,6 +42,7 @@
 #include <ql/settings.hpp>
 #include <functional>
 #include <limits>
+#include <sstream>
 #include <string>
 
 using namespace QuantLib;
@@ -533,6 +534,74 @@ BOOST_AUTO_TEST_CASE(testMaxCallDelta) {
     BOOST_CHECK(kPeak > highVol.forward());
     for (Real m : {0.999, 1.001})
         BOOST_CHECK(callDelta(highVol, m * kPeak) < highVol.maxCallDelta());
+}
+
+namespace {
+
+    template <class Section>
+    SectionFactory conventionFactory(const MarketData& md,
+                                     DeltaVolQuote::DeltaType dt,
+                                     DeltaVolQuote::AtmType at) {
+        return [&md, dt, at](const ext::shared_ptr<FxSmileQuotes>& quotes) {
+            return ext::make_shared<Section>(md.expiryDate, md.spot, quotes, md.forDiscount,
+                                             md.domDiscount, dt, at, Actual365Fixed(),
+                                             md.settlement);
+        };
+    }
+
+    // strike <-> delta <-> vol round trips on a calibrated smile
+    void checkDeltaRoundTrips(const std::string& name, const FxSmileSection& ss) {
+        for (Real d : {0.10, 0.25}) {
+            for (auto [type, delta] : {std::make_pair(Option::Call, d), std::make_pair(Option::Put, -d)}) {
+                const Rate K = ss.strikeByDelta(delta, type);
+                BOOST_CHECK_MESSAGE(std::fabs(ss.deltaByStrike(K, type) - delta) < 1.0e-8,
+                                    name << ": delta " << delta << " -> strike " << K
+                                         << " -> delta " << ss.deltaByStrike(K, type));
+                BOOST_CHECK_MESSAGE(std::fabs(ss.volByDelta(delta, type) - ss.volByStrike(K)) < 1.0e-8,
+                                    name << ": vol by delta " << delta << " and by its strike differ");
+            }
+        }
+    }
+
+}
+
+BOOST_AUTO_TEST_CASE(testRoundTripsInAllConventions) {
+    BOOST_TEST_MESSAGE("Testing FX smile round trips in every delta and ATM convention...");
+
+    MarketData md;
+
+    for (auto dt : {DeltaVolQuote::Spot, DeltaVolQuote::Fwd, DeltaVolQuote::PaSpot,
+                    DeltaVolQuote::PaFwd}) {
+        for (auto at : {DeltaVolQuote::AtmFwd, DeltaVolQuote::AtmDeltaNeutral}) {
+            const std::vector<std::pair<std::string, SectionFactory>> models = {
+                {"Polynomial", conventionFactory<PolynomialSmileSection>(md, dt, at)},
+                {"SABR", conventionFactory<FxSabrSmileSection>(md, dt, at)},
+                {"SVI", conventionFactory<FxSviSmileSection>(md, dt, at)},
+                {"Quadratic", conventionFactory<QuadraticSmileSection>(md, dt, at)},
+                {"CostFlatDynamics", conventionFactory<FxCostSmileSectionFlatDynamics>(md, dt, at)},
+                {"CostScaledDynamics", conventionFactory<FxCostSmileSectionScaledDynamics>(md, dt, at)}};
+            for (const auto& [model, make] : models) {
+                std::ostringstream name;
+                name << model << " (" << dt << ", " << at << ")";
+                try {
+                    auto ss = make(md.rrBfQuotes());
+                    // the ATM vol lies on the smile at the ATM strike...
+                    BOOST_CHECK_MESSAGE(std::fabs(ss->volByStrike(ss->atmStrike()) - ss->atmVol()) < 1.0e-10,
+                                        name.str() << ": ATM vol not on the smile");
+                    // ...strikes, deltas and vols are consistent...
+                    checkDeltaRoundTrips(name.str(), *ss);
+                    // ...and quotes read off the smile are refitted exactly
+                    auto refitted = make(quotesFromSmile(*ss));
+                    BOOST_CHECK_MESSAGE(refitted->calibrationError() < 1.0e-8,
+                                        name.str() << ": quotes from its own smile not refitted: error "
+                                                   << refitted->calibrationError());
+                    checkSameSmile(name.str(), *ss, *refitted, 1.0e-6);
+                } catch (std::exception& e) {
+                    BOOST_ERROR(name.str() << ": " << e.what());
+                }
+            }
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(testMarketDataReactivity) {
