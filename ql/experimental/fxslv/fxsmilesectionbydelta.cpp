@@ -23,7 +23,6 @@
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
-#include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <algorithm>
 #include <cmath>
 
@@ -70,52 +69,38 @@ namespace QuantLib {
         calculate();
 
         if (parity == Option::Call) {
-            // call delta needs to be converted to put delta
-            switch (deltaType()) { 
-            
-            case DeltaVolQuote::Spot:
-                QL_REQUIRE(std::fabs(delta) <= dfor_, "Spot delta out of range.");
-                delta -= dfor_;
-                break;
+            // the smile is parameterised by put delta: convert the call delta
+            const FxDeltaConvention conv = deltaConvention();
+            const Real sqrtT = std::sqrt(exerciseTime());
 
-            case DeltaVolQuote::Fwd:
-                QL_REQUIRE(std::fabs(delta) <= 1.0, "Forward delta out of range.");
-                delta -= 1;
-                break;
-
-            case DeltaVolQuote::PaSpot:
-            case DeltaVolQuote::PaFwd:
+            if (!conv.premiumAdjusted()) {
+                // parity is a constant for unadjusted deltas
+                QL_REQUIRE(delta > 0.0 && delta <= conv.callDeltaLimit(),
+                           "call delta out of range: " << delta);
+                delta -= conv.parity(fwd_);
+            } else {
                 const Rate kPeak = peakCallDeltaStrike();
-                Volatility v = volByStrike(kPeak);
-                Real maxCallDelta = BlackDeltaCalculator(Option::Call, deltaType(), spot()->value(),
-                                                         ddom_, dfor_, v * sqrt(exerciseTime()))
-                                        .deltaFromStrike(kPeak);
-                QL_REQUIRE(delta <= maxCallDelta + QL_EPSILON, "Call delta out of range");
-                if (std::fabs(delta - maxCallDelta) <= QL_EPSILON) {
-                    return v;
-                }
+                const Volatility vPeak = volByStrike(kPeak);
+                const Real maxCallDelta = conv.delta(Option::Call, kPeak, vPeak * sqrtT);
+                QL_REQUIRE(delta <= maxCallDelta + QL_EPSILON,
+                           "call delta " << delta << " out of range: the largest is "
+                                         << maxCallDelta);
+                if (std::fabs(delta - maxCallDelta) <= QL_EPSILON)
+                    return vPeak;
 
                 // Otherwise find the put delta d whose strike has the given
-                // call delta, by put-call parity
-                //   call delta - put delta = dfor K/F (PaSpot) or K/F (PaFwd).
+                // call delta, by parity: call delta - put delta = parity(K).
                 // Below the peak each call delta is attained at two strikes;
                 // the quoted one is above the peak, i.e. at put deltas below
                 // the peak's, where the call delta falls from its maximum to 0.
                 auto deltaError = [&](Real d) {
-                    Volatility v = volByDelta(d, Option::Type::Put);
-                    Real k = putStrikeFromDelta(d, v * sqrt(exerciseTime()));
-                    if (deltaType() == DeltaVolQuote::PaSpot) {
-                        return delta - d - dfor_ * k / fwd_;
-
-                    } else {
-                        return delta - d - k / fwd_;
-                    }
+                    const Volatility v = volByDelta(d, Option::Put);
+                    const Rate k = conv.strike(Option::Put, d, v * sqrtT);
+                    return delta - d - conv.parity(k);
                 };
 
                 // the error is negative at the peak and positive far above it
-                const Real dPeak = BlackDeltaCalculator(Option::Put, deltaType(), spot()->value(),
-                                                        ddom_, dfor_, v * sqrt(exerciseTime()))
-                                       .deltaFromStrike(kPeak);
+                const Real dPeak = conv.delta(Option::Put, kPeak, vPeak * sqrtT);
                 Real step = std::max(std::fabs(dPeak), 0.01), dFar = dPeak - step;
                 Size steps = 0;
                 while (deltaError(dFar) <= 0.0) {
@@ -139,92 +124,40 @@ namespace QuantLib {
     {
         calculate();
 
-        Volatility v = volByDelta(delta, parity);
-        if (parity == Option::Put)
-            return putStrikeFromDelta(delta, v * sqrt(exerciseTime()));
-        BlackDeltaCalculator bdc(parity, deltaType(), spot()->value(), ddom_, dfor_,
-                                 v * sqrt(exerciseTime()));
-        return bdc.strikeFromDelta(delta);
-    }
-
-    Rate FxSmileSectionByDelta::putStrikeFromDelta(Real putDelta, Real stdDev) const
-    {
-        QL_REQUIRE(putDelta < 0.0, "put delta must be negative: " << putDelta);
-
-        BlackDeltaCalculator bdc(Option::Put, deltaType(), spot()->value(), ddom_, dfor_, stdDev);
-        if (deltaType() == DeltaVolQuote::Spot || deltaType() == DeltaVolQuote::Fwd)
-            return bdc.strikeFromDelta(putDelta);
-
-        // Premium-adjusted put delta -dfor*(K/F)*N(-d2) (or -(K/F)*N(-d2))
-        // decreases monotonically from 0 to -infinity as K grows, so the
-        // strike is bracketed by expanding upwards from the forward.
-        auto f = [&](Real k) { return bdc.deltaFromStrike(k) - putDelta; };
-        Brent solver;
-        solver.setMaxEvaluations(1000);
-        solver.setLowerBound(QL_EPSILON * fwd_);
-        return solver.solve(f, 1.0e-12, fwd_, 0.1 * fwd_);
+        const Volatility v = volByDelta(delta, parity);
+        return deltaConvention().strike(parity, delta, v * std::sqrt(exerciseTime()));
     }
 
     Real FxSmileSectionByDelta::deltaByStrike(Rate strike, Option::Type parity) const 
     {
         calculate();
 
-        // Since the slice is parameterized by put deltas, ignore parity and get
-        // the put delta at the specified strike! This requires a root finding
-        // procedure as we know the strike but not the vol!
-        Rate d0 = BlackDeltaCalculator(Option::Type::Put, deltaType(), spot()->value(), ddom_,
-                                       dfor_, referenceVol() * sqrt(exerciseTime()))
-                      .deltaFromStrike(strike);
-
-        // Solve the fixed point d = putDelta(strike, vol(d)). This only needs
-        // deltaFromStrike, so it avoids inverting delta -> strike at every
-        // step (which, for premium-adjusted deltas, throws for put deltas
-        // below -dfor). The put delta at a fixed strike is bounded below
-        // whatever the vol:
-        //   Spot:   -dfor              Fwd:   -1
-        //   PaSpot: -dfor * K / F      PaFwd: -K / F
-        // since N(-d1), N(-d2) <= 1.
-        Real dmin = 0.0;
-        switch (deltaType()) {
-            case DeltaVolQuote::Spot:
-                dmin = -dfor_;
-                break;
-            case DeltaVolQuote::Fwd:
-                dmin = -1.0;
-                break;
-            case DeltaVolQuote::PaSpot:
-                dmin = -dfor_ * strike / fwd_;
-                break;
-            case DeltaVolQuote::PaFwd:
-                dmin = -strike / fwd_;
-                break;
-            default:
-                QL_FAIL("unknown delta type");
-        }
+        // The smile is parameterised by put delta, so find the put delta at
+        // the strike first: the fixed point d = putDelta(strike, vol(d)).
+        // This only needs delta from strike, never the inverse.  The put
+        // delta at a fixed strike lies in a range independent of the vol.
+        const FxDeltaConvention conv = deltaConvention();
+        const Real sqrtT = std::sqrt(exerciseTime());
+        const auto range = conv.putDeltaRange(strike);
+        const Real dmin = range.first;
         // The upper end is 0 rather than -epsilon: a deep out-of-the-money
         // put can have a delta smaller in magnitude than epsilon, and the
         // fixed-point form never needs to invert delta -> strike at 0.
-        const Real dmax = 0.0;
+        const Real dmax = range.second;
+        Real d0 = conv.delta(Option::Put, strike, referenceVol() * sqrtT);
         if (!(d0 > dmin && d0 < dmax))
             d0 = 0.5 * (dmin + dmax);
 
         auto deltaError = [&](Real delta) {
-            Volatility v = volByDelta(delta, Option::Type::Put);
-            return BlackDeltaCalculator(Option::Type::Put, deltaType(), spot()->value(), ddom_,
-                                        dfor_, v * sqrt(exerciseTime()))
-                       .deltaFromStrike(strike) -
-                   delta;
+            const Volatility v = volByDelta(delta, Option::Put);
+            return conv.delta(Option::Put, strike, v * sqrtT) - delta;
         };
 
         Brent solver;
         Real d = solver.solve(deltaError, 1e-12, d0, dmin, dmax);
 
-        if (parity == Option::Type::Call) {
-            Volatility v = volByDelta(d, Option::Type::Put);
-            d = BlackDeltaCalculator(Option::Type::Call, deltaType(), spot()->value(), ddom_, dfor_,
-                                     v * sqrt(exerciseTime()))
-                    .deltaFromStrike(strike);
-        }
+        if (parity == Option::Call)
+            d = conv.delta(Option::Call, strike, volByDelta(d, Option::Put) * sqrtT);
 
         return d;
     }
@@ -232,10 +165,8 @@ namespace QuantLib {
     Real FxSmileSectionByDelta::volResidual(Rate strike, Volatility vol) const
     {
         // the model vol at the point's put delta, computed with the point's own vol
-        const Real stdDev = vol * std::sqrt(exerciseTime());
-        const Real putDelta = BlackDeltaCalculator(Option::Put, deltaType(), spot()->value(),
-                                                   ddom_, dfor_, stdDev)
-                                  .deltaFromStrike(strike);
+        const Real putDelta =
+            deltaConvention().delta(Option::Put, strike, vol * std::sqrt(exerciseTime()));
         return volByDelta(putDelta, Option::Put) - vol;
     }
 

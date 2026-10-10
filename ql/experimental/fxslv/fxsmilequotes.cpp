@@ -21,7 +21,6 @@
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
 #include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/pricingengines/blackcalculator.hpp>
-#include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <cmath>
 #include <utility>
@@ -38,14 +37,9 @@ namespace QuantLib {
 
         // call and put strikes of the broker strangle, struck at the broker vol
         std::pair<Rate, Rate> brokerStrikes(const FxSmileSection& section, Real delta, Real stdDev) {
-            const Real spot = section.spot()->value();
-            const Real ddom = section.domesticDiscountFactor();
-            const Real dfor = section.foreignDiscountFactor();
-            const DeltaVolQuote::DeltaType dt = section.deltaType();
-            return {BlackDeltaCalculator(Option::Call, dt, spot, ddom, dfor, stdDev)
-                        .strikeFromDelta(delta),
-                    BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, stdDev)
-                        .strikeFromDelta(-delta)};
+            const FxDeltaConvention conv = section.deltaConvention();
+            return {conv.strike(Option::Call, delta, stdDev),
+                    conv.strike(Option::Put, -delta, stdDev)};
         }
 
     }
@@ -56,15 +50,11 @@ namespace QuantLib {
         const DeltaVolQuote& q = **quote_;
         const Volatility vol = q.value();
         const Real w = vol * std::sqrt(section.exerciseTime());
-        BlackDeltaCalculator calc(q.atmType() == DeltaVolQuote::AtmNull && q.delta() < 0 ?
-                                      Option::Put :
-                                      Option::Call,
-                                  q.deltaType(), section.spot()->value(),
-                                  section.domesticDiscountFactor(),
-                                  section.foreignDiscountFactor(), w);
-        const Rate strike = q.atmType() == DeltaVolQuote::AtmNull ?
-                                calc.strikeFromDelta(q.delta()) :
-                                calc.atmStrike(q.atmType());
+        const FxDeltaConvention conv = section.deltaConvention().withType(q.deltaType());
+        const Rate strike =
+            q.atmType() == DeltaVolQuote::AtmNull ?
+                conv.strike(q.delta() < 0 ? Option::Put : Option::Call, q.delta(), w) :
+                conv.atmStrike(q.atmType(), w);
         return std::make_pair(strike, vol);
     }
 

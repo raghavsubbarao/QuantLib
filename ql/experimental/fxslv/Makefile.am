@@ -5,6 +5,7 @@ this_includedir=${includedir}/${subdir}
 this_include_HEADERS = \
     all.hpp \
     fxcostsmilesection.hpp \
+    fxdeltaconvention.hpp \
     fxsettlementconvention.hpp \
     fxslvpricingcontext.hpp \
     fxsmilequotes.hpp \
@@ -20,6 +21,7 @@ this_include_HEADERS = \
 
 cpp_files = \
     fxcostsmilesection.cpp \
+    fxdeltaconvention.cpp \
     fxslvpricingcontext.cpp \
     fxsmilequotes.cpp \
     fxsmilesection.cpp \

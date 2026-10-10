@@ -2,6 +2,7 @@
 /* Add the files to be included into Makefile.am instead. */
 
 #include <ql/experimental/fxslv/fxcostsmilesection.hpp>
+#include <ql/experimental/fxslv/fxdeltaconvention.hpp>
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
 #include <ql/experimental/fxslv/fxsmilequotes.hpp>

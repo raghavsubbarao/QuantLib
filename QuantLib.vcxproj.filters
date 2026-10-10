@@ -3309,6 +3309,9 @@
     <ClInclude Include="ql\experimental\fxslv\fxcostsmilesection.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>
+    <ClInclude Include="ql\experimental\fxslv\fxdeltaconvention.hpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClInclude>
     <ClInclude Include="ql\experimental\fxslv\fxsettlementconvention.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>
@@ -7448,6 +7451,9 @@
       <Filter>experimental\fx</Filter>
     </ClCompile>
     <ClCompile Include="ql\experimental\fxslv\fxcostsmilesection.cpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClCompile>
+    <ClCompile Include="ql\experimental\fxslv\fxdeltaconvention.cpp">
       <Filter>experimental\fxslv</Filter>
     </ClCompile>
     <ClCompile Include="ql\experimental\fxslv\fxslvpricingcontext.cpp">

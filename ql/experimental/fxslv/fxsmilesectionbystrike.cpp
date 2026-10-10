@@ -25,7 +25,6 @@
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/volatility/sabr.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
-#include <ql/pricingengines/blackdeltacalculator.hpp>
 
 namespace QuantLib {
 
@@ -73,10 +72,8 @@ namespace QuantLib {
     {
         calculate();
 
-        Volatility v = volByStrike(strike);
-        return BlackDeltaCalculator(parity, deltaType(), spot()->value(), ddom_, dfor_,
-                                    v * sqrt(exerciseTime()))
-            .deltaFromStrike(strike);
+        return deltaConvention().delta(parity, strike,
+                                       volByStrike(strike) * std::sqrt(exerciseTime()));
     }
 
     Rate FxSmileSectionByStrike::strikeByDelta(Real delta, Option::Type parity) const 
@@ -95,18 +92,14 @@ namespace QuantLib {
             }
         }
 
-        Rate k0 = BlackDeltaCalculator(parity, deltaType(), spot()->value(), ddom_, dfor_,
-                                       referenceVol() * sqrt(exerciseTime()))
-                      .strikeFromDelta(delta);
+        const FxDeltaConvention conv = deltaConvention();
+        const Real sqrtT = std::sqrt(exerciseTime());
+        Rate k0 = conv.strike(parity, delta, referenceVol() * sqrtT);
         Rate kmin = paCall ? kPeak : QL_EPSILON;
         Rate kmax = k0 * 10;
 
         auto deltaError = [&](Real strike) {
-            Volatility v = volByStrike(strike);
-            Real d = BlackDeltaCalculator(parity, deltaType(), spot()->value(), ddom_, dfor_,
-                                          v * sqrt(exerciseTime()))
-                         .deltaFromStrike(strike);
-            return d - delta;
+            return conv.delta(parity, strike, volByStrike(strike) * sqrtT) - delta;
         };
 
         Brent solver;

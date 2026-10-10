@@ -26,7 +26,6 @@
 #include <ql/math/optimization/problem.hpp>
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/pricingengines/blackcalculator.hpp>
-#include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -141,15 +140,13 @@ namespace QuantLib {
         // the forward, in steps of one reference standard deviation, widening as
         // needed, so that far-away strikes where a smile may be undefined
         // are only visited if the root is really out there.
-        const Real spot = spot_->value();
+        const FxDeltaConvention conv = deltaConvention();
         const Real stdDev = referenceVol() * std::sqrt(exerciseTime());
 
         auto atmStrikeError = [&](Real logStrike) {
             const Real strike = std::exp(logStrike);
             const Volatility v = volByStrike(strike);
-            const Real kAtm = BlackDeltaCalculator(Option::Call, deltaType(), spot, ddom_, dfor_,
-                                                   v * std::sqrt(exerciseTime()))
-                                  .atmStrike(atmType());
+            const Real kAtm = conv.atmStrike(atmType(), v * std::sqrt(exerciseTime()));
             return logStrike - std::log(kAtm);
         };
 
@@ -257,15 +254,15 @@ namespace QuantLib {
         QL_REQUIRE(premiumAdjust(), "the call delta only peaks for premium-adjusted deltas");
 
         // call delta of the current smile as a function of log-strike
-        const Real spot = spot_->value(), sqrtT = std::sqrt(exerciseTime());
+        const FxDeltaConvention conv = deltaConvention();
+        const Real sqrtT = std::sqrt(exerciseTime());
         auto callDelta = [&](Real x) {
             const Rate strike = std::exp(x);
             const Volatility vol = volByStrike(strike);
             QL_REQUIRE(std::isfinite(vol) && vol >= 0.0,
                        "smile not defined at strike " << strike << " (vol " << vol
                            << ") while looking for the peak premium-adjusted call delta");
-            return BlackDeltaCalculator(Option::Call, deltaType(), spot, ddom_, dfor_, vol * sqrtT)
-                .deltaFromStrike(strike);
+            return conv.delta(Option::Call, strike, vol * sqrtT);
         };
 
         // bracket the peak, walking from the forward in steps of one
@@ -317,22 +314,16 @@ namespace QuantLib {
     }
 
     Real FxSmileSection::maxCallDelta() const {
+        const FxDeltaConvention conv = deltaConvention();
+        if (!conv.premiumAdjusted())
+            return conv.callDeltaLimit();
+        const Rate strike = peakCallDeltaStrike();
+        return conv.delta(Option::Call, strike, volByStrike(strike) * std::sqrt(exerciseTime()));
+    }
+
+    FxDeltaConvention FxSmileSection::deltaConvention() const {
         calculate();
-        switch (deltaType_) {
-          case DeltaVolQuote::Spot:
-            return dfor_;
-          case DeltaVolQuote::Fwd:
-            return 1.0;
-          case DeltaVolQuote::PaSpot:
-          case DeltaVolQuote::PaFwd: {
-              const Rate strike = peakCallDeltaStrike();
-              return BlackDeltaCalculator(Option::Call, deltaType_, spot_->value(), ddom_, dfor_,
-                                          volByStrike(strike) * std::sqrt(exerciseTime()))
-                  .deltaFromStrike(strike);
-          }
-          default:
-            QL_FAIL("unknown delta type");
-        }
+        return FxDeltaConvention(deltaType_, spot_->value(), ddom_, dfor_);
     }
 
     void FxSmileSection::performCalculations() const {
