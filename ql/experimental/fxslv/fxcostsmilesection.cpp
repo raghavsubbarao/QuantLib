@@ -17,6 +17,7 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
+#include <algorithm>
 #include <complex>
 #include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/math/matrix.hpp>
@@ -109,6 +110,7 @@ namespace QuantLib {
 
     Integer Quartic::roots(std::vector<Real>& zeros)
     {
+        zeros.clear();
         const std::vector<Real> c = coefficients();
 
         if (c[4] == 0.0) {
@@ -153,18 +155,15 @@ namespace QuantLib {
         Cubic p3(std::vector<Real>{-J * J, I * I - 4.0 * K, 2.0 * I, 1.0});
 
         std::vector<Real> z3;
-        int n = p3.roots(z3);
+        p3.roots(z3);
 
-        QL_ASSERT(n > 0, "a cubic should have at least one real root!");
-
-        Real z = z3[0];
-        if (z < 0) z = z3[1];
-        if (z < 0) z = z3[2];
+        const auto positive = std::find_if(z3.begin(), z3.end(), [](Real r) { return r >= 0.0; });
+        QL_ENSURE(positive != z3.end(), "the resolvent cubic should have a non-negative root");
+        Real z = *positive;
 
         Real p = std::sqrt(z);
 
         if (std::abs(p) < 1.0e-10) {
-            zeros.clear();
             zeros.push_back(-0.25 * B);
             return 1;
 
@@ -427,14 +426,14 @@ namespace QuantLib {
         Quartic q(std::vector<Real>{-x * x * params[3], 2 * x * params[2], -params[0],
                                     s * params[2] - 2 * params[1], params[3] / 4.});
         std::vector<Real> omega;
-        Integer n = q.roots(omega);
+        q.roots(omega);
 
-        QL_REQUIRE(n > 0, "calibrated smile should have a real root");
-
-        Real w = omega[0];
-        if (w < 0) w = omega[1];
-        if (w < 0) w = omega[2];
-        if (w < 0) w = omega[3];
+        // the first non-negative real root; which root to take when there
+        // are several is an open question
+        const auto root = std::find_if(omega.begin(), omega.end(), [](Real r) { return r >= 0.0; });
+        QL_REQUIRE(root != omega.end(),
+                   "cost equation has no non-negative real root at strike " << strike);
+        Real w = *root;
 
         // improve root if necc
         Real err = q(w);

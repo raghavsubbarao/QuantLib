@@ -3312,6 +3312,9 @@
     <ClInclude Include="ql\experimental\fxslv\fxdeltaconverter.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>
+    <ClInclude Include="ql\experimental\fxslv\fxrootbracketing.hpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClInclude>
     <ClInclude Include="ql\experimental\fxslv\fxsettlementconvention.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>

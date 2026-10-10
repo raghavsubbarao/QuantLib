@@ -6,6 +6,7 @@ this_include_HEADERS = \
     all.hpp \
     fxcostsmilesection.hpp \
     fxdeltaconverter.hpp \
+    fxrootbracketing.hpp \
     fxsettlementconvention.hpp \
     fxslvpricingcontext.hpp \
     fxsmilequotes.hpp \

@@ -1197,6 +1197,7 @@ set(QL_HEADERS
     experimental/fx/mtmcrosscurrencybasisswap.hpp
     experimental/fxslv/fxcostsmilesection.hpp
     experimental/fxslv/fxdeltaconverter.hpp
+    experimental/fxslv/fxrootbracketing.hpp
     experimental/fxslv/fxsettlementconvention.hpp
     experimental/fxslv/fxslvpricingcontext.hpp
     experimental/fxslv/fxsmilequotes.hpp

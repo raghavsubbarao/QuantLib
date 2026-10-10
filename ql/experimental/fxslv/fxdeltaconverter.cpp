@@ -18,9 +18,8 @@
 */
 
 #include <ql/experimental/fxslv/fxdeltaconverter.hpp>
+#include <ql/experimental/fxslv/fxrootbracketing.hpp>
 #include <ql/math/distributions/normaldistribution.hpp>
-#include <ql/math/solvers1d/brent.hpp>
-#include <algorithm>
 #include <cmath>
 
 namespace QuantLib {
@@ -82,12 +81,7 @@ namespace QuantLib {
         CumulativeNormalDistribution N;
         NormalDistribution n;
         auto h = [&](Real d) { return w * N(d) - n(d); };
-        Real hi = std::max(1.0, -w + 1.0);
-        while (h(hi) <= 0.0)
-            hi += 1.0;
-        Brent solver;
-        solver.setMaxEvaluations(1000);
-        const Real d2 = solver.solve(h, 1.0e-14, 0.5 * (hi - w), -w, hi);
+        const Real d2 = detail::findRoot(h, -w, 1.0, detail::Slope::Increasing, 1.0e-14);
         // d2 = log(F/K)/w - w/2
         return forward_ * std::exp(-w * d2 - 0.5 * w * w);
     }
@@ -105,42 +99,18 @@ namespace QuantLib {
         // fall from their peak to 0 above the peak strike.
         auto error = [&](Real x) { return this->delta(type, std::exp(x), stdDev) - delta; };
 
-        Real lo, hi;
-        if (type == Option::Put) {
-            // the error is positive at low strikes and negative at high ones
-            Real step = stdDev;
-            lo = hi = std::log(forward_);
-            while (error(lo) <= 0.0) {
-                lo -= step;
-                step *= 2.0;
-            }
-            step = stdDev;
-            while (error(hi) >= 0.0) {
-                hi += step;
-                step *= 2.0;
-            }
-        } else {
+        Real start = std::log(forward_);
+        if (type == Option::Call) {
             const Rate kPeak = peakCallStrike(stdDev);
             const Real maxDelta = this->delta(Option::Call, kPeak, stdDev);
             QL_REQUIRE(delta <= maxDelta,
                        "call delta " << delta << " not attainable: the largest premium-adjusted "
                                      << "call delta at a standard deviation of " << stdDev
                                      << " is " << maxDelta);
-            lo = std::log(kPeak);
-            if (delta == maxDelta)
-                return kPeak;
-            // the error is positive at the peak and negative far above it
-            Real step = stdDev;
-            hi = lo + step;
-            while (error(hi) >= 0.0) {
-                step *= 2.0;
-                hi = lo + step;
-            }
+            // the error is not negative at the peak, and falls above it
+            start = std::log(kPeak);
         }
-
-        Brent solver;
-        solver.setMaxEvaluations(1000);
-        return std::exp(solver.solve(error, 1.0e-12, 0.5 * (lo + hi), lo, hi));
+        return std::exp(detail::findRoot(error, start, stdDev, detail::Slope::Decreasing, 1.0e-12));
     }
 
 }

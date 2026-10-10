@@ -41,6 +41,7 @@
 #include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/time/date.hpp>
 #include <ql/settings.hpp>
+#include <algorithm>
 #include <functional>
 #include <limits>
 #include <sstream>
@@ -679,6 +680,110 @@ BOOST_AUTO_TEST_CASE(testDeltaConverter) {
     const FxDeltaConverter pa(DeltaVolQuote::PaSpot, spot, ddom, dfor);
     const Rate itm = pa.strike(Option::Put, -1.2, 0.15);
     BOOST_CHECK_SMALL(pa.delta(Option::Put, itm, 0.15) + 1.2, 1.0e-10);
+}
+
+namespace {
+
+    // A smile quadratic in log-moneyness that is only defined near the
+    // money, as some models are in practice.
+    class NearTheMoneySmile : public FxSmileSectionByStrike {
+      public:
+        using FxSmileSectionByStrike::FxSmileSectionByStrike;
+      protected:
+        Array initialParams() const override {
+            Array guess(3, 0.0);
+            guess[0] = referenceVol();
+            return guess;
+        }
+      private:
+        Volatility _volByStrike(Real strike, Real fwd, Time, const std::vector<Real>& p) const override {
+            const Real k = std::log(strike / fwd);
+            if (std::fabs(k) > 0.5)
+                return std::numeric_limits<Real>::quiet_NaN();
+            return p[0] + p[1] * k + p[2] * k * k;
+        }
+    };
+
+}
+
+BOOST_AUTO_TEST_CASE(testStrikeByDeltaOnlyVisitsStrikesNearTheRoot) {
+    BOOST_TEST_MESSAGE("Testing FX strike-by-delta inversion on a smile defined only near the money...");
+
+    MarketData md;
+    for (auto dt : {DeltaVolQuote::Spot, DeltaVolQuote::Fwd, DeltaVolQuote::PaSpot,
+                    DeltaVolQuote::PaFwd}) {
+        NearTheMoneySmile ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount,
+                             md.domDiscount, dt, md.atmType, Actual365Fixed(), md.settlement);
+        BOOST_REQUIRE(std::isnan(ss.volByStrike(0.5 * ss.forward())));
+        // the quoted strikes lie well inside the domain, so inverting their
+        // deltas must not depend on the smile far away
+        for (Real d : {0.10, 0.25}) {
+            for (auto [type, delta] :
+                 {std::make_pair(Option::Call, d), std::make_pair(Option::Put, -d)}) {
+                try {
+                    const Rate K = ss.strikeByDelta(delta, type);
+                    BOOST_CHECK_SMALL(ss.deltaByStrike(K, type) - delta, 1.0e-8);
+                } catch (std::exception& e) {
+                    BOOST_ERROR(dt << ", delta " << delta << ": " << e.what());
+                }
+            }
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testPremiumAdjustedCallsBeyondTheFlatVolPeak) {
+    BOOST_TEST_MESSAGE("Testing premium-adjusted call deltas the smile reaches but a flat vol does not...");
+
+    // With a put skew the call wing has a lower vol than the reference
+    // (ATM) vol, and a lower vol lets premium-adjusted call deltas reach
+    // higher, so the smile attains call deltas a flat reference vol does
+    // not.  This only matters at a high total vol, where the largest
+    // attainable delta comes down towards the quoted ones.
+    MarketData md;
+    const Date expiry = md.todaysDate + 5 * Years;
+    auto quotes = ext::make_shared<FxRrBfQuotes>(
+        makeQuoteHandle(0.60), std::vector<Handle<Quote>>{makeQuoteHandle(-0.10)},
+        std::vector<Handle<Quote>>{makeQuoteHandle(0.01)}, std::vector<Real>{0.10},
+        FxRrBfQuotes::SmileStrangle);
+    PolynomialSmileSection ss(expiry, md.spot, quotes, md.forDiscount, md.domDiscount,
+                              DeltaVolQuote::PaFwd, DeltaVolQuote::AtmFwd, Actual365Fixed(),
+                              md.settlement);
+
+    const FxDeltaConverter conv = ss.deltaConverter();
+    const Real flatStdDev = 0.60 * std::sqrt(ss.exerciseTime());
+    const Real flatMax = conv.delta(Option::Call, conv.peakCallStrike(flatStdDev), flatStdDev);
+    const Real smileMax = ss.maxCallDelta();
+    BOOST_REQUIRE_MESSAGE(smileMax > flatMax + 1.0e-3,
+                          "test setup: smile max " << smileMax << ", flat max " << flatMax);
+
+    const Real delta = 0.5 * (flatMax + smileMax);
+    BOOST_CHECK_THROW(conv.strike(Option::Call, delta, flatStdDev), Error);
+    try {
+        const Rate K = ss.strikeByDelta(delta, Option::Call);
+        BOOST_CHECK_SMALL(ss.deltaByStrike(K, Option::Call) - delta, 1.0e-8);
+        BOOST_CHECK_SMALL(ss.volByDelta(delta, Option::Call) - ss.volByStrike(K), 1.0e-8);
+    } catch (std::exception& e) {
+        BOOST_ERROR("call delta " << delta << " between the flat and smile peaks: " << e.what());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testQuarticRoots) {
+    BOOST_TEST_MESSAGE("Testing the real roots of the cost models' quartic...");
+
+    auto check = [](const std::vector<Real>& coefficients, std::vector<Real> expected) {
+        std::vector<Real> roots = {42.0, 43.0};  // stale content must go
+        Quartic(coefficients).roots(roots);
+        std::sort(roots.begin(), roots.end());
+        std::sort(expected.begin(), expected.end());
+        BOOST_REQUIRE_EQUAL(roots.size(), expected.size());
+        for (Size i = 0; i < roots.size(); ++i)
+            BOOST_CHECK_SMALL(roots[i] - expected[i], 1.0e-10);
+    };
+    // coefficients in increasing powers
+    check({24.0, -50.0, 35.0, -10.0, 1.0}, {1.0, 2.0, 3.0, 4.0});  // (w-1)(w-2)(w-3)(w-4)
+    check({2.0, -3.0, 3.0, -3.0, 1.0}, {1.0, 2.0});                // (w-1)(w-2)(w^2+1)
+    check({2.0, 3.0, 3.0, 3.0, 1.0}, {-1.0, -2.0});                // (w+1)(w+2)(w^2+1)
+    check({1.0, 0.0, 2.0, 0.0, 1.0}, {});                          // (w^2+1)^2
 }
 
 BOOST_AUTO_TEST_CASE(testMarketDataReactivity) {

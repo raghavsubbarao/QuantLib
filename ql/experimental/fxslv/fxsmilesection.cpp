@@ -266,7 +266,9 @@ namespace QuantLib {
         };
 
         // bracket the peak, walking from the forward in steps of one
-        // reference standard deviation, growing as needed
+        // reference standard deviation.  The peak is within a step or two of
+        // the forward, so the steps do not grow: the walk then never goes
+        // more than a step past the peak, where a smile may be undefined.
         Real h = referenceVol() * sqrtT;
         Real b = std::log(fwd_), fb = callDelta(b);
         Real a = b - h, fa = callDelta(a);
@@ -284,7 +286,6 @@ namespace QuantLib {
             fb = fa;
             a = c;
             fa = fc;
-            h *= 1.5;
             c = a - h;
             fc = callDelta(c);
         }

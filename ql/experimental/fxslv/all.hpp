@@ -3,6 +3,7 @@
 
 #include <ql/experimental/fxslv/fxcostsmilesection.hpp>
 #include <ql/experimental/fxslv/fxdeltaconverter.hpp>
+#include <ql/experimental/fxslv/fxrootbracketing.hpp>
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
 #include <ql/experimental/fxslv/fxsmilequotes.hpp>

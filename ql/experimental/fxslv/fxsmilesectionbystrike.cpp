@@ -24,6 +24,7 @@
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/volatility/sabr.hpp>
+#include <ql/experimental/fxslv/fxrootbracketing.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
 
 namespace QuantLib {
@@ -92,21 +93,22 @@ namespace QuantLib {
             }
         }
 
+        // The delta along the smile falls as the strike grows, for puts
+        // and for calls above the peak, so walk from a start point towards
+        // the root: only strikes between the two are visited.  Start at the
+        // peak for premium-adjusted calls, where the error is not negative,
+        // otherwise at the strike for the reference vol.
         const FxDeltaConverter conv = deltaConverter();
         const Real sqrtT = std::sqrt(exerciseTime());
-        Rate k0 = conv.strike(parity, delta, referenceVol() * sqrtT);
-        Rate kmin = paCall ? kPeak : QL_EPSILON;
-        Rate kmax = k0 * 10;
+        const Real stdDev = referenceVol() * sqrtT;
+        const Rate start = paCall ? kPeak : conv.strike(parity, delta, stdDev);
 
-        auto deltaError = [&](Real strike) {
+        auto deltaError = [&](Real x) {
+            const Rate strike = std::exp(x);
             return conv.delta(parity, strike, volByStrike(strike) * sqrtT) - delta;
         };
-
-        Brent solver;
-        solver.setMaxEvaluations(10000);
-        Rate k = solver.solve([&](Real strike) { return deltaError(strike); }, 
-                              1e-12, k0, kmin, kmax);
-        return k;
+        return std::exp(detail::findRoot(deltaError, std::log(start), stdDev,
+                                         detail::Slope::Decreasing, 1e-12));
     }
 
 

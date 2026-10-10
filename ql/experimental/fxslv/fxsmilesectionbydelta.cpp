@@ -22,6 +22,7 @@
 #include <ql/math/optimization/levenbergmarquardt.hpp>
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/quotes/simplequote.hpp>
+#include <ql/experimental/fxslv/fxrootbracketing.hpp>
 #include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
 #include <algorithm>
 #include <cmath>
@@ -99,20 +100,11 @@ namespace QuantLib {
                     return delta - d - conv.callMinusPutDelta(k);
                 };
 
-                // the error is negative at the peak and positive far above it
+                // the error is negative at the peak and grows as the put
+                // delta falls (higher strikes)
                 const Real dPeak = conv.delta(Option::Put, kPeak, vPeak * sqrtT);
-                Real step = std::max(std::fabs(dPeak), 0.01), dFar = dPeak - step;
-                Size steps = 0;
-                while (deltaError(dFar) <= 0.0) {
-                    QL_REQUIRE(++steps < 100, "cannot convert call delta " << delta
-                                                  << " to a put delta");
-                    step *= 2.0;
-                    dFar = dPeak - step;
-                }
-
-                Brent solver;
-                solver.setMaxEvaluations(1000);
-                delta = solver.solve(deltaError, 1e-12, 0.5 * (dFar + dPeak), dFar, dPeak);
+                delta = detail::findRoot(deltaError, dPeak, std::max(std::fabs(dPeak), 0.01),
+                                         detail::Slope::Decreasing, 1e-12);
             }
         }
 
