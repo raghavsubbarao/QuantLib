@@ -97,10 +97,10 @@ namespace {
 
             spot  = makeQuoteHandle(1.7554);
             v_atm = makeQuoteHandle(0.14483);
-            v_25rr = makeQuoteHandle(0.05770);
-            v_10rr = makeQuoteHandle(0.101575);
+            v_25rr = makeQuoteHandle(0.02770);
+            v_10rr = makeQuoteHandle(0.048752);
             v_25bf = makeQuoteHandle(0.007425);
-            v_10bf = makeQuoteHandle(0.016125);
+            v_10bf = makeQuoteHandle(0.02376);
 
             deltas    = {0.25, 0.1};
             deltaType = DeltaVolQuote::PaSpot;
@@ -120,10 +120,10 @@ namespace {
         }
     };
 
-    // Check the fit to the market quotes.  The models have fewer
-    // parameters than the five quotes (or, for SVI, cannot use all five),
-    // so they cannot reproduce them; the bound on the RMS error, in vol,
-    // is a regression limit set a little above the current fit.
+    // Check the fit to the market quotes.  Most models have fewer
+    // parameters than the five quotes, so they cannot reproduce them; the
+    // bound on the RMS error, in vol, is then a regression limit set a
+    // little above the current fit.
     void checkSmileSection(const FxSmileSection& ss, Real maxError) {
         BOOST_CHECK_EQUAL(ss.calibrationResiduals().size(), Size(5));
         BOOST_CHECK_MESSAGE(ss.calibrationError() < maxError,
@@ -209,7 +209,7 @@ BOOST_AUTO_TEST_CASE(testPolynomialSmileSection) {
                               Actual365Fixed(), md.settlement);
 
     // 3 parameters for 5 quotes
-    checkSmileSection(ss, 12.0e-4);
+    checkSmileSection(ss, 15.0e-4);
     checkStrikeDeltaConsistency(ss, md);
 }
 
@@ -228,7 +228,7 @@ BOOST_AUTO_TEST_CASE(testSabrSmileSection) {
                           Actual365Fixed(), md.settlement);
 
     // 3 free parameters (alpha, nu, rho) for 5 quotes
-    checkSmileSection(ss, 40.0e-4);
+    checkSmileSection(ss, 25.0e-4);
     checkStrikeDeltaConsistency(ss, md);
 
     // Sanity-check parameter bounds
@@ -252,8 +252,8 @@ BOOST_AUTO_TEST_CASE(testSviSmileSection) {
                          md.deltaType, md.atmType,
                          Actual365Fixed(), md.settlement);
 
-    // 5 parameters for 5 quotes, but the unconstrained fit stalls short of exact
-    checkSmileSection(ss, 30.0e-4);
+    // 5 parameters for 5 quotes: the fit is exact
+    checkSmileSection(ss, 1.0e-6);
     checkStrikeDeltaConsistency(ss, md);
 }
 
@@ -272,7 +272,7 @@ BOOST_AUTO_TEST_CASE(testQuadraticSmileSection) {
                              Actual365Fixed(), md.settlement);
 
     // 3 parameters for 5 quotes; residuals in put delta coordinates
-    checkSmileSection(ss, 25.0e-4);
+    checkSmileSection(ss, 30.0e-4);
     checkStrikeDeltaConsistency(ss, md, 1.0e-5);
 }
 
@@ -291,7 +291,7 @@ BOOST_AUTO_TEST_CASE(testCostSmileSectionFlatDynamics) {
                                       Actual365Fixed(), md.settlement, Date(), true);
 
     // 3 free coefficients for 5 quotes, fitted in closed form
-    checkSmileSection(ss, 35.0e-4);
+    checkSmileSection(ss, 17.0e-4);
     checkStrikeDeltaConsistency(ss, md, 1.0e-5);
 }
 
@@ -310,7 +310,7 @@ BOOST_AUTO_TEST_CASE(testCostSmileSectionScaledDynamics) {
                                         Actual365Fixed(), md.settlement, Date(), true);
 
     // 3 free coefficients for 5 quotes, fitted in closed form
-    checkSmileSection(ss, 50.0e-4);
+    checkSmileSection(ss, 35.0e-4);
     checkStrikeDeltaConsistency(ss, md, 1.0e-5);
 }
 
