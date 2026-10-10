@@ -39,7 +39,7 @@ namespace QuantLib {
 
     //! A condition the calibrated smile should meet
     /*! Each target gives a residual, in vol units, for the section's
-        current smile.  During calibration the section holds trial
+        current smile. During calibration the section holds trial
         parameters, so residual() measures that trial smile.
     */
     class FxSmileTarget {
@@ -49,9 +49,9 @@ namespace QuantLib {
         //! Residual of the section's current smile, in vol units.
         virtual Real residual(const FxSmileSection& section) const = 0;
 
-        //! The point (strike, vol) on the section's smile this target fixes, if any
+        //! The (strike, vol) on the section's smile this target fixes (if any)
         /*! For models with closed-form fits to points (e.g. the cost
-            models).  The strike depends on the section's forward and
+            models). The strike depends on the section's forward and
             conventions, so it is worked out for the given section.
         */
         virtual std::optional<std::pair<Rate, Volatility>> point(const FxSmileSection&) const {
@@ -62,11 +62,12 @@ namespace QuantLib {
     //! The smile matches a delta-vol quote
     /*! The quote's strike follows from its own delta, delta type and
         vol, or from its own ATM convention, and the section's spot,
-        discount factors and expiry; it is worked out when the target is
-        evaluated, so a target is not tied to one section.  Quotes may
-        therefore use conventions other than the section's.  The quote's
-        maturity is not used: the section's expiry applies.  The residual is measured in the section's
-        natural coordinate, see FxSmileSection::volResidual().
+        discount factors and expiry; it is worked out when the target
+        is evaluated, so a target is not tied to one section. Quotes 
+        may therefore use conventions other than the section's. The 
+        quote's maturity is not used: the section's expiry applies. 
+        The residual is measured in the section's natural coordinate, 
+        see FxSmileSection::volResidual().
     */
     class FxDeltaVolTarget : public FxSmileTarget {
       public:

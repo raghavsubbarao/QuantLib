@@ -96,10 +96,10 @@ namespace {
 
             spot  = makeQuoteHandle(1.7554);
             v_atm = makeQuoteHandle(0.14483);
-            v_25rr = makeQuoteHandle(0.05770);
-            v_10rr = makeQuoteHandle(0.101575);
+            v_25rr = makeQuoteHandle(0.02770);
+            v_10rr = makeQuoteHandle(0.048752);
             v_25bf = makeQuoteHandle(0.007425);
-            v_10bf = makeQuoteHandle(0.016125);
+            v_10bf = makeQuoteHandle(0.02376);
 
             deltas    = {0.25, 0.1};
             deltaType = DeltaVolQuote::PaSpot;
