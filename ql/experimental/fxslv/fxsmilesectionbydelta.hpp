@@ -53,21 +53,21 @@ namespace QuantLib {
                               DeltaVolQuote::AtmType atmType,
                              const DayCounter& dayCounter = DayCounter());
 
-        //! \name fxSmileSection interface
+        //! \name FxSmileSection interface
         //@{
-        Volatility volByStrike(Rate strike) const;
-        Volatility volByDelta(Real delta, Option::Type parity) const;
-        Real deltaByStrike(Rate strike, Option::Type parity) const;
-        Rate strikeByDelta(Real delta, Option::Type parity) const;
+        Volatility volByStrike(Rate strike) const override;
+        Volatility volByDelta(Real delta, Option::Type parity) const override;
+        Real deltaByStrike(Rate strike, Option::Type parity) const override;
+        Rate strikeByDelta(Real delta, Option::Type parity) const override;
         //! Residual at the point's put delta, the natural coordinate here.
         Real volResidual(Rate strike, Volatility vol) const override;
         //@}
 
       private:
-        virtual Volatility _volByDelta(Real delta,
-                                       Real fwd,
-                                       Time tau,
-                                       const std::vector<Real>& params) const = 0;
+        virtual Volatility volByDeltaImpl(Real delta,
+                                          Real fwd,
+                                          Time tau,
+                                          const std::vector<Real>& params) const = 0;
 
 
       protected:
@@ -81,49 +81,48 @@ namespace QuantLib {
         mutable std::vector<Real> params_;
     };
 
-    //typedef ext::shared_ptr<fxSmileSectionByDelta> fxSmileSectionByDeltaPtr;
 
 
     //! Quadratic smile section parameterized by put delta.
     /*! Implied volatility is a quadratic function of put delta:
         \f$ \sigma(\Delta) = a \Delta^2 + b \Delta + c \f$
     */
-    class QuadraticSmileSection : public FxSmileSectionByDelta {
+    class FxQuadraticSmileSection : public FxSmileSectionByDelta {
       public:
         //! Date mode (see FxSmileSection).
-        QuadraticSmileSection(const Date& exerciseDate,
-                              const Handle<Quote>& spot,
-                              const ext::shared_ptr<FxSmileQuotes>& quotes,
-                              const Handle<YieldTermStructure>& foreignDiscount,
-                              const Handle<YieldTermStructure>& domesticDiscount,
-                              DeltaVolQuote::DeltaType deltaType,
-                              DeltaVolQuote::AtmType atmType,
-                              const DayCounter& dayCounter,
-                              const FxSettlementConvention& settlement,
-                              const Date& referenceDate = Date());
+        FxQuadraticSmileSection(const Date& exerciseDate,
+                                const Handle<Quote>& spot,
+                                const ext::shared_ptr<FxSmileQuotes>& quotes,
+                                const Handle<YieldTermStructure>& foreignDiscount,
+                                const Handle<YieldTermStructure>& domesticDiscount,
+                                DeltaVolQuote::DeltaType deltaType,
+                                DeltaVolQuote::AtmType atmType,
+                                const DayCounter& dayCounter,
+                                const FxSettlementConvention& settlement,
+                                const Date& referenceDate = Date());
 
         //! Time mode (see FxSmileSection).
-        QuadraticSmileSection(Time exerciseTime,
-                              const Handle<Quote>& spot,
-                              const ext::shared_ptr<FxSmileQuotes>& quotes,
-                              const Handle<YieldTermStructure>& foreignDiscount,
-                              const Handle<YieldTermStructure>& domesticDiscount,
-                              DeltaVolQuote::DeltaType deltaType,
-                              DeltaVolQuote::AtmType atmType,
-                              const DayCounter& dayCounter = DayCounter());
+        FxQuadraticSmileSection(Time exerciseTime,
+                                const Handle<Quote>& spot,
+                                const ext::shared_ptr<FxSmileQuotes>& quotes,
+                                const Handle<YieldTermStructure>& foreignDiscount,
+                                const Handle<YieldTermStructure>& domesticDiscount,
+                                DeltaVolQuote::DeltaType deltaType,
+                                DeltaVolQuote::AtmType atmType,
+                                const DayCounter& dayCounter = DayCounter());
 
         // Introspection
-        Real a() const { return params_[0]; };
-        Real b() const { return params_[1]; };
-        Real c() const { return params_[2]; };
+        Real a() const { calculate(); return params_[0]; }
+        Real b() const { calculate(); return params_[1]; }
+        Real c() const { calculate(); return params_[2]; }
 
       private:
-        //! \name fxSmileSectionByDelta interface
+        //! \name FxSmileSectionByDelta interface
         //@{
-        Volatility _volByDelta(Real delta,
-                               Real fwd,
-                               Time tau,
-                               const std::vector<Real>& params) const override;
+        Volatility volByDeltaImpl(Real delta,
+                                  Real fwd,
+                                  Time tau,
+                                  const std::vector<Real>& params) const override;
         //@}
 
       protected:

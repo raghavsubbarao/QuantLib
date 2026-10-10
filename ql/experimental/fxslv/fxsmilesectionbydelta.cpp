@@ -109,7 +109,7 @@ namespace QuantLib {
         }
 
         // got vol as a function of delta
-        return _volByDelta(delta, fwd_, exerciseTime(), params_);
+        return volByDeltaImpl(delta, fwd_, exerciseTime(), params_);
     }
 
     Rate FxSmileSectionByDelta::strikeByDelta(Real delta, Option::Type parity) const 
@@ -165,7 +165,7 @@ namespace QuantLib {
 
     //! \name Quadratic smile section (delta-parameterized)
     //@{
-    QuadraticSmileSection::QuadraticSmileSection(const Date& exerciseDate,
+    FxQuadraticSmileSection::FxQuadraticSmileSection(const Date& exerciseDate,
                                                  const Handle<Quote>& spot,
                                                  const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                  const Handle<YieldTermStructure>& foreignDiscount,
@@ -182,7 +182,7 @@ namespace QuantLib {
         params_.reserve(3);
     }
 
-    QuadraticSmileSection::QuadraticSmileSection(Time exerciseTime,
+    FxQuadraticSmileSection::FxQuadraticSmileSection(Time exerciseTime,
                                                  const Handle<Quote>& spot,
                                                  const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                  const Handle<YieldTermStructure>& foreignDiscount,
@@ -197,7 +197,7 @@ namespace QuantLib {
         params_.reserve(3);
     }
 
-    Array QuadraticSmileSection::initialParams() const
+    Array FxQuadraticSmileSection::initialParams() const
     {
         // vol = a*delta^2 + b*delta + c
         // ATM put delta is conventionally -0.5, so at ATM:
@@ -210,10 +210,10 @@ namespace QuantLib {
         return guess;
     }
 
-    Volatility QuadraticSmileSection::_volByDelta(Real delta,
-                                                   Real fwd,
-                                                   Time tau,
-                                                   const std::vector<Real>& params) const
+    Volatility FxQuadraticSmileSection::volByDeltaImpl(Real delta,
+                                                       Real fwd,
+                                                       Time tau,
+                                                       const std::vector<Real>& params) const
     {
         return params[0] * delta * delta + params[1] * delta + params[2];
     }

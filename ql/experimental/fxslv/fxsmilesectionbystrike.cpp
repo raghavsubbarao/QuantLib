@@ -60,7 +60,7 @@ namespace QuantLib {
     Volatility FxSmileSectionByStrike::volByStrike(Rate strike) const 
     {
         calculate();
-        return _volByStrike(strike, fwd_, exerciseTime(), params_);
+        return volByStrikeImpl(strike, fwd_, exerciseTime(), params_);
     }
 
     Volatility FxSmileSectionByStrike::volByDelta(Real delta, Option::Type parity) const 
@@ -115,7 +115,7 @@ namespace QuantLib {
 
     //! \name Polynomial smile section
     //@{
-    PolynomialSmileSection::PolynomialSmileSection(const Date& exerciseDate,
+    FxPolynomialSmileSection::FxPolynomialSmileSection(const Date& exerciseDate,
                                                    const Handle<Quote>& spot,
                                                    const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                    const Handle<YieldTermStructure>& foreignDiscount,
@@ -132,7 +132,7 @@ namespace QuantLib {
         params_.reserve(3);
     }
 
-    PolynomialSmileSection::PolynomialSmileSection(Time exerciseTime,
+    FxPolynomialSmileSection::FxPolynomialSmileSection(Time exerciseTime,
                                                    const Handle<Quote>& spot,
                                                    const ext::shared_ptr<FxSmileQuotes>& quotes,
                                                    const Handle<YieldTermStructure>& foreignDiscount,
@@ -147,7 +147,7 @@ namespace QuantLib {
         params_.reserve(3);
     }
 
-    Array PolynomialSmileSection::initialParams() const
+    Array FxPolynomialSmileSection::initialParams() const
     {
         // vol = exp(a*x^2 + b*x + c), at ATM x = Phi(0) = 0.5
         // with a=b=0, c = log(atm_vol)
@@ -158,10 +158,10 @@ namespace QuantLib {
         return guess;
     }
 
-    Volatility PolynomialSmileSection::_volByStrike(Rate strike,
-                                                    Real fwd,
-                                                    Time tau,
-                                                    const std::vector<Real>& params) const
+    Volatility FxPolynomialSmileSection::volByStrikeImpl(Rate strike,
+                                                         Real fwd,
+                                                         Time tau,
+                                                         const std::vector<Real>& params) const
     {
         CumulativeNormalDistribution f;
         Real atmfVol = std::exp(params[0] / 4. + params[1] / 2. + params[2]);
@@ -215,10 +215,10 @@ namespace QuantLib {
         return guess;
     }
 
-    Volatility FxSabrSmileSection::_volByStrike(Rate strike,
-                                                Real fwd,
-                                                Time tau,
-                                                const std::vector<Real>& params) const
+    Volatility FxSabrSmileSection::volByStrikeImpl(Rate strike,
+                                                   Real fwd,
+                                                   Time tau,
+                                                   const std::vector<Real>& params) const
     {
         return unsafeShiftedSabrVolatility(strike, fwd, tau,
                                            params[0], 1.0, params[1], params[2],
@@ -276,10 +276,10 @@ namespace QuantLib {
         return guess;
     }
 
-    Volatility FxSviSmileSection::_volByStrike(Rate strike,
-                                                Real fwd,
-                                                Time tau,
-                                                const std::vector<Real>& params) const
+    Volatility FxSviSmileSection::volByStrikeImpl(Rate strike,
+                                                  Real fwd,
+                                                  Time tau,
+                                                  const std::vector<Real>& params) const
     {
         Real k = std::log(strike / fwd);
         Real km = k - params[3];

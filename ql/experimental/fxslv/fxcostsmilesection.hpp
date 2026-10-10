@@ -31,23 +31,27 @@
 
 namespace QuantLib {
 
-    class Cubic : public PolynomialFunction {
+    //! Cubic polynomial with its real roots
+    /*! Coefficients are given in increasing powers. */
+    class CubicPolynomial : public PolynomialFunction {
       public:
-          Cubic(const std::vector<Real>& coeff): PolynomialFunction(coeff) {
-            QL_REQUIRE(coeff.size() == 4,
-                       "cubic requires four coefficients to initialize");
-
+        explicit CubicPolynomial(const std::vector<Real>& coeff) : PolynomialFunction(coeff) {
+            QL_REQUIRE(coeff.size() == 4, "cubic requires four coefficients to initialize");
         }
 
+        //! Replaces \c zeros with the real roots and returns their number.
         Integer roots(std::vector<Real>& zeros);
     };
 
-    class Quartic : public PolynomialFunction {
+    //! Quartic polynomial with its real roots
+    /*! Coefficients are given in increasing powers. */
+    class QuarticPolynomial : public PolynomialFunction {
       public:
-        Quartic(const std::vector<Real>& coeff) : PolynomialFunction(coeff) {
+        explicit QuarticPolynomial(const std::vector<Real>& coeff) : PolynomialFunction(coeff) {
             QL_REQUIRE(coeff.size() == 5, "quartic requires five coefficients to initialize");
         }
 
+        //! Replaces \c zeros with the real roots and returns their number.
         Integer roots(std::vector<Real>& zeros);
     };
 
@@ -59,11 +63,11 @@ namespace QuantLib {
 
             d(rho) = c * rho^alpha
 
-        The default _volByStrike() solves the cost equation by Newton-Raphson.
-        Derived classes may override _volByStrike() with closed-form solvers when
-        alpha takes a special value (0 → quartic, 1 → biquadratic/quadratic).
-    */
-    class FxCostSmileSection : public FxSmileSectionByStrike {
+        The default volByStrikeImpl() solves the cost equation by Newton-Raphson.
+                                    Derived classes may override volByStrikeImpl() with closed-form solvers when
+                                    alpha takes a special value (0 → quartic, 1 → biquadratic/quadratic).
+                                    */
+                                    class FxCostSmileSection : public FxSmileSectionByStrike {
       public:
         //! Date mode (see FxSmileSection).
         FxCostSmileSection(const Date& exerciseDate,
@@ -95,17 +99,17 @@ namespace QuantLib {
         Real alpha() const { return alpha_; }
 
       private:
-        //! \name fxSmileSection interface
+        //! \name FxSmileSection interface
         //@{
         void calibrate() const override;
         //@}
 
-        //! \name fxSmileSectionByStrike interface
+        //! \name FxSmileSectionByStrike interface
         //@{
-        Volatility _volByStrike(Real strike,
-                                Real fwd,
-                                Time tau,
-                                const std::vector<Real>& params) const override;
+        Volatility volByStrikeImpl(Real strike,
+                                   Real fwd,
+                                   Time tau,
+                                   const std::vector<Real>& params) const override;
         //@}
 
         bool weightedCalibrationFlag_;
@@ -148,12 +152,12 @@ namespace QuantLib {
                                        bool weightedCalibrationFlag = true);
 
       private:
-        //! \name fxSmileSectionByStrike interface
+        //! \name FxSmileSectionByStrike interface
         //@{
-        Volatility _volByStrike(Real strike,
-                                Real fwd,
-                                Time tau,
-                                const std::vector<Real>& params) const override;
+        Volatility volByStrikeImpl(Real strike,
+                                   Real fwd,
+                                   Time tau,
+                                   const std::vector<Real>& params) const override;
         //@}
     };
 
@@ -189,12 +193,12 @@ namespace QuantLib {
                                          bool weightedCalibrationFlag = true);
 
       private:
-        //! \name fxSmileSectionByStrike interface
+        //! \name FxSmileSectionByStrike interface
         //@{
-        Volatility _volByStrike(Real strike,
-                                Real fwd,
-                                Time tau,
-                                const std::vector<Real>& params) const override;
+        Volatility volByStrikeImpl(Real strike,
+                                   Real fwd,
+                                   Time tau,
+                                   const std::vector<Real>& params) const override;
         //@}
     };
 

@@ -246,9 +246,9 @@ int main(int, char*[]) {
         std::cout << "--- Strike-parameterised models ---\n\n";
 
         {
-            PolynomialSmileSection ss(expiryDate, spot, smileQuotes,
-                                      forDiscount, domDiscount,
-                                      deltaType, atmType, dc, settlement);
+            FxPolynomialSmileSection ss(expiryDate, spot, smileQuotes,
+                                        forDiscount, domDiscount,
+                                        deltaType, atmType, dc, settlement);
             printRow("Polynomial (3 params)", ss,
                      mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
         }
@@ -343,9 +343,9 @@ int main(int, char*[]) {
         std::cout << "--- Delta-parameterised models ---\n\n";
 
         {
-            QuadraticSmileSection ss(expiryDate, spot, smileQuotes,
-                                     forDiscount, domDiscount,
-                                     deltaType, atmType, dc, settlement);
+            FxQuadraticSmileSection ss(expiryDate, spot, smileQuotes,
+                                       forDiscount, domDiscount,
+                                       deltaType, atmType, dc, settlement);
             printRow("Quadratic in delta (3 params)", ss,
                      mkt_atm, mkt_rr25, mkt_bf25, mkt_rr10, mkt_bf10);
 
@@ -410,8 +410,8 @@ int main(int, char*[]) {
         };
 
         {
-            PolynomialSmileSection s1(expiryDate, spot, smileQuotes,
-                                      forDiscount, domDiscount, deltaType, atmType, dc, settlement);
+            FxPolynomialSmileSection s1(expiryDate, spot, smileQuotes,
+                                        forDiscount, domDiscount, deltaType, atmType, dc, settlement);
             printStrikeRow("Polynomial", s1);
         }
         {
@@ -437,8 +437,8 @@ int main(int, char*[]) {
             printStrikeRow("Cost-scaled", s5);
         }
         {
-            QuadraticSmileSection s6(expiryDate, spot, smileQuotes,
-                                     forDiscount, domDiscount, deltaType, atmType, dc, settlement);
+            FxQuadraticSmileSection s6(expiryDate, spot, smileQuotes,
+                                       forDiscount, domDiscount, deltaType, atmType, dc, settlement);
             printStrikeRow("Quadratic-delta", s6);
         }
         std::cout << "\n";

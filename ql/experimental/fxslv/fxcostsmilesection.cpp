@@ -28,7 +28,7 @@
 
 namespace QuantLib {
 
-    Integer Cubic::roots(std::vector<Real>& zeros)
+    Integer CubicPolynomial::roots(std::vector<Real>& zeros)
     {
         Real pi = 3.14159265358979323846;
         const std::vector<Real> c = coefficients();
@@ -108,13 +108,13 @@ namespace QuantLib {
     }
 
 
-    Integer Quartic::roots(std::vector<Real>& zeros)
+    Integer QuarticPolynomial::roots(std::vector<Real>& zeros)
     {
         zeros.clear();
         const std::vector<Real> c = coefficients();
 
         if (c[4] == 0.0) {
-            return Cubic(std::vector<Real>(c.begin() + 1, c.end())).roots(zeros);
+            return CubicPolynomial(std::vector<Real>(c.begin() + 1, c.end())).roots(zeros);
         }
 
         Real B = c[3] / c[4], C = c[2] / c[4], D = c[1] / c[4], E = c[0] / c[4];
@@ -152,7 +152,7 @@ namespace QuantLib {
 
         // create and solve cubic - this cubic is -J*J<0 at 0 and
         // tends to infinity as x-> infinity -> it has a positive root!
-        Cubic p3(std::vector<Real>{-J * J, I * I - 4.0 * K, 2.0 * I, 1.0});
+        CubicPolynomial p3(std::vector<Real>{-J * J, I * I - 4.0 * K, 2.0 * I, 1.0});
 
         std::vector<Real> z3;
         p3.roots(z3);
@@ -312,10 +312,10 @@ namespace QuantLib {
     //  fxCostSmileSection — Newton-Raphson vol by strike (general alpha)
     // -----------------------------------------------------------------------
 
-    Volatility FxCostSmileSection::_volByStrike(Real strike,
-                                                 Real fwd,
-                                                 Time tau,
-                                                 const std::vector<Real>& params) const
+    Volatility FxCostSmileSection::volByStrikeImpl(Real strike,
+                                                   Real fwd,
+                                                   Time tau,
+                                                   const std::vector<Real>& params) const
     {
         // Solve f(rho) = 0 for total vol rho = sigma*sqrt(tau) at log-moneyness x = ln(F/K).
         //
@@ -415,15 +415,15 @@ namespace QuantLib {
     //  fxCostSmileSectionFlatDynamics — quartic vol by strike (alpha = 0)
     // -----------------------------------------------------------------------
 
-    Volatility FxCostSmileSectionFlatDynamics::_volByStrike(Real strike,
-                                                            Real fwd,
-                                                            Time tau,
-                                                            const std::vector<Real>& params) const
+    Volatility FxCostSmileSectionFlatDynamics::volByStrikeImpl(Real strike,
+                                                               Real fwd,
+                                                               Time tau,
+                                                               const std::vector<Real>& params) const
     {
         Real x = std::log(fwd / strike);
         Integer s = premiumAdjust() ? 1 : -1;
 
-        Quartic q(std::vector<Real>{-x * x * params[3], 2 * x * params[2], -params[0],
+        QuarticPolynomial q(std::vector<Real>{-x * x * params[3], 2 * x * params[2], -params[0],
                                     s * params[2] - 2 * params[1], params[3] / 4.});
         std::vector<Real> omega;
         q.roots(omega);
@@ -485,10 +485,10 @@ namespace QuantLib {
     //  fxCostSmileSectionScaledDynamics — quadratic vol by strike (alpha = 1)
     // -----------------------------------------------------------------------
 
-    Volatility FxCostSmileSectionScaledDynamics::_volByStrike(Real strike,
-                                                              Real fwd,
-                                                              Time tau,
-                                                              const std::vector<Real>& params) const
+    Volatility FxCostSmileSectionScaledDynamics::volByStrikeImpl(Real strike,
+                                                                 Real fwd,
+                                                                 Time tau,
+                                                                 const std::vector<Real>& params) const
     {
         Real x = std::log(fwd / strike);
         Integer s = premiumAdjust() ? 1 : -1;

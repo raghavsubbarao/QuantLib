@@ -105,7 +105,7 @@ namespace {
         DeltaVolQuote::AtmType   atmType;
         FxRrBfQuotes::FlyType  flyType;
 
-        ext::shared_ptr<fxVarianceSurfaceNCP<QuadraticSmileSection>> volSurface;
+        ext::shared_ptr<fxVarianceSurfaceNCP<FxQuadraticSmileSection>> volSurface;
         Handle<BlackVolTermStructure> volSurfaceHandle;
 
         ext::shared_ptr<NoExceptLocalVolSurface> localVolSurface;
@@ -191,7 +191,7 @@ namespace {
             auto timeTs = Handle<tradingTimeTermStructure>(
                 ext::make_shared<tradingTimeTermStructure>(today, calendar, 0.0));
 
-            volSurface = ext::make_shared<fxVarianceSurfaceNCP<QuadraticSmileSection>>(
+            volSurface = ext::make_shared<fxVarianceSurfaceNCP<FxQuadraticSmileSection>>(
                 today, spot, pillars, atms, rrs, bfs, deltas,
                 eurTs, usdTs, timeTs,
                 deltaType, atmType, flyType,

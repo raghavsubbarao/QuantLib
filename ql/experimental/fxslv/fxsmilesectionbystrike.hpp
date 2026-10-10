@@ -53,19 +53,19 @@ namespace QuantLib {
                                DeltaVolQuote::AtmType atmType,
                                const DayCounter& dayCounter = DayCounter());
 
-        //! \name fxSmileSection interface
+        //! \name FxSmileSection interface
         //@{
-        Volatility volByStrike(Rate strike) const;
-        Volatility volByDelta(Real delta, Option::Type parity) const;
-        Real deltaByStrike(Rate strike, Option::Type parity) const;
-        Rate strikeByDelta(Real delta, Option::Type parity) const;
+        Volatility volByStrike(Rate strike) const override;
+        Volatility volByDelta(Real delta, Option::Type parity) const override;
+        Real deltaByStrike(Rate strike, Option::Type parity) const override;
+        Rate strikeByDelta(Real delta, Option::Type parity) const override;
         //@}
 
       private:
-        virtual Volatility _volByStrike(Real strike,
-                                        Real fwd,
-                                        Time tau,
-                                        const std::vector<Real>& params) const = 0;
+        virtual Volatility volByStrikeImpl(Real strike,
+                                           Real fwd,
+                                           Time tau,
+                                           const std::vector<Real>& params) const = 0;
 
 
       protected:
@@ -80,45 +80,44 @@ namespace QuantLib {
 
     };
 
-    //typedef ext::shared_ptr<FxSmileSectionByStrike> fxSmileSectionByStrikePtr;
 
 
-    class PolynomialSmileSection : public FxSmileSectionByStrike {
+    class FxPolynomialSmileSection : public FxSmileSectionByStrike {
       public:
         //! Date mode (see FxSmileSection).
-        PolynomialSmileSection(const Date& exerciseDate,
-                               const Handle<Quote>& spot,
-                               const ext::shared_ptr<FxSmileQuotes>& quotes,
-                               const Handle<YieldTermStructure>& foreignDiscount,
-                               const Handle<YieldTermStructure>& domesticDiscount,
-                               DeltaVolQuote::DeltaType deltaType,
-                               DeltaVolQuote::AtmType atmType,
-                               const DayCounter& dayCounter,
-                               const FxSettlementConvention& settlement,
-                               const Date& referenceDate = Date());
+        FxPolynomialSmileSection(const Date& exerciseDate,
+                                 const Handle<Quote>& spot,
+                                 const ext::shared_ptr<FxSmileQuotes>& quotes,
+                                 const Handle<YieldTermStructure>& foreignDiscount,
+                                 const Handle<YieldTermStructure>& domesticDiscount,
+                                 DeltaVolQuote::DeltaType deltaType,
+                                 DeltaVolQuote::AtmType atmType,
+                                 const DayCounter& dayCounter,
+                                 const FxSettlementConvention& settlement,
+                                 const Date& referenceDate = Date());
 
         //! Time mode (see FxSmileSection).
-        PolynomialSmileSection(Time exerciseTime,
-                               const Handle<Quote>& spot,
-                               const ext::shared_ptr<FxSmileQuotes>& quotes,
-                               const Handle<YieldTermStructure>& foreignDiscount,
-                               const Handle<YieldTermStructure>& domesticDiscount,
-                               DeltaVolQuote::DeltaType deltaType,
-                               DeltaVolQuote::AtmType atmType,
-                               const DayCounter& dayCounter = DayCounter());
+        FxPolynomialSmileSection(Time exerciseTime,
+                                 const Handle<Quote>& spot,
+                                 const ext::shared_ptr<FxSmileQuotes>& quotes,
+                                 const Handle<YieldTermStructure>& foreignDiscount,
+                                 const Handle<YieldTermStructure>& domesticDiscount,
+                                 DeltaVolQuote::DeltaType deltaType,
+                                 DeltaVolQuote::AtmType atmType,
+                                 const DayCounter& dayCounter = DayCounter());
 
         // Introspection
-        Real a() const { return params_[0]; };
-        Real b() const { return params_[1]; };
-        Real c() const { return params_[2]; };
+        Real a() const { calculate(); return params_[0]; }
+        Real b() const { calculate(); return params_[1]; }
+        Real c() const { calculate(); return params_[2]; }
 
       private:
-        //! \name fxSmileSectionByStrike interface
+        //! \name FxSmileSectionByStrike interface
         //@{
-        Volatility _volByStrike(Real strike,
-                                Real fwd,
-                                Time tau,
-                                const std::vector<Real>& params) const override;
+        Volatility volByStrikeImpl(Real strike,
+                                   Real fwd,
+                                   Time tau,
+                                   const std::vector<Real>& params) const override;
         //@}
 
       protected:
@@ -151,18 +150,18 @@ namespace QuantLib {
                            const DayCounter& dayCounter = DayCounter());
 
         // Introspection
-        Real alpha() const { return params_[0]; };
-        Real beta() const { return 1.0; };
-        Real nu() const { return params_[1]; };
-        Real rho() const { return params_[2]; };
+        Real alpha() const { calculate(); return params_[0]; }
+        Real beta() const { return 1.0; }
+        Real nu() const { calculate(); return params_[1]; }
+        Real rho() const { calculate(); return params_[2]; }
 
       private:
-        //! \name fxSmileSectionByStrike interface
+        //! \name FxSmileSectionByStrike interface
         //@{
-        Volatility _volByStrike(Real strike,
-                                Real fwd,
-                                Time tau,
-                                const std::vector<Real>& params) const override;
+        Volatility volByStrikeImpl(Real strike,
+                                   Real fwd,
+                                   Time tau,
+                                   const std::vector<Real>& params) const override;
         //@}
 
       protected:
@@ -203,19 +202,19 @@ namespace QuantLib {
                           const DayCounter& dayCounter = DayCounter());
 
         // Introspection
-        Real a() const { return params_[0]; };
-        Real b() const { return params_[1]; };
-        Real rho() const { return params_[2]; };
-        Real m() const { return params_[3]; };
-        Real sigma() const { return params_[4]; };
+        Real a() const { calculate(); return params_[0]; }
+        Real b() const { calculate(); return params_[1]; }
+        Real rho() const { calculate(); return params_[2]; }
+        Real m() const { calculate(); return params_[3]; }
+        Real sigma() const { calculate(); return params_[4]; }
 
       private:
-        //! \name fxSmileSectionByStrike interface
+        //! \name FxSmileSectionByStrike interface
         //@{
-        Volatility _volByStrike(Real strike,
-                                Real fwd,
-                                Time tau,
-                                const std::vector<Real>& params) const override;
+        Volatility volByStrikeImpl(Real strike,
+                                   Real fwd,
+                                   Time tau,
+                                   const std::vector<Real>& params) const override;
         //@}
 
       protected:
