@@ -392,6 +392,29 @@ BOOST_AUTO_TEST_CASE(testCalibrationRoundTrip) {
 //  8. Market data reactivity (observer pattern)
 // ---------------------------------------------------------------------------
 
+BOOST_AUTO_TEST_CASE(testAtmLevelIsTheForward) {
+    BOOST_TEST_MESSAGE("Testing that an FX smile section's ATM level is the forward...");
+
+    MarketData md;
+    // under delta-neutral ATM the ATM strike is not the forward
+    QuadraticSmileSection ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount,
+                             md.domDiscount, md.deltaType, DeltaVolQuote::AtmDeltaNeutral,
+                             Actual365Fixed(), md.settlement);
+    const Real F = ss.forward();
+    BOOST_CHECK_EQUAL(ss.atmLevel(), F);
+    BOOST_CHECK(std::fabs(ss.atmStrike() - F) > 1.0e-4);
+    BOOST_CHECK_SMALL(ss.volByStrike(ss.atmStrike()) - ss.atmVol(), 1.0e-12);
+
+    // so SmileSection's pricing uses the right forward
+    const Real sqrtT = std::sqrt(ss.exerciseTime());
+    for (Real m : {0.9, 1.0, 1.1}) {
+        const Rate K = m * F;
+        const Option::Type type = K >= F ? Option::Call : Option::Put;
+        const Real expected = BlackCalculator(type, K, F, ss.volByStrike(K) * sqrtT).value();
+        BOOST_CHECK_CLOSE(ss.optionPrice(K, type), expected, 1.0e-10);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(testMarketDataReactivity) {
     BOOST_TEST_MESSAGE("Testing FX smile section reactivity to market data changes...");
 
@@ -441,7 +464,7 @@ BOOST_AUTO_TEST_CASE(testMarketDataReactivity) {
     checkMoves(*bf10Quote, 0.005, "10D butterfly",
                [&] { return ss.volByStrike(kCall) + ss.volByStrike(kPut); });
     checkMoves(*spotQuote, 0.01, "spot", [&] { return ss.forward(); });
-    checkMoves(*spotQuote, 0.01, "spot (ATM strike)", [&] { return ss.atmLevel(); });
+    checkMoves(*spotQuote, 0.01, "spot (ATM strike)", [&] { return ss.atmStrike(); });
 
     // an ATM vol bump moves the calibrated ATM vol by about as much
     const Real atmBefore = ss.atmVol();
@@ -857,7 +880,7 @@ BOOST_AUTO_TEST_CASE(testMarketStrangleCalibration) {
 
         // the ATM quote holds, and atmVol() lies on the smile
         BOOST_CHECK_SMALL(ss.atmVol() - atm, 1.0e-8);
-        BOOST_CHECK_SMALL(ss.atmVol() - ss.volByStrike(ss.atmLevel()), 1.0e-12);
+        BOOST_CHECK_SMALL(ss.atmVol() - ss.volByStrike(ss.atmStrike()), 1.0e-12);
     }
 
     // Two delta levels: five targets for three parameters, fitted jointly
@@ -869,7 +892,7 @@ BOOST_AUTO_TEST_CASE(testMarketStrangleCalibration) {
                                  FxRrBfQuotes::MarketStrangle),
                              md.forDiscount, md.domDiscount, dt, at, Actual365Fixed(),
                              md.settlement);
-    BOOST_CHECK_SMALL(ss.atmVol() - ss.volByStrike(ss.atmLevel()), 1.0e-12);
+    BOOST_CHECK_SMALL(ss.atmVol() - ss.volByStrike(ss.atmStrike()), 1.0e-12);
 
     // cost models have a closed form for points on the smile only
     FxCostSmileSectionFlatDynamics cost(

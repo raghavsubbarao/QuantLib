@@ -528,7 +528,7 @@ namespace QuantLib {
         quotes.push_back(interpNcp(k_p25));
 
         // atm
-        Real k_atm = ssFinal.atmLevel();
+        Real k_atm = ssFinal.atmStrike();
         quotes.push_back(interpNcp(k_atm));
 
         // 25c call

@@ -80,7 +80,7 @@ void printRow(const std::string& name,
     const int w0 = 34; // model name column
     const int w  =  9; // vol columns
 
-    Real atm    = ss.volByStrike(ss.atmLevel());
+    Real atm    = ss.volByStrike(ss.atmStrike());
     Real v25c   = ss.volByDelta( 0.25, Option::Call);
     Real v25p   = ss.volByDelta(-0.25, Option::Put);
     Real v10c   = ss.volByDelta( 0.10, Option::Call);

@@ -110,7 +110,11 @@ namespace QuantLib {
         //@{
         Real minStrike() const override { calculate(); return minStrike_; }
         Real maxStrike() const override { calculate(); return maxStrike_; }
-        Real atmLevel() const override { calculate(); return atmStrike_; }
+        //! The forward, as SmileSection requires; see atmStrike() for the ATM strike.
+        /*! SmileSection's pricing functions (optionPrice(), vega(),
+            density(), ...) use this as the forward.
+        */
+        Real atmLevel() const override { return forward(); }
         //@}
 
         // Conventions
@@ -127,6 +131,8 @@ namespace QuantLib {
             recalibrates, so observe the section to be notified.
         */
         Volatility atmVol() const { calculate(); return atmVol_; }
+        //! ATM strike under the section's ATM convention, at which atmVol() is quoted.
+        Rate atmStrike() const { calculate(); return atmStrike_; }
         Real forward() const { calculate(); return fwd_; }
         Handle<YieldTermStructure> foreignDiscount() const { return foreignDiscount_; }
         Handle<YieldTermStructure> domesticDiscount() const { return domesticDiscount_; }
