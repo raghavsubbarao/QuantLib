@@ -140,7 +140,7 @@ namespace QuantLib {
         // the forward, in steps of one reference standard deviation, widening as
         // needed, so that far-away strikes where a smile may be undefined
         // are only visited if the root is really out there.
-        const FxDeltaConvention conv = deltaConvention();
+        const FxDeltaConverter conv = deltaConverter();
         const Real stdDev = referenceVol() * std::sqrt(exerciseTime());
 
         auto atmStrikeError = [&](Real logStrike) {
@@ -254,7 +254,7 @@ namespace QuantLib {
         QL_REQUIRE(premiumAdjust(), "the call delta only peaks for premium-adjusted deltas");
 
         // call delta of the current smile as a function of log-strike
-        const FxDeltaConvention conv = deltaConvention();
+        const FxDeltaConverter conv = deltaConverter();
         const Real sqrtT = std::sqrt(exerciseTime());
         auto callDelta = [&](Real x) {
             const Rate strike = std::exp(x);
@@ -314,16 +314,16 @@ namespace QuantLib {
     }
 
     Real FxSmileSection::maxCallDelta() const {
-        const FxDeltaConvention conv = deltaConvention();
+        const FxDeltaConverter conv = deltaConverter();
         if (!conv.premiumAdjusted())
             return conv.callDeltaLimit();
         const Rate strike = peakCallDeltaStrike();
         return conv.delta(Option::Call, strike, volByStrike(strike) * std::sqrt(exerciseTime()));
     }
 
-    FxDeltaConvention FxSmileSection::deltaConvention() const {
+    FxDeltaConverter FxSmileSection::deltaConverter() const {
         calculate();
-        return FxDeltaConvention(deltaType_, spot_->value(), ddom_, dfor_);
+        return FxDeltaConverter(deltaType_, spot_->value(), ddom_, dfor_);
     }
 
     void FxSmileSection::performCalculations() const {

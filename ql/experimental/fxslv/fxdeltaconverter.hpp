@@ -17,12 +17,12 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-/*! \file fxdeltaconvention.hpp
+/*! \file fxdeltaconverter.hpp
     \brief Strike and delta conversions in an FX delta convention
 */
 
-#ifndef quantlib_fx_delta_convention_hpp
-#define quantlib_fx_delta_convention_hpp
+#ifndef quantlib_fx_delta_converter_hpp
+#define quantlib_fx_delta_converter_hpp
 
 #include <ql/option.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
@@ -40,10 +40,9 @@ namespace QuantLib {
 
         Two identities hold whatever the vol, with \f$ D_f \f$ the
         foreign discount factor:
-        - put-call parity in delta: call delta minus put delta at a
-          strike is \f$ D_f \f$ (spot), 1 (forward), \f$ D_f K/F \f$
-          (premium-adjusted spot) or \f$ K/F \f$ (premium-adjusted
-          forward);
+        - call delta minus put delta at a strike is \f$ D_f \f$
+          (spot), 1 (forward), \f$ D_f K/F \f$ (premium-adjusted spot)
+          or \f$ K/F \f$ (premium-adjusted forward);
         - the put delta at a strike lies between minus that and 0.
 
         Premium-adjusted call deltas are not monotonic in strike: they
@@ -51,12 +50,12 @@ namespace QuantLib {
         twice and higher deltas not at all.  Strikes are those above the
         peak, as quoted in the market.
     */
-    class FxDeltaConvention {
+    class FxDeltaConverter {
       public:
-        FxDeltaConvention(DeltaVolQuote::DeltaType type,
-                          Real spot,
-                          DiscountFactor domesticDiscount,
-                          DiscountFactor foreignDiscount);
+        FxDeltaConverter(DeltaVolQuote::DeltaType type,
+                         Real spot,
+                         DiscountFactor domesticDiscount,
+                         DiscountFactor foreignDiscount);
 
         //! \name Inspectors
         //@{
@@ -71,8 +70,8 @@ namespace QuantLib {
         //@}
 
         //! The same market in another delta convention.
-        FxDeltaConvention withType(DeltaVolQuote::DeltaType type) const {
-            return FxDeltaConvention(type, spot_, domesticDiscount_, foreignDiscount_);
+        FxDeltaConverter withType(DeltaVolQuote::DeltaType type) const {
+            return FxDeltaConverter(type, spot_, domesticDiscount_, foreignDiscount_);
         }
 
         //! \name Conversions at a given total vol
@@ -95,10 +94,10 @@ namespace QuantLib {
         //! \name Identities at any vol
         //@{
         //! Call delta minus put delta at the given strike.
-        Real parity(Rate strike) const;
+        Real callMinusPutDelta(Rate strike) const;
         //! Range of the put delta at the given strike, whatever the vol.
         std::pair<Real, Real> putDeltaRange(Rate strike) const {
-            return {-parity(strike), 0.0};
+            return {-callMinusPutDelta(strike), 0.0};
         }
         //! Supremum of the call delta, attained at zero strike, for unadjusted types.
         /*! For premium-adjusted types it depends on the vol at each

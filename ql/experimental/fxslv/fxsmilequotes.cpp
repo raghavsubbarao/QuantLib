@@ -37,7 +37,7 @@ namespace QuantLib {
 
         // call and put strikes of the broker strangle, struck at the broker vol
         std::pair<Rate, Rate> brokerStrikes(const FxSmileSection& section, Real delta, Real stdDev) {
-            const FxDeltaConvention conv = section.deltaConvention();
+            const FxDeltaConverter conv = section.deltaConverter();
             return {conv.strike(Option::Call, delta, stdDev),
                     conv.strike(Option::Put, -delta, stdDev)};
         }
@@ -50,7 +50,7 @@ namespace QuantLib {
         const DeltaVolQuote& q = **quote_;
         const Volatility vol = q.value();
         const Real w = vol * std::sqrt(section.exerciseTime());
-        const FxDeltaConvention conv = section.deltaConvention().withType(q.deltaType());
+        const FxDeltaConverter conv = section.deltaConverter().withType(q.deltaType());
         const Rate strike =
             q.atmType() == DeltaVolQuote::AtmNull ?
                 conv.strike(q.delta() < 0 ? Option::Put : Option::Call, q.delta(), w) :

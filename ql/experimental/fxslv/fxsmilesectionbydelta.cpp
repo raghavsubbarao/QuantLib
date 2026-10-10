@@ -70,14 +70,14 @@ namespace QuantLib {
 
         if (parity == Option::Call) {
             // the smile is parameterised by put delta: convert the call delta
-            const FxDeltaConvention conv = deltaConvention();
+            const FxDeltaConverter conv = deltaConverter();
             const Real sqrtT = std::sqrt(exerciseTime());
 
             if (!conv.premiumAdjusted()) {
-                // parity is a constant for unadjusted deltas
+                // call minus put delta is a constant for unadjusted deltas
                 QL_REQUIRE(delta > 0.0 && delta <= conv.callDeltaLimit(),
                            "call delta out of range: " << delta);
-                delta -= conv.parity(fwd_);
+                delta -= conv.callMinusPutDelta(fwd_);
             } else {
                 const Rate kPeak = peakCallDeltaStrike();
                 const Volatility vPeak = volByStrike(kPeak);
@@ -89,14 +89,14 @@ namespace QuantLib {
                     return vPeak;
 
                 // Otherwise find the put delta d whose strike has the given
-                // call delta, by parity: call delta - put delta = parity(K).
+                // call delta: call delta - put delta = callMinusPutDelta(K).
                 // Below the peak each call delta is attained at two strikes;
                 // the quoted one is above the peak, i.e. at put deltas below
                 // the peak's, where the call delta falls from its maximum to 0.
                 auto deltaError = [&](Real d) {
                     const Volatility v = volByDelta(d, Option::Put);
                     const Rate k = conv.strike(Option::Put, d, v * sqrtT);
-                    return delta - d - conv.parity(k);
+                    return delta - d - conv.callMinusPutDelta(k);
                 };
 
                 // the error is negative at the peak and positive far above it
@@ -125,7 +125,7 @@ namespace QuantLib {
         calculate();
 
         const Volatility v = volByDelta(delta, parity);
-        return deltaConvention().strike(parity, delta, v * std::sqrt(exerciseTime()));
+        return deltaConverter().strike(parity, delta, v * std::sqrt(exerciseTime()));
     }
 
     Real FxSmileSectionByDelta::deltaByStrike(Rate strike, Option::Type parity) const 
@@ -136,7 +136,7 @@ namespace QuantLib {
         // the strike first: the fixed point d = putDelta(strike, vol(d)).
         // This only needs delta from strike, never the inverse.  The put
         // delta at a fixed strike lies in a range independent of the vol.
-        const FxDeltaConvention conv = deltaConvention();
+        const FxDeltaConverter conv = deltaConverter();
         const Real sqrtT = std::sqrt(exerciseTime());
         const auto range = conv.putDeltaRange(strike);
         const Real dmin = range.first;
@@ -166,7 +166,7 @@ namespace QuantLib {
     {
         // the model vol at the point's put delta, computed with the point's own vol
         const Real putDelta =
-            deltaConvention().delta(Option::Put, strike, vol * std::sqrt(exerciseTime()));
+            deltaConverter().delta(Option::Put, strike, vol * std::sqrt(exerciseTime()));
         return volByDelta(putDelta, Option::Put) - vol;
     }
 

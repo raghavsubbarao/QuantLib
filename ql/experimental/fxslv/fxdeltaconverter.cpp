@@ -17,7 +17,7 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include <ql/experimental/fxslv/fxdeltaconvention.hpp>
+#include <ql/experimental/fxslv/fxdeltaconverter.hpp>
 #include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/math/solvers1d/brent.hpp>
 #include <algorithm>
@@ -25,10 +25,10 @@
 
 namespace QuantLib {
 
-    FxDeltaConvention::FxDeltaConvention(DeltaVolQuote::DeltaType type,
-                                         Real spot,
-                                         DiscountFactor domesticDiscount,
-                                         DiscountFactor foreignDiscount)
+    FxDeltaConverter::FxDeltaConverter(DeltaVolQuote::DeltaType type,
+                                       Real spot,
+                                       DiscountFactor domesticDiscount,
+                                       DiscountFactor foreignDiscount)
     : type_(type), spot_(spot), forward_(spot * foreignDiscount / domesticDiscount),
       domesticDiscount_(domesticDiscount), foreignDiscount_(foreignDiscount) {
         QL_REQUIRE(spot > 0.0, "positive spot required: " << spot);
@@ -37,20 +37,20 @@ namespace QuantLib {
                                                           << foreignDiscount);
     }
 
-    BlackDeltaCalculator FxDeltaConvention::calculator(Option::Type type, Real stdDev) const {
+    BlackDeltaCalculator FxDeltaConverter::calculator(Option::Type type, Real stdDev) const {
         return BlackDeltaCalculator(type, type_, spot_, domesticDiscount_, foreignDiscount_,
                                     stdDev);
     }
 
-    Real FxDeltaConvention::delta(Option::Type type, Rate strike, Real stdDev) const {
+    Real FxDeltaConverter::delta(Option::Type type, Rate strike, Real stdDev) const {
         return calculator(type, stdDev).deltaFromStrike(strike);
     }
 
-    Rate FxDeltaConvention::atmStrike(DeltaVolQuote::AtmType type, Real stdDev) const {
+    Rate FxDeltaConverter::atmStrike(DeltaVolQuote::AtmType type, Real stdDev) const {
         return calculator(Option::Call, stdDev).atmStrike(type);
     }
 
-    Real FxDeltaConvention::parity(Rate strike) const {
+    Real FxDeltaConverter::callMinusPutDelta(Rate strike) const {
         switch (type_) {
           case DeltaVolQuote::Spot:
             return foreignDiscount_;
@@ -65,13 +65,13 @@ namespace QuantLib {
         }
     }
 
-    Real FxDeltaConvention::callDeltaLimit() const {
+    Real FxDeltaConverter::callDeltaLimit() const {
         QL_REQUIRE(!premiumAdjusted(),
                    "the largest premium-adjusted call delta depends on the smile");
-        return parity(forward_);
+        return callMinusPutDelta(forward_);
     }
 
-    Rate FxDeltaConvention::peakCallStrike(Real stdDev) const {
+    Rate FxDeltaConverter::peakCallStrike(Real stdDev) const {
         QL_REQUIRE(premiumAdjusted(), "the call delta only peaks for premium-adjusted deltas");
         QL_REQUIRE(stdDev > 0.0, "positive standard deviation required: " << stdDev);
         // The premium-adjusted call delta is proportional to (K/F) N(d2);
@@ -92,7 +92,7 @@ namespace QuantLib {
         return forward_ * std::exp(-w * d2 - 0.5 * w * w);
     }
 
-    Rate FxDeltaConvention::strike(Option::Type type, Real delta, Real stdDev) const {
+    Rate FxDeltaConverter::strike(Option::Type type, Real delta, Real stdDev) const {
         QL_REQUIRE(stdDev > 0.0, "positive standard deviation required: " << stdDev);
         QL_REQUIRE(delta * static_cast<Real>(type) > 0.0,
                    "option type and delta are incoherent: " << type << ", " << delta);

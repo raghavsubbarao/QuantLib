@@ -72,7 +72,7 @@ namespace QuantLib {
     {
         calculate();
 
-        return deltaConvention().delta(parity, strike,
+        return deltaConverter().delta(parity, strike,
                                        volByStrike(strike) * std::sqrt(exerciseTime()));
     }
 
@@ -92,7 +92,7 @@ namespace QuantLib {
             }
         }
 
-        const FxDeltaConvention conv = deltaConvention();
+        const FxDeltaConverter conv = deltaConverter();
         const Real sqrtT = std::sqrt(exerciseTime());
         Rate k0 = conv.strike(parity, delta, referenceVol() * sqrtT);
         Rate kmin = paCall ? kPeak : QL_EPSILON;

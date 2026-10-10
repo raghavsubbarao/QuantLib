@@ -24,7 +24,7 @@
 #ifndef quantlib_fx_smile_section_hpp
 #define quantlib_fx_smile_section_hpp
 
-#include <ql/experimental/fxslv/fxdeltaconvention.hpp>
+#include <ql/experimental/fxslv/fxdeltaconverter.hpp>
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxsmilequotes.hpp>
 #include <ql/quotes/deltavolquote.hpp>
@@ -156,7 +156,7 @@ namespace QuantLib {
             conversions along the smile are volByDelta(), strikeByDelta()
             and deltaByStrike().
         */
-        FxDeltaConvention deltaConvention() const;
+        FxDeltaConverter deltaConverter() const;
 
         //! Largest call delta in the section's delta convention.
         /*! For premium-adjusted deltas the call delta is not monotonic

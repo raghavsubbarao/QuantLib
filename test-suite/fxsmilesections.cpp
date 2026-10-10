@@ -23,7 +23,7 @@
 
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
-#include <ql/experimental/fxslv/fxdeltaconvention.hpp>
+#include <ql/experimental/fxslv/fxdeltaconverter.hpp>
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxsmilequotes.hpp>
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
@@ -605,13 +605,13 @@ BOOST_AUTO_TEST_CASE(testRoundTripsInAllConventions) {
     }
 }
 
-BOOST_AUTO_TEST_CASE(testDeltaConvention) {
+BOOST_AUTO_TEST_CASE(testDeltaConverter) {
     BOOST_TEST_MESSAGE("Testing strike and delta conversions in FX delta conventions...");
 
     const Real spot = 1.7554, ddom = 0.97, dfor = 0.95;
     for (auto dt : {DeltaVolQuote::Spot, DeltaVolQuote::Fwd, DeltaVolQuote::PaSpot,
                     DeltaVolQuote::PaFwd}) {
-        const FxDeltaConvention conv(dt, spot, ddom, dfor);
+        const FxDeltaConverter conv(dt, spot, ddom, dfor);
         const Real F = conv.forward();
         BOOST_CHECK_CLOSE(F, spot * dfor / ddom, 1.0e-12);
 
@@ -621,7 +621,7 @@ BOOST_AUTO_TEST_CASE(testDeltaConvention) {
                 const Real call = conv.delta(Option::Call, K, w);
                 const Real put = conv.delta(Option::Put, K, w);
                 // parity, and the put delta within its range
-                BOOST_CHECK_SMALL(call - put - conv.parity(K), 1.0e-14);
+                BOOST_CHECK_SMALL(call - put - conv.callMinusPutDelta(K), 1.0e-14);
                 const auto range = conv.putDeltaRange(K);
                 BOOST_CHECK(put >= range.first && put <= range.second);
                 // the same deltas as BlackDeltaCalculator
@@ -638,7 +638,7 @@ BOOST_AUTO_TEST_CASE(testDeltaConvention) {
                 const Real tolerance = conv.premiumAdjusted() ? 1.0e-10 : 1.0e-8;
                 const bool saturated =
                     !conv.premiumAdjusted() &&
-                    std::min(std::fabs(call), std::fabs(put)) < conv.parity(K) * 1.0e-6;
+                    std::min(std::fabs(call), std::fabs(put)) < conv.callMinusPutDelta(K) * 1.0e-6;
                 if (put < -1.0e-12 && !saturated) {
                     const Real error = conv.strike(Option::Put, put, w) / K - 1.0;
                     BOOST_CHECK_MESSAGE(std::fabs(error) < tolerance,
@@ -676,7 +676,7 @@ BOOST_AUTO_TEST_CASE(testDeltaConvention) {
     }
     // premium-adjusted puts deeper than -dfor (in the money), which
     // BlackDeltaCalculator::strikeFromDelta rejects
-    const FxDeltaConvention pa(DeltaVolQuote::PaSpot, spot, ddom, dfor);
+    const FxDeltaConverter pa(DeltaVolQuote::PaSpot, spot, ddom, dfor);
     const Rate itm = pa.strike(Option::Put, -1.2, 0.15);
     BOOST_CHECK_SMALL(pa.delta(Option::Put, itm, 0.15) + 1.2, 1.0e-10);
 }
