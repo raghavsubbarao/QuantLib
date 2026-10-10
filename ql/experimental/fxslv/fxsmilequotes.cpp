@@ -19,6 +19,7 @@
 
 #include <ql/experimental/fxslv/fxsmilequotes.hpp>
 #include <ql/experimental/fxslv/fxsmilesection.hpp>
+#include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/pricingengines/blackcalculator.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <ql/quotes/simplequote.hpp>
@@ -26,6 +27,28 @@
 #include <utility>
 
 namespace QuantLib {
+
+    namespace {
+
+        // n(d+), proportional to the vega of an option struck at K
+        Real vegaWeight(Real forward, Rate strike, Real stdDev) {
+            const Real dp = std::log(forward / strike) / stdDev + 0.5 * stdDev;
+            return NormalDistribution()(dp);
+        }
+
+        // call and put strikes of the broker strangle, struck at the broker vol
+        std::pair<Rate, Rate> brokerStrikes(const FxSmileSection& section, Real delta, Real stdDev) {
+            const Real spot = section.spot()->value();
+            const Real ddom = section.domesticDiscountFactor();
+            const Real dfor = section.foreignDiscountFactor();
+            const DeltaVolQuote::DeltaType dt = section.deltaType();
+            return {BlackDeltaCalculator(Option::Call, dt, spot, ddom, dfor, stdDev)
+                        .strikeFromDelta(delta),
+                    BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, stdDev)
+                        .strikeFromDelta(-delta)};
+        }
+
+    }
 
     std::optional<std::pair<Rate, Volatility>>
     FxDeltaVolTarget::point(const FxSmileSection& section) const {
@@ -50,6 +73,16 @@ namespace QuantLib {
         return section.volResidual(p.first, p.second);
     }
 
+    Real FxDeltaVolTarget::weight(const FxSmileSection& section) const {
+        const auto p = *point(section);
+        return vegaWeight(section.forward(), p.first, p.second * std::sqrt(section.exerciseTime()));
+    }
+
+    Real FxRiskReversalTarget::weight(const FxSmileSection&) const {
+        // d+ = N^{-1}(delta) for a forward call delta; both legs alike
+        return NormalDistribution()(InverseCumulativeNormal()(delta_));
+    }
+
     Real FxRiskReversalTarget::residual(const FxSmileSection& section) const {
         return section.volByDelta(delta_, Option::Call) - section.volByDelta(-delta_, Option::Put) -
                riskReversal_;
@@ -59,16 +92,10 @@ namespace QuantLib {
         const Time tau = section.exerciseTime();
         const Real htau = std::sqrt(tau);
 
-        const Real spot = section.spot()->value();
-        const Real ddom = section.domesticDiscountFactor();
-        const Real dfor = section.foreignDiscountFactor();
         const Real fwd = section.forward();
 
         const Real w = (atmVol_ + brokerFly_) * htau;
-        const DeltaVolQuote::DeltaType dt = section.deltaType();
-        
-        const Rate callStrike = BlackDeltaCalculator(Option::Call, dt, spot, ddom, dfor, w).strikeFromDelta(delta_);
-        const Rate putStrike = BlackDeltaCalculator(Option::Put, dt, spot, ddom, dfor, w).strikeFromDelta(-delta_);
+        const auto [callStrike, putStrike] = brokerStrikes(section, delta_, w);
         const BlackCalculator call(Option::Call, callStrike, fwd, w);
         const BlackCalculator put(Option::Put, putStrike, fwd, w);
         Real marketPrice = call.value() + put.value();
@@ -82,6 +109,13 @@ namespace QuantLib {
         return (smilePrice - marketPrice) / marketVega;
     }
 
+
+    Real FxBrokerStrangleTarget::weight(const FxSmileSection& section) const {
+        const Real w = (atmVol_ + brokerFly_) * std::sqrt(section.exerciseTime());
+        const Real fwd = section.forward();
+        const auto [callStrike, putStrike] = brokerStrikes(section, delta_, w);
+        return 0.5 * (vegaWeight(fwd, callStrike, w) + vegaWeight(fwd, putStrike, w));
+    }
 
     void FxSmileQuotes::fit(const FxSmileSection& section, FxSmileTargets targets) {
         section.fitToTargets(std::move(targets));

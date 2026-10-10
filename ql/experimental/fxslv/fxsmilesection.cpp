@@ -164,6 +164,7 @@ namespace QuantLib {
         // No ATM vol until the new smile is fitted; the fit is seeded from
         // referenceVol(), so the same quotes always give the same smile.
         atmVol_ = Null<Volatility>();
+        calibrationResiduals_ = Array();
 
         // The quotes drive the fit; check they actually fitted the section,
         // otherwise it would silently keep a previous calibration.
@@ -188,18 +189,47 @@ namespace QuantLib {
         QL_REQUIRE(!targets.empty(), "no calibration targets");
         targets_ = std::move(targets);
         calibrate();
+
+        // measure the fit the same way whatever the model's calibrate() did
+        calibrationResiduals_ = Array(targets_.size());
+        for (Size i = 0; i < targets_.size(); ++i) {
+            calibrationResiduals_[i] = targets_[i]->residual(*this);
+            QL_ENSURE(std::isfinite(calibrationResiduals_[i]),
+                      "calibrated smile gives a non-finite residual for target " << i);
+        }
         fitRequested_ = true;
+    }
+
+    const Array& FxSmileSection::calibrationResiduals() const {
+        calculate();
+        return calibrationResiduals_;
+    }
+
+    Real FxSmileSection::calibrationError() const {
+        calculate();
+        Real sum = 0.0;
+        for (Real r : calibrationResiduals_)
+            sum += r * r;
+        return std::sqrt(sum / static_cast<Real>(calibrationResiduals_.size()));
     }
 
     void FxSmileSection::calibrate() const {
         // Least squares over the model parameters: each evaluation loads
         // the trial parameters, so the targets measure the trial smile
-        // through the section's own functions.
+        // through the section's own functions.  Residuals are weighted by
+        // vega, so that errors count roughly as price errors.
+        Array weights(targets_.size());
+        for (Size i = 0; i < targets_.size(); ++i) {
+            weights[i] = targets_[i]->weight(*this);
+            QL_REQUIRE(weights[i] > 0.0 && std::isfinite(weights[i]),
+                       "calibration target " << i << " has an invalid weight: " << weights[i]);
+        }
+
         auto residuals = [&](const Array& params) -> Array {
             setParams(params);
             Array r(targets_.size());
             for (Size i = 0; i < targets_.size(); ++i)
-                r[i] = targets_[i]->residual(*this);
+                r[i] = weights[i] * targets_[i]->residual(*this);
             return r;
         };
 
@@ -208,7 +238,11 @@ namespace QuantLib {
         Problem problem(costFunction, constraint, initialParams());
         LevenbergMarquardt lm;
         EndCriteria endCriteria(1000, 100, 1.0e-12, 1.0e-12, 1.0e-12);
-        lm.minimize(problem, endCriteria);
+        const EndCriteria::Type result = lm.minimize(problem, endCriteria);
+        // MINPACK's "cannot reduce further" (FunctionEpsilonTooSmall) is a
+        // converged fit too, typically an exact one
+        QL_ENSURE(EndCriteria::succeeded(result) || result == EndCriteria::FunctionEpsilonTooSmall,
+                  "smile calibration did not converge: " << result);
 
         setParams(problem.currentValue());
     }

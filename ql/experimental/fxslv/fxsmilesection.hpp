@@ -146,6 +146,17 @@ namespace QuantLib {
         //! Market quotes the section is calibrated to.
         const ext::shared_ptr<FxSmileQuotes>& smileQuotes() const { return smileQuotes_; }
 
+        //! \name Calibration quality
+        /*! A model with fewer parameters than targets cannot fit them
+            all; these say how far the calibrated smile is from each.
+        */
+        //@{
+        //! Residual of each calibration target, in vol units, in the order the quotes give them.
+        const Array& calibrationResiduals() const;
+        //! Root mean square of calibrationResiduals(), in vol units.
+        Real calibrationError() const;
+        //@}
+
         // Calibration
         virtual Volatility volByStrike(Rate strike) const = 0;
         virtual Volatility volByDelta(Real delta, Option::Type parity) const = 0;
@@ -200,9 +211,10 @@ namespace QuantLib {
         virtual void adjustStrikes() const;
 
         //! Fits the smile to targets_.
-        /*! By default a least-squares fit of the target residuals over the
-            model parameters, starting from initialParams(); models with a
-            closed-form fit can override it.
+        /*! By default a least-squares fit of the vega-weighted target
+            residuals over the model parameters, starting from
+            initialParams(), which fails if it does not converge; models
+            with a closed-form fit can override it.
         */
         virtual void calibrate() const;
 
@@ -246,6 +258,8 @@ namespace QuantLib {
         // targets_ holds the calibration targets while calibrate() runs.
         mutable Volatility atmVol_ = Null<Volatility>();
         mutable FxSmileTargets targets_;
+        // unweighted residuals of the fitted smile, set by fitToTargets()
+        mutable Array calibrationResiduals_;
 
     };
 

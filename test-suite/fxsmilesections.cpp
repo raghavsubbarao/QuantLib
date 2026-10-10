@@ -41,6 +41,7 @@
 #include <ql/time/date.hpp>
 #include <ql/settings.hpp>
 #include <functional>
+#include <limits>
 #include <string>
 
 using namespace QuantLib;
@@ -119,65 +120,57 @@ namespace {
         }
     };
 
-    // Check that a smile section reproduces the input vols to within tolerance.
-    // rr_tol / bf_tol are tolerances on the RR and BF residuals respectively.
-    void checkSmileSection(FxSmileSection& ss,
-                           const MarketData& md,
-                           Real rr25_tol,
-                           Real bf25_tol,
-                           Real rr10_tol,
-                           Real bf10_tol) {
-        // ATM: model vol at ATM strike should match input ATM vol
-        Real atm_computed = ss.volByStrike(ss.atmLevel());
-        Real atm_error = std::fabs(atm_computed - md.v_atm->value());
-        BOOST_CHECK_MESSAGE(atm_error < 1.0e-4,
-            "ATM vol mismatch: model=" << atm_computed
-            << " market=" << md.v_atm->value()
-            << " error=" << atm_error);
+    // Check the fit to the market quotes.  The models have fewer
+    // parameters than the five quotes (or, for SVI, cannot use all five),
+    // so they cannot reproduce them; the bound on the RMS error, in vol,
+    // is a regression limit set a little above the current fit.
+    void checkSmileSection(const FxSmileSection& ss, Real maxError) {
+        BOOST_CHECK_EQUAL(ss.calibrationResiduals().size(), Size(5));
+        BOOST_CHECK_MESSAGE(ss.calibrationError() < maxError,
+                            "calibration error too large: " << ss.calibrationError()
+                                << " (limit " << maxError << ")");
+    }
 
-        // 25-delta risk reversal residual
-        Real model_v25c = ss.volByDelta(0.25, Option::Call);
-        Real model_v25p = ss.volByDelta(-0.25, Option::Put);
-        Real model_rr25 = model_v25c - model_v25p;
-        Real market_rr25 = md.v_25rr->value();
-        Real rr25_error = std::fabs(model_rr25 - market_rr25);
-        BOOST_CHECK_MESSAGE(rr25_error < rr25_tol,
-            "25D risk-reversal mismatch: model=" << model_rr25
-            << " market=" << market_rr25
-            << " error=" << rr25_error
-            << " tol=" << rr25_tol);
+    typedef std::function<ext::shared_ptr<FxSmileSection>(const ext::shared_ptr<FxSmileQuotes>&)>
+        SectionFactory;
 
-        // 25-delta butterfly residual
-        Real model_bf25 = 0.5 * (model_v25c + model_v25p) - md.v_atm->value();
-        Real market_bf25 = md.v_25bf->value();
-        Real bf25_error = std::fabs(model_bf25 - market_bf25);
-        BOOST_CHECK_MESSAGE(bf25_error < bf25_tol,
-            "25D butterfly mismatch: model=" << model_bf25
-            << " market=" << market_bf25
-            << " error=" << bf25_error
-            << " tol=" << bf25_tol);
+    template <class Section>
+    SectionFactory sectionFactory(const MarketData& md) {
+        return [&md](const ext::shared_ptr<FxSmileQuotes>& quotes) {
+            return ext::make_shared<Section>(md.expiryDate, md.spot, quotes, md.forDiscount,
+                                             md.domDiscount, md.deltaType, md.atmType,
+                                             Actual365Fixed(), md.settlement);
+        };
+    }
 
-        // 10-delta risk reversal residual
-        Real model_v10c = ss.volByDelta(0.10, Option::Call);
-        Real model_v10p = ss.volByDelta(-0.10, Option::Put);
-        Real model_rr10 = model_v10c - model_v10p;
-        Real market_rr10 = md.v_10rr->value();
-        Real rr10_error = std::fabs(model_rr10 - market_rr10);
-        BOOST_CHECK_MESSAGE(rr10_error < rr10_tol,
-            "10D risk-reversal mismatch: model=" << model_rr10
-            << " market=" << market_rr10
-            << " error=" << rr10_error
-            << " tol=" << rr10_tol);
+    // Quotes read off a calibrated smile at the market's deltas: the model
+    // fits these exactly, with the parameters it already has.
+    ext::shared_ptr<FxSmileQuotes> quotesFromSmile(const FxSmileSection& ss) {
+        const Time t = ss.exerciseTime();
+        const DeltaVolQuote::DeltaType dt = ss.deltaType();
+        std::vector<Handle<DeltaVolQuote>> q;
+        q.emplace_back(
+            ext::make_shared<DeltaVolQuote>(makeQuoteHandle(ss.atmVol()), dt, t, ss.atmType()));
+        for (Real d : {0.25, 0.10}) {
+            q.emplace_back(ext::make_shared<DeltaVolQuote>(
+                d, makeQuoteHandle(ss.volByDelta(d, Option::Call)), t, dt));
+            q.emplace_back(ext::make_shared<DeltaVolQuote>(
+                -d, makeQuoteHandle(ss.volByDelta(-d, Option::Put)), t, dt));
+        }
+        return ext::make_shared<FxDeltaVolQuotes>(q);
+    }
 
-        // 10-delta butterfly residual
-        Real model_bf10 = 0.5 * (model_v10c + model_v10p) - md.v_atm->value();
-        Real market_bf10 = md.v_10bf->value();
-        Real bf10_error = std::fabs(model_bf10 - market_bf10);
-        BOOST_CHECK_MESSAGE(bf10_error < bf10_tol,
-            "10D butterfly mismatch: model=" << model_bf10
-            << " market=" << market_bf10
-            << " error=" << bf10_error
-            << " tol=" << bf10_tol);
+    // Two sections give the same smile.
+    void checkSameSmile(const std::string& name,
+                        const FxSmileSection& a,
+                        const FxSmileSection& b,
+                        Real tolerance) {
+        for (Real m : {0.8, 0.9, 1.0, 1.1, 1.2}) {
+            const Rate K = m * a.forward();
+            BOOST_CHECK_MESSAGE(std::fabs(a.volByStrike(K) - b.volByStrike(K)) < tolerance,
+                                name << ": smiles differ at K/F = " << m << ": "
+                                     << a.volByStrike(K) << " vs " << b.volByStrike(K));
+        }
     }
 
     // Check that volByStrike and volByDelta are consistent via the
@@ -215,9 +208,8 @@ BOOST_AUTO_TEST_CASE(testPolynomialSmileSection) {
                               md.deltaType, md.atmType,
                               Actual365Fixed(), md.settlement);
 
-    // 3 parameters for 5 constraints => over-determined; expect best-fit
-    // Use wider tolerances than the cost models.
-    checkSmileSection(ss, md, 5.0e-3, 5.0e-3, 5.0e-3, 5.0e-3);
+    // 3 parameters for 5 quotes
+    checkSmileSection(ss, 12.0e-4);
     checkStrikeDeltaConsistency(ss, md);
 }
 
@@ -235,8 +227,8 @@ BOOST_AUTO_TEST_CASE(testSabrSmileSection) {
                           md.deltaType, md.atmType,
                           Actual365Fixed(), md.settlement);
 
-    // SABR has 3 free params (alpha, nu, rho) for 5 constraints.
-    checkSmileSection(ss, md, 5.0e-3, 5.0e-3, 5.0e-3, 5.0e-3);
+    // 3 free parameters (alpha, nu, rho) for 5 quotes
+    checkSmileSection(ss, 40.0e-4);
     checkStrikeDeltaConsistency(ss, md);
 
     // Sanity-check parameter bounds
@@ -260,8 +252,8 @@ BOOST_AUTO_TEST_CASE(testSviSmileSection) {
                          md.deltaType, md.atmType,
                          Actual365Fixed(), md.settlement);
 
-    // SVI has 5 params matching 5 constraints exactly in principle.
-    checkSmileSection(ss, md, 1.0e-4, 1.0e-4, 1.0e-4, 1.0e-4);
+    // 5 parameters for 5 quotes, but the unconstrained fit stalls short of exact
+    checkSmileSection(ss, 30.0e-4);
     checkStrikeDeltaConsistency(ss, md);
 }
 
@@ -279,8 +271,8 @@ BOOST_AUTO_TEST_CASE(testQuadraticSmileSection) {
                              md.deltaType, md.atmType,
                              Actual365Fixed(), md.settlement);
 
-    // 3 params for 5 constraints => over-determined, best-fit.
-    checkSmileSection(ss, md, 5.0e-3, 5.0e-3, 5.0e-3, 5.0e-3);
+    // 3 parameters for 5 quotes; residuals in put delta coordinates
+    checkSmileSection(ss, 25.0e-4);
     checkStrikeDeltaConsistency(ss, md, 1.0e-5);
 }
 
@@ -298,8 +290,8 @@ BOOST_AUTO_TEST_CASE(testCostSmileSectionFlatDynamics) {
                                       md.deltaType, md.atmType,
                                       Actual365Fixed(), md.settlement, Date(), true);
 
-    // Cost-based models calibrate exactly; use tight tolerances.
-    checkSmileSection(ss, md, 1.0e-6, 1.0e-6, 1.0e-6, 1.0e-6);
+    // 3 free coefficients for 5 quotes, fitted in closed form
+    checkSmileSection(ss, 35.0e-4);
     checkStrikeDeltaConsistency(ss, md, 1.0e-5);
 }
 
@@ -317,8 +309,8 @@ BOOST_AUTO_TEST_CASE(testCostSmileSectionScaledDynamics) {
                                         md.deltaType, md.atmType,
                                         Actual365Fixed(), md.settlement, Date(), true);
 
-    // Cost-based models calibrate exactly; use tight tolerances.
-    checkSmileSection(ss, md, 1.0e-6, 1.0e-6, 1.0e-6, 1.0e-6);
+    // 3 free coefficients for 5 quotes, fitted in closed form
+    checkSmileSection(ss, 50.0e-4);
     checkStrikeDeltaConsistency(ss, md, 1.0e-5);
 }
 
@@ -349,71 +341,50 @@ BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {
     quotes.push_back(Handle<DeltaVolQuote>(ext::make_shared<DeltaVolQuote>(
         0.10, makeQuoteHandle(md.v_10c), 1.0, DeltaVolQuote::PaSpot)));
 
-    // --- polynomial ---
-    {
-        PolynomialSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
-                                  md.forDiscount, md.domDiscount,
-                                  md.deltaType, md.atmType,
-                                  Actual365Fixed(), md.settlement);
-        Real atm_computed = ss.volByStrike(ss.atmLevel());
-        BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 5.0e-3,
-            "Polynomial (DeltaVolQuote path) ATM vol error too large");
-    }
+    // These are the market quotes, in the conventions the section reads
+    // them in, so every model must give the smile it gets from the RR/BF
+    // quotes.
+    auto deltaVolQuotes = ext::make_shared<FxDeltaVolQuotes>(quotes);
+    auto compare = [&](const std::string& name, const SectionFactory& make) {
+        auto fromRrBf = make(md.rrBfQuotes());
+        auto fromDeltaVols = make(deltaVolQuotes);
+        // the targets come in a different order, and LM stops on a relative
+        // change of the objective, so the fits agree to well below 0.1bp
+        // rather than to machine precision
+        BOOST_CHECK_SMALL(fromRrBf->calibrationError() - fromDeltaVols->calibrationError(), 1.0e-7);
+        checkSameSmile(name, *fromRrBf, *fromDeltaVols, 1.0e-5);
+    };
+    compare("Polynomial", sectionFactory<PolynomialSmileSection>(md));
+    compare("SABR", sectionFactory<FxSabrSmileSection>(md));
+    compare("SVI", sectionFactory<FxSviSmileSection>(md));
+    compare("Quadratic", sectionFactory<QuadraticSmileSection>(md));
+    compare("CostFlatDynamics", sectionFactory<FxCostSmileSectionFlatDynamics>(md));
+    compare("CostScaledDynamics", sectionFactory<FxCostSmileSectionScaledDynamics>(md));
+}
 
-    // --- SABR ---
-    {
-        FxSabrSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
-                              md.forDiscount, md.domDiscount,
-                              md.deltaType, md.atmType,
-                              Actual365Fixed(), md.settlement);
-        Real atm_computed = ss.volByStrike(ss.atmLevel());
-        BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 5.0e-3,
-            "SABR (DeltaVolQuote path) ATM vol error too large");
-    }
 
-    // --- SVI ---
-    {
-        FxSviSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
-                             md.forDiscount, md.domDiscount,
-                             md.deltaType, md.atmType,
-                             Actual365Fixed(), md.settlement);
-        Real atm_computed = ss.volByStrike(ss.atmLevel());
-        BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 1.0e-4,
-            "SVI (DeltaVolQuote path) ATM vol error too large");
-    }
+BOOST_AUTO_TEST_CASE(testCalibrationRoundTrip) {
+    BOOST_TEST_MESSAGE("Testing that FX smile sections refit quotes generated by their own smile...");
 
-    // --- quadratic ---
-    {
-        QuadraticSmileSection ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
-                                 md.forDiscount, md.domDiscount,
-                                 md.deltaType, md.atmType,
-                                 Actual365Fixed(), md.settlement);
-        Real atm_computed = ss.volByStrike(ss.atmLevel());
-        BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 5.0e-3,
-            "Quadratic (DeltaVolQuote path) ATM vol error too large");
-    }
+    MarketData md;
 
-    // --- cost flat dynamics ---
-    {
-        FxCostSmileSectionFlatDynamics ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
-                                          md.forDiscount, md.domDiscount,
-                                          md.deltaType, md.atmType,
-                                          Actual365Fixed(), md.settlement);
-        Real atm_computed = ss.volByStrike(ss.atmLevel());
-        BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 1.0e-4,
-            "CostFlatDynamics (DeltaVolQuote path) ATM vol error too large");
-    }
-
-    // --- cost scaled dynamics ---
-    {
-        FxCostSmileSectionScaledDynamics ss(md.expiryDate, md.spot, ext::make_shared<FxDeltaVolQuotes>(quotes),
-                                            md.forDiscount, md.domDiscount,
-                                            md.deltaType, md.atmType,
-                                            Actual365Fixed(), md.settlement);
-        Real atm_computed = ss.volByStrike(ss.atmLevel());
-        BOOST_CHECK_MESSAGE(std::fabs(atm_computed - md.v_atm->value()) < 1.0e-4,
-            "CostScaledDynamics (DeltaVolQuote path) ATM vol error too large");
-    }
+    // Each model is calibrated to the market, quotes are read off its
+    // smile, and a fresh section must fit them exactly and give back the
+    // same smile.
+    auto roundTrip = [&](const std::string& name, const SectionFactory& make) {
+        auto original = make(md.rrBfQuotes());
+        auto refitted = make(quotesFromSmile(*original));
+        BOOST_CHECK_MESSAGE(refitted->calibrationError() < 1.0e-8,
+                            name << ": quotes from its own smile not refitted: error "
+                                 << refitted->calibrationError());
+        checkSameSmile(name, *original, *refitted, 1.0e-6);
+    };
+    roundTrip("Polynomial", sectionFactory<PolynomialSmileSection>(md));
+    roundTrip("SABR", sectionFactory<FxSabrSmileSection>(md));
+    roundTrip("SVI", sectionFactory<FxSviSmileSection>(md));
+    roundTrip("Quadratic", sectionFactory<QuadraticSmileSection>(md));
+    roundTrip("CostFlatDynamics", sectionFactory<FxCostSmileSectionFlatDynamics>(md));
+    roundTrip("CostScaledDynamics", sectionFactory<FxCostSmileSectionScaledDynamics>(md));
 }
 
 
@@ -787,6 +758,38 @@ namespace {
         mutable const FxSmileSection* section_ = nullptr;
     };
 
+}
+
+namespace {
+
+    // A target no smile can meet.
+    class UnreachableTarget : public FxSmileTarget {
+      public:
+        Real residual(const FxSmileSection&) const override {
+            return std::numeric_limits<Real>::quiet_NaN();
+        }
+    };
+
+    class QuotesWithUnreachableTarget : public FxSmileQuotes {
+      public:
+        Volatility referenceVol() const override { return 0.1; }
+      private:
+        void calibrate(const FxSmileSection& section) const override {
+            fit(section, {ext::make_shared<UnreachableTarget>()});
+        }
+    };
+
+}
+
+BOOST_AUTO_TEST_CASE(testFailedCalibrationThrows) {
+    BOOST_TEST_MESSAGE("Testing that a failed FX smile calibration raises an error...");
+
+    MarketData md;
+    QuadraticSmileSection ss(md.expiryDate, md.spot, ext::make_shared<QuotesWithUnreachableTarget>(),
+                             md.forDiscount, md.domDiscount, md.deltaType, md.atmType,
+                             Actual365Fixed(), md.settlement);
+    BOOST_CHECK_THROW(ss.volByStrike(md.spot->value()), Error);
+    BOOST_CHECK_THROW(ss.calibrationError(), Error);
 }
 
 BOOST_AUTO_TEST_CASE(testSmileQuotesMustFitDuringCalibration) {

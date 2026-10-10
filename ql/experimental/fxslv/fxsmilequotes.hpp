@@ -49,6 +49,15 @@ namespace QuantLib {
         //! Residual of the section's current smile, in vol units.
         virtual Real residual(const FxSmileSection& section) const = 0;
 
+        //! Weight of the residual in a least-squares fit.
+        /*! Proportional to the vega of the target's options,
+            \f$ n(d_+) \f$, so that a fit weighs vol errors roughly as
+            price errors; the factor \f$ F\sqrt{\tau} \f$, common to
+            all targets of a section, is left out.  It must not depend on
+            the section's trial smile.  The default is 1.
+        */
+        virtual Real weight(const FxSmileSection&) const { return 1.0; }
+
         //! The point (strike, vol) on the section's smile this target fixes, if any
         /*! For models with closed-form fits to points (e.g. the cost
             models).  The strike depends on the section's forward and
@@ -72,6 +81,8 @@ namespace QuantLib {
       public:
         explicit FxDeltaVolTarget(Handle<DeltaVolQuote> quote) : quote_(std::move(quote)) {}
         Real residual(const FxSmileSection& section) const override;
+        //! \f$ n(d_+) \f$ at the quote's strike and vol.
+        Real weight(const FxSmileSection& section) const override;
         std::optional<std::pair<Rate, Volatility>> point(const FxSmileSection& section) const override;
 
       private:
@@ -88,6 +99,8 @@ namespace QuantLib {
         FxRiskReversalTarget(Real delta, Volatility riskReversal)
         : delta_(delta), riskReversal_(riskReversal) {}
         Real residual(const FxSmileSection& section) const override;
+        //! \f$ n(N^{-1}(\Delta)) \f$: exact for forward deltas, close for the others.
+        Real weight(const FxSmileSection& section) const override;
 
       private:
         Real delta_;
@@ -105,6 +118,8 @@ namespace QuantLib {
         FxBrokerStrangleTarget(Volatility atmVol, Volatility brokerFly, Real delta)
         : atmVol_(atmVol), brokerFly_(brokerFly), delta_(delta) {}
         Real residual(const FxSmileSection& section) const override;
+        //! Average \f$ n(d_+) \f$ of the two legs, struck and valued at the broker vol.
+        Real weight(const FxSmileSection& section) const override;
 
       private:
         Volatility atmVol_, brokerFly_;
