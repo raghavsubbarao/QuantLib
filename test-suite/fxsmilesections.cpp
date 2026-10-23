@@ -326,7 +326,28 @@ BOOST_AUTO_TEST_CASE(testCostSmileSectionScaledDynamics) {
 
 
 // ---------------------------------------------------------------------------
-//  7. DeltaVolQuote constructor path (all models)
+//  7. fxCostSmileSectionStickyDelta
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_CASE(testCostSmileSectionStickyDelta) {
+    BOOST_TEST_MESSAGE("Testing FX cost smile section (sticky delta) calibration...");
+
+    MarketData md;
+
+    FxCostSmileSectionStickyDelta ss(md.expiryDate, md.spot, md.rrBfQuotes(), md.forDiscount,
+                                     md.domDiscount, md.deltaType, md.atmType,
+                                     Actual365Fixed(), md.settlement, Date(), true);
+
+    // 3 free cost coefficients for 5 quotes; sticky-delta slope adds one
+    // extra constraint per point, so the fit is slightly looser than other
+    // sections with the same parameter count
+    checkSmileSection(ss, 40.0e-4);
+    checkStrikeDeltaConsistency(ss, md, 1.0e-5);
+}
+
+
+// ---------------------------------------------------------------------------
+//  8. DeltaVolQuote constructor path (all models)
 // ---------------------------------------------------------------------------
 
 BOOST_AUTO_TEST_CASE(testDeltaVolQuoteConstructorPath) {

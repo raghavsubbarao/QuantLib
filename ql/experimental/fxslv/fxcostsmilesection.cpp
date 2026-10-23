@@ -591,9 +591,10 @@ namespace QuantLib {
 
         std::vector<Real> slopes;
         Real sd, su;
+        // beta = dw/dx where x = log(F/K), so dw/dx = -(K * dw/dK) — note the negative sign
         auto discreteSlope = [&](const std::optional<std::pair<Rate, Volatility>>& p1,
                                  const std::optional<std::pair<Rate, Volatility>>& p2) {
-            return (p2->second - p1->second) * htau * (p2->first + p1->first) /
+            return -(p2->second - p1->second) * htau * (p2->first + p1->first) /
                    (2 * (p2->first - p1->first));
         };
 
