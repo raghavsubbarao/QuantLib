@@ -239,7 +239,7 @@ namespace QuantLib {
         //@{
         virtual void calibrate() const override;
         //@}
-        
+
         //! \name FxSmileSectionByStrike interface
         //@{
         Volatility volByStrikeImpl(Real strike,
@@ -247,6 +247,11 @@ namespace QuantLib {
                                    Time tau,
                                    const std::vector<Real>& params) const override;
         //@}
+
+        // Calibrated smile points (sorted by descending x = log(F/K), i.e. ascending K),
+        // used to initialize the fixed-point iteration in volByStrikeImpl.
+        struct CalibratedPoint { Real x, w, beta; };
+        mutable std::vector<CalibratedPoint> calibratedPoints_;
     };
 } // namespace QuantLib
 

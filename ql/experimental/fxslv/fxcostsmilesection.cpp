@@ -549,35 +549,18 @@ namespace QuantLib {
 
 
     void FxCostSmileSectionStickyDelta::calibrate() const {
-        // Build the regressor matrix for the general-alpha cost equation.
-        //
-        // The cost equation at a quoted point with total vol w = sigma * sqrt(T) is:
-        //
-        //   Cgamma + 2*Ctheta*w^(1+alpha) - 2*Ceta*d+(w)*w^alpha + Comega*d+(w)*d-(w)*w^(2*alpha) =
-        //   0
-        //
-        // Columns: [Cgamma, Ctheta, Ceta, Comega]
-        // Regressors: [1, 2*w^(1+a), -2*d+*w^a, d+*d-*w^(2a)]   (times optional weight)
-        //
-        // Note: d+ is used for the vanna regressor in both the standard and premium-adjusted
-        // cases — this is consistent with the existing per-class behaviour preserved here.
-
         auto dp = [&](Real k, Real iw) { return std::log(forward() / k) / iw + iw / 2.; };
         auto dm = [&](Real k, Real iw) { return std::log(forward() / k) / iw - iw / 2.; };
 
         Real htau = std::sqrt(exerciseTime());
 
-        // check all quotes are delta-vol quotes - cannot be calibrated otherwise
         for (Size i = 0; i < targets_.size(); i++) {
-            // the closed form needs points on the smile (delta-vol quotes
-            // or smile strangles); broker strangles are not points
             const auto point = targets_[i]->point(*this);
             QL_REQUIRE(point, "cost smile sections can only be calibrated to points on the "
                               "smile (delta-vol quotes or smile strangles), not to broker "
                               "strangles");
         }
 
-        // sort the targets by strike
         auto sortByStrike = [&](const ext::shared_ptr<FxSmileTarget>& L,
                                 const ext::shared_ptr<FxSmileTarget>& R) {
             return L->point(*this)->first < R->point(*this)->first;
@@ -585,45 +568,39 @@ namespace QuantLib {
         std::sort(targets_.begin(), targets_.end(), sortByStrike);
 
         std::vector<std::optional<std::pair<Rate, Volatility>>> points;
-        for (Size i = 0; i < targets_.size(); i++) {
+        for (Size i = 0; i < targets_.size(); i++)
             points.push_back(targets_[i]->point(*this));
-        }
 
-        std::vector<Real> slopes;
-        Real sd, su;
-        // beta = dw/dx where x = log(F/K), so dw/dx = -(K * dw/dK) — note the negative sign
+        // beta = dw/dx where x = log(F/K); discrete finite-difference as initial guess.
         auto discreteSlope = [&](const std::optional<std::pair<Rate, Volatility>>& p1,
                                  const std::optional<std::pair<Rate, Volatility>>& p2) {
             return -(p2->second - p1->second) * htau * (p2->first + p1->first) /
                    (2 * (p2->first - p1->first));
         };
 
-        // initialize slope estimates
+        std::vector<Real> slopes;
         slopes.push_back(discreteSlope(points[0], points[1]));
         for (Size i = 1; i < targets_.size() - 1; i++) {
-            sd = discreteSlope(points[i - 1], points[i]);
-            su = discreteSlope(points[i], points[i + 1]);
+            Real sd = discreteSlope(points[i - 1], points[i]);
+            Real su = discreteSlope(points[i], points[i + 1]);
             slopes.push_back((sd + su) / 2.);
         }
-        // final one
         slopes.push_back(discreteSlope(points[targets_.size() - 2], points[targets_.size() - 1]));
 
-        // Precompute all per-point quantities that are constant across iterations.
-        // Only slopes[i] changes; everything else depends only on quotes and forward.
         struct PointCache {
-            Real k, w, x;      // strike, total vol, log-moneyness
-            Real phi_p, phi_m; // d+, d-
-            Real phi_v;        // d+ (premium-adjusted) or d- (standard) for vanna regressor
-            Real wt;           // calibration weight
+            Real k, w, x;
+            Real phi_p, phi_m;
+            Real phi_v;
+            Real wt;
         };
 
         CumulativeNormalDistribution f;
-        const Real pa = premiumAdjust() ? 1. : -1.;
+        const Integer pa = premiumAdjust() ? 1 : -1;
 
-        // pre-compute value for iterative procedure below
+        const Size n = targets_.size();
         std::vector<PointCache> cache;
-        cache.reserve(targets_.size());
-        for (Size i = 0; i < targets_.size(); i++) {
+        cache.reserve(n);
+        for (Size i = 0; i < n; i++) {
             PointCache c;
             c.k = points[i]->first;
             c.w = points[i]->second * htau;
@@ -635,125 +612,99 @@ namespace QuantLib {
             cache.push_back(c);
         }
 
-        // Ensure params_ is initialised so the convergence check on the first
-        // iteration does not read uninitialised memory.
-        if (params_.size() < 4)
-            params_.assign(4, 0.0);
-
-        std::vector<Real> ts, ss;
-        Real eps;
-        do {
-            eps = 0.0;
-
-            ts.clear();
-            // cost-equation rows only (n x 4); slope condition constrains beta
-            // via the cubic update below — adding it here as extra rows over-
-            // determines the SVD (10 constraints on 3 free costs) and degrades
-            // the cost-equation fit relative to the base-class calibration
-            for (Size i = 0; i < targets_.size(); i++) {
-                const PointCache& c = cache[i];
-                const Real beta = slopes[i];
-                const Real r1 = c.wt * (1 + 2 * beta * c.phi_m + beta * beta * c.phi_p * c.phi_m);
-                const Real r2 = c.wt * 2.0 * c.w;
-                const Real r3 = -c.wt * 2.0 * (c.phi_v + beta * c.phi_p * c.phi_m);
-                const Real r4 = c.wt * c.phi_p * c.phi_m;
-                ts.push_back(r1);
-                ts.push_back(r2);
-                ts.push_back(r3);
-                ts.push_back(r4);
+        // Linear fit of discrete slopes for extrapolation outside the calibrated range.
+        {
+            std::vector<Real> ts2;
+            for (Size i = 0; i < n; i++) {
+                ts2.push_back(cache[i].x);
+                ts2.push_back(1.);
             }
-
-            Matrix A(targets_.size(), 4, ts.begin(), ts.end());
-            SVD svd(A);
-            const Matrix V = svd.V();
-            const Array s = svd.singularValues();
-
-            eps += (params_[1] - V(1, 3) / V(0, 3)) * (params_[1] - V(1, 3) / V(0, 3));
-            eps += (params_[2] - V(2, 3) / V(0, 3)) * (params_[2] - V(2, 3) / V(0, 3));
-            eps += (params_[3] - V(3, 3) / V(0, 3)) * (params_[3] - V(3, 3) / V(0, 3));
-            //eps = s[3];
-
-            params_.clear();
-            params_.push_back(1.0);
-            params_.push_back(V(1, 3) / V(0, 3));
-            params_.push_back(V(2, 3) / V(0, 3));
-            params_.push_back(V(3, 3) / V(0, 3));
-
-            for (Size i = 0; i < targets_.size(); i++) {
-                const PointCache& c = cache[i];
-                
-                // form the cubic in slopes and solve
-                CubicPolynomial P(std::vector<Real>{
-                    2 * (c.x * params_[3] - c.w * params_[2]),
-                    c.w * c.w * (c.w * params_[3] + 3 * (pa * params_[2]  - 2 * params_[1])) -
-                        2 * c.x * params_[2],
-                    c.w * c.w * (3 * params_[0]  - 2 * params_[2] * c.w), 
-                    c.w * c.w * c.w * params_[0]});
-
-                P.roots(ss);
-
-                // the the closest root to the previous guess
-                Real target = slopes[i];
-                auto closest = std::min_element(ss.begin(), ss.end(), [target](double a, double b) {
-                    return std::abs(a - target) < std::abs(b - target);
-                });
-                eps += (slopes[i] - *closest) * (slopes[i] - *closest);
-                slopes[i] = *closest;
-            }
-            
-        } while (eps > 1.0e-12);
-
-        // set-up a quadratic for initializing slope
-        ts.clear();
-        for (Size i = 0; i < targets_.size(); i++) {
-            const PointCache& c = cache[i];
-            ts.push_back(c.x);
-            ts.push_back(1.);
+            Matrix A2(n, 2, ts2.begin(), ts2.end());
+            std::vector<Real> slopeVec(slopes.begin(), slopes.end());
+            Matrix b2(n, 1, slopeVec.begin(), slopeVec.end());
+            Matrix v2 = inverse(transpose(A2) * A2) * transpose(A2) * b2;
+            params_.push_back(v2[0][0]);  // a_slope (will be updated after LM)
+            params_.push_back(v2[1][0]);  // b_slope
         }
 
-        Matrix A(targets_.size(), 2, ts.begin(), ts.end());
-        Matrix b(targets_.size(), 1, slopes.begin(), slopes.end());
-        Matrix v = inverse(transpose(A) * A) * transpose(A) * b;
-
-        params_.push_back(v[0][0]);
-        params_.push_back(v[1][0]);
-
-        // Refine cost parameters via Levenberg-Marquardt, minimising the
-        // weighted squared differences between model-implied and quoted vols.
-        // The SVD result above is the warm start.  Slope params (indices 4,5)
-        // are held fixed; only the 3 free costs are varied.
+        // Q-only linear regression: find (C_θ, C_η, C_ω) minimising
+        //   Σ_i wt_i² * Q(w_i, β_disc_i; C)²
         //
-        // Residual i = wt_i * ( volByStrikeImpl(k_i; costs) - sigma_quoted_i )
+        // β_disc_i are used as FIXED reference slopes.  Q is linear in C, so
+        // this is an exact 5×3 weighted least-squares problem.
+        //
+        // With C_γ normalised to 1:
+        //   A_i = wt_i * [2w_i, -2(φv_i+β_i*φp_i*φm_i), φp_i*φm_i]
+        //   b_i = -wt_i * (1 + 2β_i*φm_i + β_i²*φp_i*φm_i)
+        {
+            std::vector<Real> Mdata, bdata;
+            Mdata.reserve(3 * n);
+            bdata.reserve(n);
 
-        struct VolMismatch : public CostFunction {
-            const FxCostSmileSectionStickyDelta& sec_;
+            for (Size i = 0; i < n; i++) {
+                const Real wi = cache[i].w;
+                const Real bi = slopes[i];
+                const Real wt = cache[i].wt;
+                const Real pp = cache[i].phi_p * cache[i].phi_m;
+                const Real pv = cache[i].phi_v;
+                const Real pm = cache[i].phi_m;
+
+                Mdata.push_back(wt * 2.0 * wi);
+                Mdata.push_back(-wt * 2.0 * (pv + bi * pp));
+                Mdata.push_back(wt * pp);
+                bdata.push_back(-wt * (1.0 + 2*bi*pm + bi*bi*pp));
+            }
+
+            Matrix M(n, 3, Mdata.begin(), Mdata.end());
+            Matrix bm(n, 1, bdata.begin(), bdata.end());
+            Matrix sol = inverse(transpose(M) * M) * transpose(M) * bm;
+            params_[1] = sol[0][0];
+            params_[2] = sol[1][0];
+            params_[3] = sol[2][0];
+        }
+
+        // Levenberg-Marquardt refinement of [C_θ, C_η, C_ω].
+        //
+        // Minimises Q(w_i, β_disc_i; C) at all quoted points with β_disc_i fixed.
+        // Because both Q and the regression objective are linear in C, the LM step
+        // converges in one or two iterations and acts as a polishing stage.
+        struct QMismatch : public CostFunction {
             const std::vector<PointCache>& cache_;
-            std::vector<Real> params_;
-            Real fwd_, tau_;
+            const std::vector<Real>& slopes_;
+            Integer pa_;
 
-            VolMismatch(const FxCostSmileSectionStickyDelta& sec,
-                        const std::vector<PointCache>& cache,
-                        const std::vector<Real>& params,
-                        Real fwd, Real tau)
-                : sec_(sec), cache_(cache), params_(params), fwd_(fwd), tau_(tau) {}
+            QMismatch(const std::vector<PointCache>& cache,
+                      const std::vector<Real>& slopes,
+                      Integer pa)
+                : cache_(cache), slopes_(slopes), pa_(pa) {}
 
             Array values(const Array& x) const override {
-                std::vector<Real> p = {1.0, x[0], x[1], x[2], params_[4], params_[5]};
-                const Real htau = std::sqrt(tau_);
-                Array res(cache_.size());
-                for (Size i = 0; i < cache_.size(); i++) {
-                    const Real modelVol = sec_.volByStrikeImpl(cache_[i].k, fwd_, tau_, p);
-                    res[i] = cache_[i].wt * (modelVol - cache_[i].w / htau);
+                const std::vector<Real> p = {1.0, x[0], x[1], x[2]};
+                const Size nn = cache_.size();
+                Array res(nn);
+                for (Size i = 0; i < nn; ++i) {
+                    const Real xi = cache_[i].x;
+                    const Real wi = cache_[i].w;
+                    const Real bi = slopes_[i];
+                    const Real wt = cache_[i].wt;
+                    const Real q = p[0]*bi*bi - 2*p[2]*bi + p[3];
+
+                    Real Qval = -q/4.;
+                    Qval = Qval*wi + (2*p[1] - pa_*p[2] - bi*p[0]);
+                    Qval = Qval*wi + p[0];
+                    Qval = Qval*wi + 2*xi*(bi*p[0] - p[2]);
+                    Qval = Qval*wi + xi*xi*q;
+                    res[i] = wt * Qval;
                 }
                 return res;
             }
         };
 
-        VolMismatch costFn(*this, cache, params_, forward(), exerciseTime());
+        QMismatch costFn(cache, slopes, pa);
         NoConstraint noConstraint;
         Array x0 = {params_[1], params_[2], params_[3]};
-        Problem lmProblem(costFn, noConstraint, x0);
 
+        Problem lmProblem(costFn, noConstraint, x0);
         LevenbergMarquardt lm(1.0e-8, 1.0e-8, 1.0e-8);
         EndCriteria ec(1000, 100, 1.0e-8, 1.0e-8, 1.0e-8);
         lm.minimize(lmProblem, ec);
@@ -762,6 +713,28 @@ namespace QuantLib {
         params_[1] = xOpt[0];
         params_[2] = xOpt[1];
         params_[3] = xOpt[2];
+
+        // Fit linear slope to β_disc for extrapolation outside the calibrated range.
+        {
+            std::vector<Real> ts2;
+            for (Size i = 0; i < n; i++) {
+                ts2.push_back(cache[i].x);
+                ts2.push_back(1.);
+            }
+            Matrix A2(n, 2, ts2.begin(), ts2.end());
+            std::vector<Real> slopeVec(slopes.begin(), slopes.end());
+            Matrix b2(n, 1, slopeVec.begin(), slopeVec.end());
+            Matrix v2 = inverse(transpose(A2) * A2) * transpose(A2) * b2;
+            params_[4] = v2[0][0];
+            params_[5] = v2[1][0];
+        }
+
+        // Store β_disc as the initialization for volByStrikeImpl.  The fixed-point
+        // uses betaRef (= the interpolated β_disc) to select the physical P root,
+        // preventing branch jumps across strikes.
+        calibratedPoints_.resize(n);
+        for (Size i = 0; i < n; ++i)
+            calibratedPoints_[i] = {cache[i].x, cache[i].w, slopes[i]};
     }
 
     Volatility FxCostSmileSectionStickyDelta::volByStrikeImpl(
@@ -769,47 +742,79 @@ namespace QuantLib {
         Real x = std::log(fwd / strike);
         Integer pa = premiumAdjust() ? 1 : -1;
 
-        Real beta = params[4] * x + params[5];
-        Real w = referenceVol() * std::sqrt(tau);
+        // Initialize (w, beta) from calibrated smile points to land on the correct
+        // fixed-point branch.  When calibratedPoints_ is populated (post-calibration),
+        // interpolate from the two bracketing quoted points; otherwise fall back to ATM.
+        Real w, beta;
+        if (!calibratedPoints_.empty()) {
+            const auto& pts = calibratedPoints_;
+            // pts is sorted by descending x (ascending strike).
+            if (x >= pts.front().x) {
+                w = pts.front().w;
+                beta = pts.front().beta;
+            } else if (x <= pts.back().x) {
+                w = pts.back().w;
+                beta = pts.back().beta;
+            } else {
+                // Find bracketing pair [lo, lo+1] with pts[lo].x >= x >= pts[lo+1].x
+                Size lo = 0;
+                while (lo + 1 < pts.size() - 1 && pts[lo + 1].x > x)
+                    ++lo;
+                Real t = (x - pts[lo].x) / (pts[lo + 1].x - pts[lo].x);
+                w = pts[lo].w + t * (pts[lo + 1].w - pts[lo].w);
+                beta = pts[lo].beta + t * (pts[lo + 1].beta - pts[lo].beta);
+            }
+        } else {
+            w = referenceVol() * std::sqrt(tau);
+            beta = params[4] * x + params[5];
+        }
+
+        // betaRef anchors P-root selection to the physical branch for this strike.
+        // Using betaRef (= the initial interpolated slope) rather than the current
+        // beta prevents the fixed-point from jumping to a wrong branch when the
+        // nearest P root to the current beta lies far from the physical slope.
+        const Real betaRef = beta;
+
         Real eps = 0.0;
+        Size iter = 0;
         do {
             const Real q = params[0] * beta * beta - 2 * params[2] * beta + params[3];
-            QuarticPolynomial Q(std::vector<Real>{x * x * q, 2 * x * (beta * params[0] - params[2]), params[0],
-                                  2 * params[1] - pa * params[2] - beta * params[0], -q / 4.});
+            QuarticPolynomial Q(std::vector<Real>{x * x * q, 2 * x * (beta * params[0] - params[2]),
+                                  params[0], 2 * params[1] - pa * params[2] - beta * params[0], -q / 4.});
             std::vector<Real> omega;
             Q.roots(omega);
 
-            // the the closest root to the previous guess
+            QL_REQUIRE(!omega.empty(), "Q quartic has no real roots at x=" << x);
             auto nearest = std::min_element(omega.begin(), omega.end(), [w](double a, double b) {
                 return std::abs(a - w) < std::abs(b - w);
             });
             w = *nearest;
 
-            // now form the cubic in slopes and solve to update slope
             CubicPolynomial P(std::vector<Real>{
                 2 * (x * params[3] - w * params[2]),
-                w * w * (w * params[3] + 3 * (pa * params[2]  - 2 * params[1])) - 2 * x * params[2],
+                w * w * (w * params[3] + 3 * (pa * params[2] - 2 * params[1])) - 2 * x * params[2],
                 w * w * (3 * params[0] - 2 * params[2] * w), w * w * w * params[0]});
             std::vector<Real> ss;
             P.roots(ss);
 
-            // the the closest root to the previous guess
-            auto closest = std::min_element(ss.begin(), ss.end(), [beta](double a, double b) {
-                return std::abs(a - beta) < std::abs(b - beta);
+            QL_REQUIRE(!ss.empty(), "P cubic has no real roots at x=" << x);
+            auto closest = std::min_element(ss.begin(), ss.end(), [betaRef](double a, double b) {
+                return std::abs(a - betaRef) < std::abs(b - betaRef);
             });
             const Real prevBeta = beta;
             beta = *closest;
             eps = (beta - prevBeta) * (beta - prevBeta);
-        } while (eps > 1.0e-12);
+            ++iter;
+        } while (eps > 1.0e-12 && iter < 200);
 
-        // run one final root finding with the converged slope
+        // Final quartic solve with converged slope.
         const Real q = params[0] * beta * beta - 2 * params[2] * beta + params[3];
         QuarticPolynomial Q(std::vector<Real>{x * x * q, 2 * x * (beta * params[0] - params[2]),
                                               params[0], 2 * params[1] - pa * params[2] - beta * params[0], -q / 4.});
         std::vector<Real> omega;
         Q.roots(omega);
 
-        // the the closest root to the previous guess
+        QL_REQUIRE(!omega.empty(), "Q quartic has no real roots at x=" << x << " (final)");
         auto nearest = std::min_element(omega.begin(), omega.end(), [w](double a, double b) {
             return std::abs(a - w) < std::abs(b - w);
         });
