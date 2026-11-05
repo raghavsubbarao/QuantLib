@@ -707,6 +707,7 @@
     <ClInclude Include="ql\experimental\fx\fxresetcashflows.hpp" />
     <ClInclude Include="ql\experimental\fx\mtmcrosscurrencybasisswap.hpp" />
     <ClInclude Include="ql\experimental\fxslv\all.hpp" />
+    <ClInclude Include="ql\experimental\fxslv\smilesections\all.hpp" />
     <ClInclude Include="ql\experimental\fxslv\smilesections\fxcostsmilesection.hpp" />
     <ClInclude Include="ql\experimental\fxslv\smilesections\fxdeltaconverter.hpp" />
     <ClInclude Include="ql\experimental\fxslv\fxeventvariance.hpp" />

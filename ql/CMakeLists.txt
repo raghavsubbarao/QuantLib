@@ -2397,6 +2397,7 @@ set(QL_GENERATED_HEADERS
     ${PROJECT_BINARY_DIR}/ql/experimental/forward/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/fx/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/fxslv/all.hpp
+    ${PROJECT_BINARY_DIR}/ql/experimental/fxslv/smilesections/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/inflation/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/lattices/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/math/all.hpp
