@@ -26,7 +26,7 @@
 
 #include <ql/termstructures/volatility/equityfx/blackvoltermstructure.hpp>
 #include <ql/termstructures/yieldtermstructure.hpp>
-#include <ql/experimental/fxslv/fxexpirycut.hpp>
+#include <ql/experimental/fxslv/conventions/fxexpirycut.hpp>
 #include <ql/experimental/fxslv/fxsettlementforeigncurve.hpp>
 #include <ql/experimental/fxslv/fxtradingtimevariancesurface.hpp>
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>

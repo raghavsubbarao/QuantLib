@@ -24,7 +24,7 @@
 #ifndef quantlib_fx_settlement_foreign_curve_hpp
 #define quantlib_fx_settlement_foreign_curve_hpp
 
-#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
 #include <ql/termstructures/yield/derivedtermstructure.hpp>
 
 namespace QuantLib {

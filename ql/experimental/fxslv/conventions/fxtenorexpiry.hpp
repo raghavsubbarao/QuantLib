@@ -24,7 +24,7 @@
 #ifndef quantlib_fx_tenor_expiry_hpp
 #define quantlib_fx_tenor_expiry_hpp
 
-#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
 #include <ql/time/period.hpp>
 #include <vector>
 

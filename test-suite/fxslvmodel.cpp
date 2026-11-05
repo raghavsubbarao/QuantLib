@@ -31,7 +31,7 @@
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
 
-#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
 #include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
 #include <ql/experimental/fxslv/stochvolcalibrator.hpp>
