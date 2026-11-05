@@ -729,7 +729,6 @@
     <ClInclude Include="ql\experimental\fxslv\fxtenorexpiry.hpp" />
     <ClInclude Include="ql\experimental\fxslv\fxvanillagreeks.hpp" />
     <ClInclude Include="ql\experimental\fxslv\fxvariancesurface.hpp" />
-    <ClInclude Include="ql\experimental\fxslv\hestoncalibrator.hpp" />
     <ClInclude Include="ql\experimental\fxslv\slvleveragecalibrator.hpp" />
     <ClInclude Include="ql\experimental\fxslv\stochvolcalibrator.hpp" />
     <ClInclude Include="ql\experimental\fxslv\tradingtimetermstructure.hpp" />
@@ -2154,8 +2153,8 @@
     <ClCompile Include="ql\experimental\fxslv\fxstickydeltasolver.cpp" />
     <ClCompile Include="ql\experimental\fxslv\fxtenorexpiry.cpp" />
     <ClCompile Include="ql\experimental\fxslv\fxvanillagreeks.cpp" />
-    <ClCompile Include="ql\experimental\fxslv\hestoncalibrator.cpp" />
     <ClCompile Include="ql\experimental\fxslv\slvleveragecalibrator.cpp" />
+    <ClCompile Include="ql\experimental\fxslv\stochvolcalibrator.cpp" />
     <ClCompile Include="ql\experimental\fxslv\tradingtimetermstructure.cpp" />
     <ClCompile Include="ql\experimental\inflation\cpicapfloorengines.cpp" />
     <ClCompile Include="ql\experimental\inflation\cpicapfloortermpricesurface.cpp" />

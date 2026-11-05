@@ -23,7 +23,6 @@
 #include <ql/experimental/fxslv/fxtenorexpiry.hpp>
 #include <ql/experimental/fxslv/fxvanillagreeks.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
-#include <ql/experimental/fxslv/hestoncalibrator.hpp>
 #include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
 #include <ql/experimental/fxslv/stochvolcalibrator.hpp>
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>

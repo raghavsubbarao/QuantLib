@@ -168,8 +168,8 @@ set(QL_SOURCES
     experimental/fxslv/fxstickydeltasolver.cpp
     experimental/fxslv/fxtenorexpiry.cpp
     experimental/fxslv/fxvanillagreeks.cpp
-    experimental/fxslv/hestoncalibrator.cpp
     experimental/fxslv/slvleveragecalibrator.cpp
+    experimental/fxslv/stochvolcalibrator.cpp
     experimental/fxslv/tradingtimetermstructure.cpp
     experimental/inflation/cpicapfloorengines.cpp
     experimental/inflation/cpicapfloortermpricesurface.cpp
@@ -1226,7 +1226,6 @@ set(QL_HEADERS
     experimental/fxslv/fxtenorexpiry.hpp
     experimental/fxslv/fxvanillagreeks.hpp
     experimental/fxslv/fxvariancesurface.hpp
-    experimental/fxslv/hestoncalibrator.hpp
     experimental/fxslv/slvleveragecalibrator.hpp
     experimental/fxslv/stochvolcalibrator.hpp
     experimental/fxslv/tradingtimetermstructure.hpp

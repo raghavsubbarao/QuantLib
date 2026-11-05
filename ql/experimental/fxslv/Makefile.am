@@ -26,7 +26,6 @@ this_include_HEADERS = \
     fxtenorexpiry.hpp \
     fxvanillagreeks.hpp \
     fxvariancesurface.hpp \
-    hestoncalibrator.hpp \
     slvleveragecalibrator.hpp \
     stochvolcalibrator.hpp \
     tradingtimetermstructure.hpp
@@ -49,8 +48,8 @@ cpp_files = \
     fxstickydeltasolver.cpp \
     fxtenorexpiry.cpp \
     fxvanillagreeks.cpp \
-    hestoncalibrator.cpp \
     slvleveragecalibrator.cpp \
+    stochvolcalibrator.cpp \
     tradingtimetermstructure.cpp
 
 if UNITY_BUILD

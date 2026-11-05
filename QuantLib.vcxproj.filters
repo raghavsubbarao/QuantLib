@@ -3372,9 +3372,6 @@
     <ClInclude Include="ql\experimental\fxslv\fxvariancesurface.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>
-    <ClInclude Include="ql\experimental\fxslv\hestoncalibrator.hpp">
-      <Filter>experimental\fxslv</Filter>
-    </ClInclude>
     <ClInclude Include="ql\experimental\fxslv\slvleveragecalibrator.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>
@@ -7537,10 +7534,10 @@
     <ClCompile Include="ql\experimental\fxslv\fxvanillagreeks.cpp">
       <Filter>experimental\fxslv</Filter>
     </ClCompile>
-    <ClCompile Include="ql\experimental\fxslv\hestoncalibrator.cpp">
+    <ClCompile Include="ql\experimental\fxslv\slvleveragecalibrator.cpp">
       <Filter>experimental\fxslv</Filter>
     </ClCompile>
-    <ClCompile Include="ql\experimental\fxslv\slvleveragecalibrator.cpp">
+    <ClCompile Include="ql\experimental\fxslv\stochvolcalibrator.cpp">
       <Filter>experimental\fxslv</Filter>
     </ClCompile>
     <ClCompile Include="ql\experimental\fxslv\tradingtimetermstructure.cpp">

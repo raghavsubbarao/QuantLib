@@ -56,7 +56,7 @@
 
 // SLV calibration framework
 #include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
-#include <ql/experimental/fxslv/hestoncalibrator.hpp>
+#include <ql/experimental/fxslv/stochvolcalibrator.hpp>
 #include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
 
 // Process and pricing

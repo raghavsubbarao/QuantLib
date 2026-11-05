@@ -33,7 +33,6 @@
 
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
-#include <ql/experimental/fxslv/hestoncalibrator.hpp>
 #include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
 #include <ql/experimental/fxslv/stochvolcalibrator.hpp>
 #include <ql/instruments/payoffs.hpp>

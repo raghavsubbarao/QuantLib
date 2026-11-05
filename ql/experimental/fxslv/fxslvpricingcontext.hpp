@@ -24,7 +24,7 @@
 #ifndef quantlib_fx_slv_pricing_context_hpp
 #define quantlib_fx_slv_pricing_context_hpp
 
-#include <ql/experimental/fxslv/hestoncalibrator.hpp>
+#include <ql/experimental/fxslv/stochvolcalibrator.hpp>
 #include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
 #include <ql/handle.hpp>
 #include <ql/instruments/barrieroption.hpp>
