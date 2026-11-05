@@ -7,6 +7,10 @@ this_include_HEADERS = \
     fxcostsmilesection.hpp \
     fxdeltaconverter.hpp \
     fxeventvariance.hpp \
+    tradingtimeyieldtermstructure.hpp \
+    tradingtimedaycounter.hpp \
+    fxtradingtimevariancesurface.hpp \
+    fxtradingtimemarket.hpp \
     fxexpirycut.hpp \
     fxlocalvolsurface.hpp \
     fxpnlexplain.hpp \
@@ -31,6 +35,10 @@ cpp_files = \
     fxcostsmilesection.cpp \
     fxdeltaconverter.cpp \
     fxeventvariance.cpp \
+    tradingtimeyieldtermstructure.cpp \
+    tradingtimedaycounter.cpp \
+    fxtradingtimevariancesurface.cpp \
+    fxtradingtimemarket.cpp \
     fxlocalvolsurface.cpp \
     fxsettlementforeigncurve.cpp \
     fxslvpricingcontext.cpp \

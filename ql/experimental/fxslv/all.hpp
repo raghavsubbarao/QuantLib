@@ -4,6 +4,10 @@
 #include <ql/experimental/fxslv/fxcostsmilesection.hpp>
 #include <ql/experimental/fxslv/fxdeltaconverter.hpp>
 #include <ql/experimental/fxslv/fxeventvariance.hpp>
+#include <ql/experimental/fxslv/tradingtimeyieldtermstructure.hpp>
+#include <ql/experimental/fxslv/tradingtimedaycounter.hpp>
+#include <ql/experimental/fxslv/fxtradingtimevariancesurface.hpp>
+#include <ql/experimental/fxslv/fxtradingtimemarket.hpp>
 #include <ql/experimental/fxslv/fxexpirycut.hpp>
 #include <ql/experimental/fxslv/fxlocalvolsurface.hpp>
 #include <ql/experimental/fxslv/fxpnlexplain.hpp>

@@ -28,6 +28,7 @@
 #include <ql/termstructures/yieldtermstructure.hpp>
 #include <ql/experimental/fxslv/fxexpirycut.hpp>
 #include <ql/experimental/fxslv/fxsettlementforeigncurve.hpp>
+#include <ql/experimental/fxslv/fxtradingtimevariancesurface.hpp>
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
 #include <ql/time/calendars/weekendsonly.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>
@@ -43,7 +44,7 @@
 namespace QuantLib {
 
     template<class T>
-    class fxVarianceSurface : public BlackVarianceTermStructure {
+    class fxVarianceSurface : public BlackVarianceTermStructure, public FxTradingTimeVariance {
         /*
          * Implementation of a variance term structure for FXO trading. The aim is linearly
          * interpolate variance in trading time/market time as opposed to real time! This
@@ -121,6 +122,14 @@ namespace QuantLib {
         const FxSettleConvention& settlement() const { return settlement_; }
         //! The cut the quotes, pillars and trading-time events refer to.
         const FxExpiryCut& expiryCut() const { return cut_; }
+
+        //! \name FxTradingTimeVariance interface
+        //@{
+        Real blackVarianceInTradingTime(Time tradingTime, Real strike) const override;
+        const Handle<TradingTimeTermStructure>& tradingTimeStructure() const override {
+            return timeTs_;
+        }
+        //@}
         Handle<YieldTermStructure> domesticDiscountCurve() const { return domTs_; };
         Handle<YieldTermStructure> foreignDiscountCurve() const { return forTs_; };
 
@@ -153,7 +162,9 @@ namespace QuantLib {
         // a smile expiring on the given date, at the given time from the reference date
         virtual Handle<T> interpolatedSmileSection(const Date& expiry, Time t, Real wInit, const T& ssInit,
                                                    Real wFinal, const T& ssFinal) const = 0;
-        Real blackVarianceImpl(Time t, Real strike) const;  // smile variance
+        Real blackVarianceImpl(Time t, Real strike) const override;  // smile variance
+        // smile variance at a calendar time and its trading time
+        Real varianceAt(Time t, Time tau, Real strike) const;
 
         const Handle<Quote> spot_;
         const FxSettleConvention settlement_;
@@ -287,6 +298,19 @@ namespace QuantLib {
 
     template <class T>
     Real fxVarianceSurface<T>::blackVarianceImpl(Time t, Real strike) const {
+        return varianceAt(t, tradingTime(t), strike);
+    }
+
+    template <class T>
+    Real fxVarianceSurface<T>::blackVarianceInTradingTime(Time tau, Real strike) const {
+        // the calendar time finds the nodes; within an event, which takes no
+        // calendar time, the variance still grows linearly in trading time
+        tradingTime(0.0);  // checks the reference dates
+        return varianceAt(timeTs_->calendarTime(tau), tau, strike);
+    }
+
+    template <class T>
+    Real fxVarianceSurface<T>::varianceAt(Time t, Time tau, Real strike) const {
         // Total variance is interpolated between nodes: the reference date,
         // the pillars and the points of a grid in calendar time.  Between
         // two nodes it is linear in trading time, so it stays flat over a
@@ -305,7 +329,7 @@ namespace QuantLib {
         const Real moneyness = strike / fwd(t);
         const Real wa = nodeVariance(b.pa, b.index, moneyness * fa);
         const Real wb = nodeVariance(b.pb, b.index + 1, moneyness * fb);
-        const Real lambda = (tradingTime(t) - tauA) / (tauB - tauA);
+        const Real lambda = (tau - tauA) / (tauB - tauA);
         return wa + lambda * (wb - wa);
     }
 

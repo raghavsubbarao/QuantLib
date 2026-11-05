@@ -33,6 +33,11 @@
 #include <ql/termstructures/volatility/equityfx/localvolsurface.hpp>
 #include <ql/termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp>
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
+#include <ql/experimental/fxslv/fxtradingtimemarket.hpp>
+#include <ql/experimental/fxslv/fxtradingtimevariancesurface.hpp>
+#include <ql/experimental/fxslv/tradingtimedaycounter.hpp>
+#include <ql/experimental/fxslv/tradingtimeyieldtermstructure.hpp>
+#include <ql/pricingengines/vanilla/analyticeuropeanengine.hpp>
 #include <ql/experimental/fxslv/fxvanillagreeks.hpp>
 #include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>
 #include <ql/processes/blackscholesprocess.hpp>
@@ -103,7 +108,8 @@ namespace {
         ext::shared_ptr<fxVarianceSurfaceNCP<TestSmileSection>> surface;
         ext::shared_ptr<GeneralizedBlackScholesProcess> process;
 
-        FxMarket() {
+        explicit FxMarket(Real holidayWeight = 0.0,
+                          std::vector<ext::shared_ptr<TradingTimeEvent>> events = {}) {
             today    = Date(2, January, 2024);
             expiry3M = Date(2, April,   2024);
             expiry6M = Date(2, July,    2024);
@@ -114,8 +120,8 @@ namespace {
                 ext::make_shared<FlatForward>(0, NullCalendar(), 0.04, dc));
             usdTs = Handle<YieldTermStructure>(
                 ext::make_shared<FlatForward>(0, NullCalendar(), 0.0525, dc));
-            timeTs = Handle<TradingTimeTermStructure>(
-                ext::make_shared<TradingTimeTermStructure>(today, WeekendsOnly(), 0.0));
+            timeTs = Handle<TradingTimeTermStructure>(ext::make_shared<TradingTimeTermStructure>(
+                today, WeekendsOnly(), holidayWeight, std::move(events)));
 
             spotSQ = ext::make_shared<SimpleQuote>(1.0850);
             spot   = Handle<Quote>(spotSQ);
@@ -1631,6 +1637,123 @@ namespace {
                                 << r.volToday << ", " << r.volRolled << ", " << r.volNext << "]");
     }
 
+}
+
+BOOST_AUTO_TEST_CASE(testTradingTimeCalendarTimeIsItsInverse) {
+    BOOST_TEST_MESSAGE("Testing that calendar time inverts trading time...");
+
+    const Date today(2, January, 2024);
+    Settings::instance().evaluationDate() = today;
+    const Date eventDate(10, January, 2024);
+    const Real eventTime = 13.5 / 24.0, eventWeight = 2.0;
+    TradingTimeTermStructure ts(today, TARGET(), 0.2,
+                                {ext::make_shared<JumpTradingTimeEvent>(
+                                    eventDate, eventTime, makeQuoteHandle(eventWeight))});
+    BOOST_CHECK_NO_THROW(ts.checkRateIsPositive());
+
+    // trading time at calendar times, in tenths of a day over a month, maps back
+    for (Size i = 0; i <= 300; ++i) {
+        const Time t = i * 0.1 / 365.0;
+        BOOST_CHECK_SMALL(ts.calendarTime(ts.tradingTime(t)) - t, 1.0e-11);
+    }
+    // calendar time at trading times maps back, except within the jump
+    const Time te = (eventDate - today + eventTime) / 365.0;
+    const Time tauBefore = ts.tradingTime(te - 1.0e-9), tauAfter = ts.tradingTime(te);
+    // the base trading time just before the event takes 1e-9 years too
+    BOOST_CHECK_SMALL((tauAfter - tauBefore) * 365.0 - eventWeight, 1.0e-6);
+    for (Size i = 0; i <= 300; ++i) {
+        const Time tau = i * 0.1 / 365.0;
+        const Time t = ts.calendarTime(tau);
+        if (tau > tauBefore && tau < tauAfter)
+            BOOST_CHECK_SMALL(t - te, 1.0e-11);  // the jump's trading time passes at its instant
+        else
+            BOOST_CHECK_SMALL(ts.tradingTime(t) - tau, 1.0e-11);
+    }
+
+    // trading time standing still has no unique inverse
+    TradingTimeTermStructure still(today, TARGET(), 0.0);
+    BOOST_CHECK_THROW(still.checkRateIsPositive(), Error);
+}
+
+BOOST_AUTO_TEST_CASE(testTradingTimeDayCounterAndCurve) {
+    BOOST_TEST_MESSAGE("Testing curves on the trading-time clock...");
+
+    FxMarket m(0.2);
+    const TradingTimeDayCounter dc(m.timeTs);
+    const Handle<YieldTermStructure> curve(
+        ext::make_shared<TradingTimeYieldTermStructure>(m.usdTs, m.timeTs));
+    for (Integer d : {1, 4, 5, 6, 30, 91, 400}) {
+        const Date date = m.today + d;
+        // year fractions are trading times...
+        BOOST_CHECK_SMALL(dc.yearFraction(m.today, date) - m.timeTs->tradingTime(date), 1.0e-15);
+        BOOST_CHECK_SMALL(curve->timeFromReference(date) - m.timeTs->tradingTime(date), 1.0e-15);
+        // ...and discount factors at dates are unchanged
+        BOOST_CHECK_CLOSE(curve->discount(date), m.usdTs->discount(date), 1.0e-9);
+    }
+    // a weekend takes little trading time but its carry: the rate per year of
+    // trading time is higher over it than over a business day
+    const Date friday(5, January, 2024), monday(8, January, 2024), tuesday(9, January, 2024);
+    const Rate weekend = curve->forwardRate(friday + 1, monday, dc, Continuous).rate();
+    const Rate businessDay = curve->forwardRate(monday, tuesday, dc, Continuous).rate();
+    BOOST_CHECK_CLOSE(weekend / businessDay, 2.0 / 0.4, 1.0e-6);
+
+    // holidays need a positive weight, and both reference dates must agree
+    FxMarket still;
+    BOOST_CHECK_THROW(TradingTimeYieldTermStructure(still.usdTs, still.timeTs), Error);
+    const Handle<TradingTimeTermStructure> later(
+        ext::make_shared<TradingTimeTermStructure>(m.today + 1, WeekendsOnly(), 0.2));
+    BOOST_CHECK_THROW(TradingTimeYieldTermStructure(m.usdTs, later), Error);
+}
+
+BOOST_AUTO_TEST_CASE(testFxTradingTimeMarketPreservesPrices) {
+    BOOST_TEST_MESSAGE("Testing that the trading-time market prices as the calendar-time one...");
+
+    // with an event, released in the middle of a trading day
+    const std::vector<ext::shared_ptr<TradingTimeEvent>> events = {
+        ext::make_shared<JumpTradingTimeEvent>(Date(31, January, 2024), 0.8,
+                                               makeQuoteHandle(1.5))};
+    FxMarket m(0.2, events);
+    const FxSettleConvention settlement(WeekendsOnly(), 2);
+    const FxTradingTimeMarket tm(m.spot, m.eurTs, m.usdTs, settlement, m.surface);
+    auto calendarProcess = makeFxLocalVolProcess(m.spot, m.eurTs, m.usdTs, settlement,
+                                                 Handle<BlackVolTermStructure>(m.surface));
+    auto tradingProcess = ext::make_shared<GeneralizedBlackScholesProcess>(
+        tm.spot(), tm.settlementForeignCurve(), tm.domesticCurve(), tm.volSurface());
+
+    for (const Date& expiry : {Date(9, January, 2024), Date(1, February, 2024), m.expiry3M,
+                               Date(2, May, 2024)}) {
+        const Real fwd = m.surface->fwd(expiry);
+        for (Real moneyness : {0.95, 1.0, 1.05}) {
+            VanillaOption option(
+                ext::make_shared<PlainVanillaPayoff>(Option::Call, moneyness * fwd),
+                ext::make_shared<EuropeanExercise>(expiry));
+            // a change of clock leaves Black prices unchanged...
+            option.setPricingEngine(ext::make_shared<AnalyticEuropeanEngine>(calendarProcess));
+            const Real calendarPrice = option.NPV();
+            option.setPricingEngine(ext::make_shared<AnalyticEuropeanEngine>(tradingProcess));
+            BOOST_CHECK_CLOSE(option.NPV(), calendarPrice, 1.0e-8);
+            // ...and local vol in trading time reprices them
+            option.setPricingEngine(ext::make_shared<FdBlackScholesVanillaEngine>(
+                tm.localVolProcess(), 200, 200, 0, FdmSchemeDesc::Douglas(), true));
+            // to 0.5%, or a millionth of the forward far out of the money
+            const Real tolerance = std::max(0.005 * calendarPrice, 1.0e-6 * fwd);
+            if (std::fabs(option.NPV() - calendarPrice) > tolerance)
+                BOOST_ERROR("local vol in trading time misprices " << expiry << " at "
+                            << moneyness << " F: " << option.NPV() << " against Black "
+                            << calendarPrice);
+        }
+    }
+
+    // local vol in trading time does not drop over a weekend, as in calendar time
+    const Real s = m.spot->value();
+    const Date friday(5, January, 2024), sunday(7, January, 2024);
+    const Real calendarRatio =
+        calendarProcess->localVolatility()->localVol(sunday, s, true) /
+        calendarProcess->localVolatility()->localVol(friday, s, true);
+    const Real tradingRatio = tm.localVol()->localVol(sunday, s, true) /
+                              tm.localVol()->localVol(friday, s, true);
+    BOOST_CHECK_LT(calendarRatio, 0.6);
+    BOOST_CHECK_SMALL(tradingRatio - 1.0, 0.2);
 }
 
 BOOST_AUTO_TEST_CASE(testFxTenorExpiryDates) {
