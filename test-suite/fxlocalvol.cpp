@@ -29,7 +29,7 @@
 #include <ql/experimental/fxslv/fxsettlementforeigncurve.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
 #include <ql/experimental/fxslv/fxpnlexplain.hpp>
-#include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp>
 #include <ql/termstructures/volatility/equityfx/localvolsurface.hpp>
 #include <ql/termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp>
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
@@ -48,7 +48,7 @@
 #include <ql/termstructures/yield/flatforward.hpp>
 #include <ql/quotes/deltavolquote.hpp>
 #include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
-#include <ql/experimental/fxslv/hestoncalibrator.hpp>
+#include <ql/experimental/fxslv/stochvolcalibrator.hpp>
 #include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/time/calendars/weekendsonly.hpp>

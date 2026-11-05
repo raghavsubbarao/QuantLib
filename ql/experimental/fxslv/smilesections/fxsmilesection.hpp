@@ -24,9 +24,9 @@
 #ifndef quantlib_fx_smile_section_hpp
 #define quantlib_fx_smile_section_hpp
 
-#include <ql/experimental/fxslv/fxdeltaconverter.hpp>
+#include <ql/experimental/fxslv/smilesections/fxdeltaconverter.hpp>
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
-#include <ql/experimental/fxslv/fxsmilequotes.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilequotes.hpp>
 #include <ql/quotes/deltavolquote.hpp>
 #include <ql/patterns/lazyobject.hpp>
 #include <ql/quote.hpp>

@@ -22,8 +22,8 @@
 #include <ql/math/optimization/levenbergmarquardt.hpp>
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/quotes/simplequote.hpp>
-#include <ql/experimental/fxslv/fxrootbracketing.hpp>
-#include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
+#include <ql/experimental/fxslv/smilesections/fxrootbracketing.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesectionbydelta.hpp>
 #include <algorithm>
 #include <cmath>
 

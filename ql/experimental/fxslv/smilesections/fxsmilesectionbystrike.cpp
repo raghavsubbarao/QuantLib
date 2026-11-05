@@ -24,8 +24,8 @@
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/volatility/sabr.hpp>
-#include <ql/experimental/fxslv/fxrootbracketing.hpp>
-#include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
+#include <ql/experimental/fxslv/smilesections/fxrootbracketing.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp>
 
 namespace QuantLib {
 

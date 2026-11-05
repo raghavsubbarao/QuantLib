@@ -18,7 +18,7 @@
 */
 
 #include <ql/errors.hpp>
-#include <ql/experimental/fxslv/fxstickydeltasolver.hpp>
+#include <ql/experimental/fxslv/smilesections/fxstickydeltasolver.hpp>
 #include <ql/math/array.hpp>
 #include <ql/math/ode/adaptiverungekutta.hpp>
 #include <ql/math/solvers1d/brent.hpp>

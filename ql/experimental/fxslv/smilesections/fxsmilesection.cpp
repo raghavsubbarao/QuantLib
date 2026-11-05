@@ -17,7 +17,7 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include <ql/experimental/fxslv/fxsmilesection.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesection.hpp>
 #include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/math/optimization/constraint.hpp>
 #include <ql/math/optimization/costfunction.hpp>

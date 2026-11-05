@@ -17,15 +17,31 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include <ql/experimental/fxslv/hestoncalibrator.hpp>
+#include <ql/experimental/fxslv/stochvolcalibrator.hpp>
 #include <ql/math/optimization/levenbergmarquardt.hpp>
+#include <ql/models/equity/hestonmodelhelper.hpp>
+#include <ql/pricingengines/vanilla/analytichestonengine.hpp>
 #include <ql/processes/hestonprocess.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/volatility/equityfx/hestonblackvolsurface.hpp>
+#include <cmath>
 #include <limits>
 #include <utility>
 
 namespace QuantLib {
+
+    Real StochVolCalibrator::rmse() const {
+        const std::vector<Real> errs = calibrationErrors();
+        QL_REQUIRE(!errs.empty(),
+                   "StochVolCalibrator: no calibration errors available");
+        Real sumSq = 0.0;
+        for (Real e : errs)
+            sumSq += e * e;
+        return std::sqrt(sumSq / static_cast<Real>(errs.size()));
+    }
+
+
+    // HestonCalibrator
 
     HestonCalibrator::HestonCalibrator(
         HestonParams initialParams,
@@ -165,16 +181,6 @@ namespace QuantLib {
     const std::vector<ext::shared_ptr<BlackCalibrationHelper>>&
     HestonCalibrator::helpers() const {
         return helpers_;
-    }
-
-    Real StochVolCalibrator::rmse() const {
-        const std::vector<Real> errs = calibrationErrors();
-        QL_REQUIRE(!errs.empty(),
-                   "StochVolCalibrator: no calibration errors available");
-        Real sumSq = 0.0;
-        for (Real e : errs)
-            sumSq += e * e;
-        return std::sqrt(sumSq / static_cast<Real>(errs.size()));
     }
 
 }
