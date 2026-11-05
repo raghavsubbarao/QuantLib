@@ -1,11 +1,11 @@
 
+SUBDIRS = smilesections
+
 AM_CPPFLAGS = -I${top_builddir} -I${top_srcdir}
 
 this_includedir=${includedir}/${subdir}
 this_include_HEADERS = \
     all.hpp \
-    fxcostsmilesection.hpp \
-    fxdeltaconverter.hpp \
     fxeventvariance.hpp \
     tradingtimeyieldtermstructure.hpp \
     tradingtimedaycounter.hpp \
@@ -14,15 +14,9 @@ this_include_HEADERS = \
     fxexpirycut.hpp \
     fxlocalvolsurface.hpp \
     fxpnlexplain.hpp \
-    fxrootbracketing.hpp \
     fxsettlementconvention.hpp \
     fxsettlementforeigncurve.hpp \
     fxslvpricingcontext.hpp \
-    fxsmilequotes.hpp \
-    fxsmilesection.hpp \
-    fxsmilesectionbydelta.hpp \
-    fxsmilesectionbystrike.hpp \
-    fxstickydeltasolver.hpp \
     fxtenorexpiry.hpp \
     fxvanillagreeks.hpp \
     fxvariancesurface.hpp \
@@ -31,8 +25,6 @@ this_include_HEADERS = \
     tradingtimetermstructure.hpp
 
 cpp_files = \
-    fxcostsmilesection.cpp \
-    fxdeltaconverter.cpp \
     fxeventvariance.cpp \
     tradingtimeyieldtermstructure.cpp \
     tradingtimedaycounter.cpp \
@@ -41,11 +33,6 @@ cpp_files = \
     fxlocalvolsurface.cpp \
     fxsettlementforeigncurve.cpp \
     fxslvpricingcontext.cpp \
-    fxsmilequotes.cpp \
-    fxsmilesection.cpp \
-    fxsmilesectionbydelta.cpp \
-    fxsmilesectionbystrike.cpp \
-    fxstickydeltasolver.cpp \
     fxtenorexpiry.cpp \
     fxvanillagreeks.cpp \
     slvleveragecalibrator.cpp \
@@ -71,6 +58,9 @@ else
 libFxSlv_la_SOURCES = $(cpp_files)
 
 endif
+
+libFxSlv_la_LIBADD = \
+    smilesections/libFxSlvSmileSections.la
 
 noinst_LTLIBRARIES = libFxSlv.la
 

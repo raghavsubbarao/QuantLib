@@ -151,8 +151,8 @@ set(QL_SOURCES
     experimental/fx/discountingmtmcrosscurrencybasisswapengine.cpp
     experimental/fx/fxresetcashflows.cpp
     experimental/fx/mtmcrosscurrencybasisswap.cpp
-    experimental/fxslv/fxcostsmilesection.cpp
-    experimental/fxslv/fxdeltaconverter.cpp
+    experimental/fxslv/smilesections/fxcostsmilesection.cpp
+    experimental/fxslv/smilesections/fxdeltaconverter.cpp
     experimental/fxslv/fxeventvariance.cpp
     experimental/fxslv/tradingtimeyieldtermstructure.cpp
     experimental/fxslv/tradingtimedaycounter.cpp
@@ -161,11 +161,11 @@ set(QL_SOURCES
     experimental/fxslv/fxlocalvolsurface.cpp
     experimental/fxslv/fxsettlementforeigncurve.cpp
     experimental/fxslv/fxslvpricingcontext.cpp
-    experimental/fxslv/fxsmilequotes.cpp
-    experimental/fxslv/fxsmilesection.cpp
-    experimental/fxslv/fxsmilesectionbydelta.cpp
-    experimental/fxslv/fxsmilesectionbystrike.cpp
-    experimental/fxslv/fxstickydeltasolver.cpp
+    experimental/fxslv/smilesections/fxsmilequotes.cpp
+    experimental/fxslv/smilesections/fxsmilesection.cpp
+    experimental/fxslv/smilesections/fxsmilesectionbydelta.cpp
+    experimental/fxslv/smilesections/fxsmilesectionbystrike.cpp
+    experimental/fxslv/smilesections/fxstickydeltasolver.cpp
     experimental/fxslv/fxtenorexpiry.cpp
     experimental/fxslv/fxvanillagreeks.cpp
     experimental/fxslv/slvleveragecalibrator.cpp
@@ -1204,8 +1204,8 @@ set(QL_HEADERS
     experimental/fx/discountingmtmcrosscurrencybasisswapengine.hpp
     experimental/fx/fxresetcashflows.hpp
     experimental/fx/mtmcrosscurrencybasisswap.hpp
-    experimental/fxslv/fxcostsmilesection.hpp
-    experimental/fxslv/fxdeltaconverter.hpp
+    experimental/fxslv/smilesections/fxcostsmilesection.hpp
+    experimental/fxslv/smilesections/fxdeltaconverter.hpp
     experimental/fxslv/fxeventvariance.hpp
     experimental/fxslv/tradingtimeyieldtermstructure.hpp
     experimental/fxslv/tradingtimedaycounter.hpp
@@ -1214,15 +1214,15 @@ set(QL_HEADERS
     experimental/fxslv/fxexpirycut.hpp
     experimental/fxslv/fxlocalvolsurface.hpp
     experimental/fxslv/fxpnlexplain.hpp
-    experimental/fxslv/fxrootbracketing.hpp
+    experimental/fxslv/smilesections/fxrootbracketing.hpp
     experimental/fxslv/fxsettlementconvention.hpp
     experimental/fxslv/fxsettlementforeigncurve.hpp
     experimental/fxslv/fxslvpricingcontext.hpp
-    experimental/fxslv/fxsmilequotes.hpp
-    experimental/fxslv/fxsmilesection.hpp
-    experimental/fxslv/fxsmilesectionbydelta.hpp
-    experimental/fxslv/fxsmilesectionbystrike.hpp
-    experimental/fxslv/fxstickydeltasolver.hpp
+    experimental/fxslv/smilesections/fxsmilequotes.hpp
+    experimental/fxslv/smilesections/fxsmilesection.hpp
+    experimental/fxslv/smilesections/fxsmilesectionbydelta.hpp
+    experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp
+    experimental/fxslv/smilesections/fxstickydeltasolver.hpp
     experimental/fxslv/fxtenorexpiry.hpp
     experimental/fxslv/fxvanillagreeks.hpp
     experimental/fxslv/fxvariancesurface.hpp

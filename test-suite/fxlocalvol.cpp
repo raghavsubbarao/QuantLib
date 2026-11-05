@@ -29,7 +29,7 @@
 #include <ql/experimental/fxslv/fxsettlementforeigncurve.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
 #include <ql/experimental/fxslv/fxpnlexplain.hpp>
-#include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp>
 #include <ql/termstructures/volatility/equityfx/localvolsurface.hpp>
 #include <ql/termstructures/volatility/equityfx/noexceptlocalvolsurface.hpp>
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>

@@ -47,15 +47,15 @@
 #if !defined(BOOST_ALL_NO_LIB) && defined(BOOST_MSVC)
 #    include <ql/auto_link.hpp>
 #endif
-#include <ql/experimental/fxslv/fxsmilesection.hpp>
-#include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
-#include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
-#include <ql/experimental/fxslv/fxcostsmilesection.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesection.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesectionbydelta.hpp>
+#include <ql/experimental/fxslv/smilesections/fxcostsmilesection.hpp>
 #include <ql/quotes/deltavolquote.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
-#include <ql/experimental/fxslv/fxsmilequotes.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilequotes.hpp>
 #include <ql/time/calendars/weekendsonly.hpp>
 #include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/time/date.hpp>

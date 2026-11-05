@@ -23,14 +23,14 @@
 
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
-#include <ql/experimental/fxslv/fxdeltaconverter.hpp>
+#include <ql/experimental/fxslv/smilesections/fxdeltaconverter.hpp>
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
-#include <ql/experimental/fxslv/fxsmilequotes.hpp>
-#include <ql/experimental/fxslv/fxsmilesection.hpp>
-#include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
-#include <ql/experimental/fxslv/fxsmilesectionbydelta.hpp>
-#include <ql/experimental/fxslv/fxcostsmilesection.hpp>
-#include <ql/experimental/fxslv/fxstickydeltasolver.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilequotes.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesection.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesectionbydelta.hpp>
+#include <ql/experimental/fxslv/smilesections/fxcostsmilesection.hpp>
+#include <ql/experimental/fxslv/smilesections/fxstickydeltasolver.hpp>
 #include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/pricingengines/blackcalculator.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>

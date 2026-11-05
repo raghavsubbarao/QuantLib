@@ -30,7 +30,7 @@
 #include <ql/math/optimization/problem.hpp>
 #include <ql/math/solvers1d/brent.hpp>
 #include <ql/quotes/simplequote.hpp>
-#include <ql/experimental/fxslv/fxcostsmilesection.hpp>
+#include <ql/experimental/fxslv/smilesections/fxcostsmilesection.hpp>
 
 namespace QuantLib {
 

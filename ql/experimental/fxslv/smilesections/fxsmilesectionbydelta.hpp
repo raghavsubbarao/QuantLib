@@ -25,7 +25,7 @@
 #define quantlib_fx_smile_section_delta_hpp
 
 #include <ql/math/array.hpp>
-#include <ql/experimental/fxslv/fxsmilesection.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesection.hpp>
 
 namespace QuantLib {
 

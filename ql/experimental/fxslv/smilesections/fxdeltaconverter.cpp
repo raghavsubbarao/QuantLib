@@ -17,8 +17,8 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include <ql/experimental/fxslv/fxdeltaconverter.hpp>
-#include <ql/experimental/fxslv/fxrootbracketing.hpp>
+#include <ql/experimental/fxslv/smilesections/fxdeltaconverter.hpp>
+#include <ql/experimental/fxslv/smilesections/fxrootbracketing.hpp>
 #include <ql/math/distributions/normaldistribution.hpp>
 #include <cmath>
 

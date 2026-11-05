@@ -51,7 +51,7 @@
 #include <ql/experimental/fxslv/fxlocalvolsurface.hpp>
 #include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
-#include <ql/experimental/fxslv/fxsmilesectionbystrike.hpp>
+#include <ql/experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp>
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
 
 // SLV calibration framework
