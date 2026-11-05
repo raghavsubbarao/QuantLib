@@ -3315,6 +3315,18 @@
     <ClInclude Include="ql\experimental\fxslv\fxeventvariance.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>
+    <ClInclude Include="ql\experimental\fxslv\tradingtimeyieldtermstructure.hpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClInclude>
+    <ClInclude Include="ql\experimental\fxslv\tradingtimedaycounter.hpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClInclude>
+    <ClInclude Include="ql\experimental\fxslv\fxtradingtimevariancesurface.hpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClInclude>
+    <ClInclude Include="ql\experimental\fxslv\fxtradingtimemarket.hpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClInclude>
     <ClInclude Include="ql\experimental\fxslv\fxexpirycut.hpp">
       <Filter>experimental\fxslv</Filter>
     </ClInclude>
@@ -7481,6 +7493,18 @@
       <Filter>experimental\fxslv</Filter>
     </ClCompile>
     <ClCompile Include="ql\experimental\fxslv\fxeventvariance.cpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClCompile>
+    <ClCompile Include="ql\experimental\fxslv\tradingtimeyieldtermstructure.cpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClCompile>
+    <ClCompile Include="ql\experimental\fxslv\tradingtimedaycounter.cpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClCompile>
+    <ClCompile Include="ql\experimental\fxslv\fxtradingtimevariancesurface.cpp">
+      <Filter>experimental\fxslv</Filter>
+    </ClCompile>
+    <ClCompile Include="ql\experimental\fxslv\fxtradingtimemarket.cpp">
       <Filter>experimental\fxslv</Filter>
     </ClCompile>
     <ClCompile Include="ql\experimental\fxslv\fxlocalvolsurface.cpp">

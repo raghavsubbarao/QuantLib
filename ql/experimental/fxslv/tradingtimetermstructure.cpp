@@ -200,11 +200,12 @@ namespace QuantLib {
             weights_.push_back(w);
             releasedAtReference_.push_back(e.released(referenceSerial_));
         }
-        checkRateIsNonNegative();
+        checkRateIsAbove(-rateTolerance, "trading time would run backwards");
         upToDate_ = true;
     }
 
-    void TradingTimeTermStructure::checkRateIsNonNegative() const {
+    void TradingTimeTermStructure::checkRateIsAbove(Real floor,
+                                                    const std::string& failure) const {
         // trading time can never decrease. However, its passage can be 
         // slower than real time. for eg over xmas or on holidays. this can 
         // be done by a negative weighted diffuse trading event. in these 
@@ -240,8 +241,7 @@ namespace QuantLib {
             Real rate = baseRate(day);
             for (Size k = 0; k < pendingEvents_.size(); ++k)
                 rate += weights_[k] * events_[pendingEvents_[k]]->releaseRate(m);
-            QL_REQUIRE(rate >= -rateTolerance,
-                       "trading time would run backwards on " << day << ": rate " << rate);
+            QL_REQUIRE(rate >= floor, failure << " on " << day << ": rate " << rate);
         }
     }
 
@@ -292,6 +292,38 @@ namespace QuantLib {
             return -tradingTime(d2, d1);
         return (tradingDaysFromReferenceInstant(daysFromReferenceInstant(d2)) -
                 tradingDaysFromReferenceInstant(daysFromReferenceInstant(d1))) / 365.0;
+    }
+
+    Time TradingTimeTermStructure::calendarTime(Time tau) const {
+        QL_REQUIRE(tau >= 0.0, "negative trading time: " << tau);
+        checkReference();
+        const Real target = tau * 365.0;
+        if (target <= 0.0)
+            return 0.0;
+        // trading days never decrease: bracket the target, then bisect for
+        // the earliest instant reaching it
+        Real lo = 0.0, hi = 1.0;
+        while (tradingDaysFromReferenceInstant(hi) < target) {
+            lo = hi;
+            hi *= 2.0;
+            QL_REQUIRE(hi < 1.0e6, "trading time " << tau << " is never reached");
+        }
+        // to well below a second: a day has 86400 of them
+        while (hi - lo > 1.0e-9) {
+            const Real mid = 0.5 * (lo + hi);
+            if (tradingDaysFromReferenceInstant(mid) < target)
+                lo = mid;
+            else
+                hi = mid;
+        }
+        return hi / 365.0;
+    }
+
+    void TradingTimeTermStructure::checkRateIsPositive() const {
+        checkReference();
+        QL_REQUIRE(holidayWeight_ > 0.0,
+                   "trading time stands still on holidays: their weight must be positive");
+        checkRateIsAbove(rateTolerance, "trading time would stand still");
     }
 
     std::vector<std::pair<Time, Time>> TradingTimeTermStructure::eventIntervals() const {

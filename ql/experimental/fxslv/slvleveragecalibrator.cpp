@@ -39,7 +39,8 @@ namespace QuantLib {
     HestonSLVFokkerPlanckFdmParams HestonSLVLeverageCalibrator::defaultParams() {
         // Balanced grid suitable for FX option books with maturities up to ~5 years.
         // - xGrid 201: log-spot dimension; adequate for 5+ sigma range
-        // - vGrid 101: variance dimension; captures CIR mean-reversion profile
+        // - vGrid 201: variance dimension; the leverage function, through
+        //   E[v | S], needs it far finer than the spot one
         // - tMaxStepsPerYear 365: daily steps at short end for accuracy
         // - tMinStepsPerYear 25: coarser at long end for efficiency
         // - tStepNumberDecay 3.0: smooth ramp from daily to monthly steps
@@ -54,7 +55,7 @@ namespace QuantLib {
         // - vLowerBoundDensity / vUpperBoundDensity: mesher boundary densities
         // - leverageFctPropEps 1e-6: density threshold below which L = 1 (avoids 0/0)
         return {
-            201, 101,           // xGrid, vGrid
+            201, 201,           // xGrid, vGrid
             365, 25,            // tMaxStepsPerYear, tMinStepsPerYear
             3.0,                // tStepNumberDecay
             2,                  // nRannacherTimeSteps

@@ -30,6 +30,7 @@
 #include <ql/termstructure.hpp>
 #include <ql/time/calendars/weekendsonly.hpp>
 #include <ql/time/date.hpp>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -175,6 +176,19 @@ namespace QuantLib {
         Time tradingTime(const Date& d) const { return tradingTime(referenceDate(), d); }
         //! Trading time from the reference date to the given Actual/365 time, in years.
         Time tradingTime(Time t) const;
+        //! Actual/365 time from the reference date at which the trading time is reached, in years
+        /*! The inverse of tradingTime(Time).  Trading time released by a
+            jump passes at the jump's instant, which is returned for every
+            trading time it covers; where trading time stands still, the
+            earliest time is returned.  Trading time has a unique inverse
+            only where it always runs, see checkRateIsPositive().
+        */
+        Time calendarTime(Time tradingTime) const;
+        //! Fails unless trading time always runs, so that it maps one-to-one to calendar time
+        /*! It requires a positive holiday weight, and that no negative
+            diffuse event stops trading time while it releases.
+        */
+        void checkRateIsPositive() const;
         //@}
 
         //! \name Inspectors
@@ -198,8 +212,9 @@ namespace QuantLib {
         Real baseRate(const Date& day) const;
         // rebuilds the computed state if the reference date or the weights have changed
         void checkReference() const;
-        // fails if trading time would run backwards after the reference instant
-        void checkRateIsNonNegative() const;
+        // fails if trading time would run slower than the floor rate after the
+        // reference instant while negative diffuse events release
+        void checkRateIsAbove(Real floor, const std::string& failure) const;
 
         Real holidayWeight_;
         std::vector<ext::shared_ptr<TradingTimeEvent>> events_;
