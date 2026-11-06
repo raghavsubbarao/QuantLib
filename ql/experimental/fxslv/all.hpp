@@ -6,13 +6,10 @@
 #include <ql/experimental/fxslv/tradingtimedaycounter.hpp>
 #include <ql/experimental/fxslv/fxtradingtimevariancesurface.hpp>
 #include <ql/experimental/fxslv/fxtradingtimemarket.hpp>
-#include <ql/experimental/fxslv/fxexpirycut.hpp>
 #include <ql/experimental/fxslv/fxlocalvolsurface.hpp>
 #include <ql/experimental/fxslv/fxpnlexplain.hpp>
-#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxsettlementforeigncurve.hpp>
 #include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
-#include <ql/experimental/fxslv/fxtenorexpiry.hpp>
 #include <ql/experimental/fxslv/fxvanillagreeks.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
 #include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
@@ -20,3 +17,4 @@
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
 
 #include <ql/experimental/fxslv/smilesections/all.hpp>
+#include <ql/experimental/fxslv/conventions/all.hpp>

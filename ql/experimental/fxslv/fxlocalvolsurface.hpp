@@ -26,7 +26,7 @@
 #ifndef quantlib_fx_local_vol_surface_hpp
 #define quantlib_fx_local_vol_surface_hpp
 
-#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
 #include <ql/handle.hpp>
 #include <ql/processes/blackscholesprocess.hpp>
 #include <ql/quote.hpp>

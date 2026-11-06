@@ -18,7 +18,7 @@
 */
 
 #include <ql/errors.hpp>
-#include <ql/experimental/fxslv/fxtenorexpiry.hpp>
+#include <ql/experimental/fxslv/conventions/fxtenorexpiry.hpp>
 
 namespace QuantLib {
 

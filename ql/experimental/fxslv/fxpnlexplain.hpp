@@ -25,8 +25,8 @@
 #define quantlib_fx_pnl_explain_hpp
 
 #include <ql/experimental/fxslv/fxeventvariance.hpp>
-#include <ql/experimental/fxslv/fxexpirycut.hpp>
-#include <ql/experimental/fxslv/fxtenorexpiry.hpp>
+#include <ql/experimental/fxslv/conventions/fxexpirycut.hpp>
+#include <ql/experimental/fxslv/conventions/fxtenorexpiry.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
 #include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>

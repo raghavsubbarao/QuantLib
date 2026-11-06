@@ -166,7 +166,7 @@ set(QL_SOURCES
     experimental/fxslv/smilesections/fxsmilesectionbydelta.cpp
     experimental/fxslv/smilesections/fxsmilesectionbystrike.cpp
     experimental/fxslv/smilesections/fxstickydeltasolver.cpp
-    experimental/fxslv/fxtenorexpiry.cpp
+    experimental/fxslv/conventions/fxtenorexpiry.cpp
     experimental/fxslv/fxvanillagreeks.cpp
     experimental/fxslv/slvleveragecalibrator.cpp
     experimental/fxslv/stochvolcalibrator.cpp
@@ -1211,11 +1211,11 @@ set(QL_HEADERS
     experimental/fxslv/tradingtimedaycounter.hpp
     experimental/fxslv/fxtradingtimevariancesurface.hpp
     experimental/fxslv/fxtradingtimemarket.hpp
-    experimental/fxslv/fxexpirycut.hpp
+    experimental/fxslv/conventions/fxexpirycut.hpp
     experimental/fxslv/fxlocalvolsurface.hpp
     experimental/fxslv/fxpnlexplain.hpp
     experimental/fxslv/smilesections/fxrootbracketing.hpp
-    experimental/fxslv/fxsettlementconvention.hpp
+    experimental/fxslv/conventions/fxsettlementconvention.hpp
     experimental/fxslv/fxsettlementforeigncurve.hpp
     experimental/fxslv/fxslvpricingcontext.hpp
     experimental/fxslv/smilesections/fxsmilequotes.hpp
@@ -1223,7 +1223,7 @@ set(QL_HEADERS
     experimental/fxslv/smilesections/fxsmilesectionbydelta.hpp
     experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp
     experimental/fxslv/smilesections/fxstickydeltasolver.hpp
-    experimental/fxslv/fxtenorexpiry.hpp
+    experimental/fxslv/conventions/fxtenorexpiry.hpp
     experimental/fxslv/fxvanillagreeks.hpp
     experimental/fxslv/fxvariancesurface.hpp
     experimental/fxslv/slvleveragecalibrator.hpp
@@ -2397,6 +2397,8 @@ set(QL_GENERATED_HEADERS
     ${PROJECT_BINARY_DIR}/ql/experimental/forward/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/fx/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/fxslv/all.hpp
+    ${PROJECT_BINARY_DIR}/ql/experimental/fxslv/conventions/all.hpp
+    ${PROJECT_BINARY_DIR}/ql/experimental/fxslv/smilesections/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/inflation/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/lattices/all.hpp
     ${PROJECT_BINARY_DIR}/ql/experimental/math/all.hpp

@@ -24,7 +24,7 @@
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
 
-#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/fxlocalvolsurface.hpp>
 #include <ql/experimental/fxslv/fxsettlementforeigncurve.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>

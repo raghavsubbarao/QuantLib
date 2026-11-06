@@ -24,7 +24,7 @@
 #include "toplevelfixture.hpp"
 #include "utilities.hpp"
 #include <ql/experimental/fxslv/smilesections/fxdeltaconverter.hpp>
-#include <ql/experimental/fxslv/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/smilesections/fxsmilequotes.hpp>
 #include <ql/experimental/fxslv/smilesections/fxsmilesection.hpp>
 #include <ql/experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp>
