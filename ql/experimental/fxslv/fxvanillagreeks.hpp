@@ -108,14 +108,26 @@ namespace QuantLib {
         When \c localVol=true, the \c StickyType parameter controls how the
         volatility surface behaves when spot is bumped for Greek calculation:
         - <b>StickyType::Delta</b> (default): the FX variance surface re-anchors
-          in delta space when spot moves (market convention).
-        - <b>StickyType::Strike</b>: the Dupire local vol is frozen in (t,K) space
-          via \c FixedLocalVolSurface before bumping — model-consistent delta.
+          in delta space when spot moves (market convention), and the local vol
+          is rebuilt from it.
+        - <b>StickyType::LocalVol</b>: the Dupire local vol is frozen in (t,K)
+          space via \c FixedLocalVolSurface before bumping: the local-vol
+          model's own delta.  It is not sticky strike: under local vol, implied
+          vols at a fixed strike move with spot by about the skew
+          \f$ \partial\sigma/\partial K \f$, the opposite of sticky delta's
+          \f$ -\partial\sigma/\partial K \f$ (Hagan et al., 2002), so that with
+          a put skew a call's local-vol delta is below its Black delta, and its
+          sticky-delta one above.
 
         <b>Scaling conventions:</b>
         Greeks are reported per the standard FX desk conventions:
         - Spot/fwd delta/gamma are per 1% move in the respective rate.
-        - Vega, vanna, volga are per 1% (100 bp) absolute vol move.
+        - Vega, vanna, volga are per 1% (100 bp) absolute vol move.  They take
+          central differences over a parallel bump of the ATM quotes, by
+          default 1%: volga is a second difference, and with local vol smaller
+          bumps leave it to the noise of the finite-difference and Dupire
+          numerics, which it amplifies by \f$ 1/\text{volBump}^2 \f$ (at 0.1%, a
+          volga of order 10 per 1% for a 3M ATM option, of either sign).
         - Rega bumps each RR pillar by \f$ \text{rrBump} \times \sqrt{T_{1M}/T_i} \f$,
           so the 1M pillar moves by \c rrBump (default 10 bp) and longer tenors
           move by a smaller amount proportional to \f$ 1/\sqrt{T} \f$.
@@ -135,10 +147,10 @@ namespace QuantLib {
             //! Sticky-delta (market convention): the FX variance surface
             //! re-anchors in delta space when spot moves.
             Delta,
-            //! Sticky-strike (model-consistent): the Dupire local vol grid is
-            //! frozen in (t,K) space before bumping spot.  Only effective when
-            //! \c localVol=true.
-            Strike
+            //! Local vol frozen: the Dupire local vol grid is frozen in (t,K)
+            //! space before bumping spot, giving the local-vol model's own
+            //! delta.  Only effective when \c localVol=true.
+            LocalVol
         };
 
         /*! \param option            Vanilla option to price.
@@ -161,14 +173,15 @@ namespace QuantLib {
             \param bfPillarTimes     Year-fraction time for each BF pillar.
             \param notional          Option notional in foreign currency.
             \param spotBump          Relative spot bump for delta/gamma (e.g. 0.001).
-            \param volBump           Absolute ATM vol bump for vega/vanna/volga.
+            \param volBump           Absolute ATM vol bump for vega/vanna/volga
+                                     (see above for why it is not smaller).
             \param rrBump            Reference (1M) RR bump for rega; other tenors
                                      scale as \f$ \text{rrBump}\,\sqrt{T_{1M}/T_i}\f$.
             \param bfBump            Reference (1M) BF bump for sega.
             \param tGrid             FD time steps.
             \param xGrid             FD spot grid points.
             \param lvTimePts         Time points in the auto-sized local vol grid
-                                     (sticky-strike mode only).
+                                     (frozen local-vol mode only).
             \param lvStrikePts       Strike points in the local vol grid.
             \param lvStrikeSpread    Half-width of local vol strike grid in units of
                                      \f$ \sigma_{ATM}\sqrt{T} \f$.
@@ -184,7 +197,7 @@ namespace QuantLib {
             std::vector<Time> bfPillarTimes = {},
             Real notional = 1.0e6,
             Real spotBump = 0.001,
-            Real volBump = 0.001,
+            Real volBump = 0.01,
             Real rrBump = 0.001,
             Real bfBump = 0.001,
             Size tGrid = 100,

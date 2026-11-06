@@ -319,7 +319,7 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
                                    mkt.bfPillarSQs, mkt.bfPillarTimes,
                                    /*notional=*/1.0e6,
                                    /*spotBump=*/0.001,
-                                   /*volBump=*/0.001,
+                                   /*volBump=*/0.01,
                                    /*rrBump=*/0.001,
                                    /*bfBump=*/0.001,
                                    /*tGrid=*/50, /*xGrid=*/50);
@@ -334,7 +334,9 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
         BOOST_CHECK_MESSAGE(g.fwdGamma  > 0.0, "call fwd gamma must be >0: "    << g.fwdGamma);
         BOOST_CHECK_MESSAGE(g.theta     < 0.0, "call theta must be negative: "  << g.theta);
         BOOST_CHECK_MESSAGE(g.vega      > 0.0, "call vega must be positive: "   << g.vega);
-        BOOST_CHECK_MESSAGE(g.volga     > 0.0, "call volga must be positive: "  << g.volga);
+        // at the money forward d1 d2 = -sigma^2 T / 4: volga is about 0, slightly negative
+        BOOST_CHECK_MESSAGE(std::fabs(g.volga) < 1.0e-3 * g.vega,
+                            "call volga at the money should be about 0: " << g.volga);
 
         // navva == vanna (identity, not approximate)
         BOOST_CHECK_MESSAGE(g.navva == g.vanna,
@@ -349,7 +351,7 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
                                    mkt.bfPillarSQs, mkt.bfPillarTimes,
                                    /*notional=*/1.0e6,
                                    /*spotBump=*/0.001,
-                                   /*volBump=*/0.001,
+                                   /*volBump=*/0.01,
                                    /*rrBump=*/0.001,
                                    /*bfBump=*/0.001,
                                    /*tGrid=*/50, /*xGrid=*/50);
@@ -364,7 +366,27 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
         BOOST_CHECK_MESSAGE(g.fwdGamma  > 0.0, "put fwd gamma must be >0: "    << g.fwdGamma);
         BOOST_CHECK_MESSAGE(g.theta     < 0.0, "put theta must be negative: "  << g.theta);
         BOOST_CHECK_MESSAGE(g.vega      > 0.0, "put vega must be positive: "   << g.vega);
-        BOOST_CHECK_MESSAGE(g.volga     > 0.0, "put volga must be positive: "  << g.volga);
+        // at the money forward d1 d2 = -sigma^2 T / 4: volga is about 0, slightly negative
+        BOOST_CHECK_MESSAGE(std::fabs(g.volga) < 1.0e-3 * g.vega,
+                            "put volga at the money should be about 0: " << g.volga);
+    }
+
+    // ── Out of the money, d1 and d2 have the same sign and volga is positive ─
+    for (Real moneyness : {0.95, 1.05}) {
+        const Option::Type type = moneyness > 1.0 ? Option::Call : Option::Put;
+        const Real strike = moneyness * mkt.surface->fwd(mkt.expiry3M);
+        auto option = ext::make_shared<VanillaOption>(
+            ext::make_shared<PlainVanillaPayoff>(type, strike),
+            ext::make_shared<EuropeanExercise>(mkt.expiry3M));
+        FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs, {}, {},
+                                   {}, {}, 1.0e6, 0.001, 0.01, 0.001, 0.001, 50, 50);
+        for (bool localVol : {false, true}) {
+            const FxVanillaGreeks g = riskCalc.calculate(localVol);
+            BOOST_CHECK_MESSAGE(g.volga > 0.0, (localVol ? "local-vol " : "Black ")
+                                                   << (type == Option::Call ? "call" : "put")
+                                                   << " volga at " << moneyness
+                                                   << " F must be positive: " << g.volga);
+        }
     }
 }
 
@@ -411,12 +433,6 @@ BOOST_AUTO_TEST_CASE(testPutCallParity) {
     BOOST_TEST_MESSAGE("Testing FX local vol: put-call parity...");
 
     FxMarket mkt;
-
-    Time T   = mkt.dc.yearFraction(mkt.today, mkt.expiry3M);
-    Real Bd  = mkt.usdTs->discount(T);
-    Real Bf  = mkt.eurTs->discount(T);
-    Real fwd = mkt.spot->value() * Bf / Bd;
-
     const Real notional = 1.0e6;
 
     auto callOption = mkt.makeAtmCall();
@@ -441,17 +457,20 @@ BOOST_AUTO_TEST_CASE(testPutCallParity) {
         "put-call parity violation: call-put=" << (callG.npv - putG.npv)
         << " (tolerance=" << priceTol << ")");
 
-    // Gamma parity: call gamma == put gamma (both in USD per 1% spot^2)
-    const Real gammaTol = 0.01; // $0.01 in scaled units
+    // Gamma and vega parity: C - P is linear in the forward, so the call's
+    // and the put's are equal in the model.  The finite-difference local vol
+    // pricing meets parity only to about 9 USD here, converging to it no
+    // closer as the grid is refined, nor in calendar time: the local vol in
+    // the wings of its spot grid is large (0.3 to 0.9 against 0.09 at the
+    // money), and capping it at 0.15 restores parity to 0.02 USD.  Being
+    // vol and spot dependent, that error leaves call and put gamma 0.06% and
+    // vega 0.12% apart on this grid (0.01% and 0.08% on 400 points).
     BOOST_CHECK_MESSAGE(
-        std::fabs(callG.spotGamma - putG.spotGamma) < gammaTol,
+        std::fabs(callG.spotGamma - putG.spotGamma) < 1.0e-3 * callG.spotGamma,
         "gamma parity violation: call gamma=" << callG.spotGamma
         << " put gamma=" << putG.spotGamma);
-
-    // Vega parity: call vega == put vega
-    const Real vegaTol = 0.10;
     BOOST_CHECK_MESSAGE(
-        std::fabs(callG.vega - putG.vega) < vegaTol,
+        std::fabs(callG.vega - putG.vega) < 2.0e-3 * callG.vega,
         "vega parity violation: call vega=" << callG.vega
         << " put vega=" << putG.vega);
 }
@@ -530,11 +549,11 @@ BOOST_AUTO_TEST_CASE(testBsVsLocalVolPricing) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Test 7: Sticky-delta vs sticky-strike deltas differ when skew is present
+//  Test 7: Sticky-delta and local-vol (frozen local vol) deltas, with skew
 // ─────────────────────────────────────────────────────────────────────────────
 
-BOOST_AUTO_TEST_CASE(testStickyDeltaVsStickyStrike) {
-    BOOST_TEST_MESSAGE("Testing FX local vol: sticky-delta vs sticky-strike deltas differ...");
+BOOST_AUTO_TEST_CASE(testStickyDeltaVsLocalVolDelta) {
+    BOOST_TEST_MESSAGE("Testing FX local vol: sticky-delta and local-vol deltas...");
 
     FxMarket mkt;
     auto option = mkt.makeAtmCall();
@@ -552,45 +571,56 @@ BOOST_AUTO_TEST_CASE(testStickyDeltaVsStickyStrike) {
                                 /*lvTimePts=*/15, /*lvStrikePts=*/30);
 
     FxVanillaGreeks sdG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Delta);
-    FxVanillaGreeks ssG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Strike);
+    FxVanillaGreeks lvG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::LocalVol);
 
     BOOST_CHECK_MESSAGE(sdG.spotDelta > 0.0,
         "sticky-delta call spot delta must be >0: " << sdG.spotDelta);
-    BOOST_CHECK_MESSAGE(ssG.spotDelta > 0.0,
-        "sticky-strike call spot delta must be >0: " << ssG.spotDelta);
+    BOOST_CHECK_MESSAGE(lvG.spotDelta > 0.0,
+        "local-vol call spot delta must be >0: " << lvG.spotDelta);
 
     BOOST_CHECK_MESSAGE(sdG.npv > 0.0, "sticky-delta NPV must be >0: " << sdG.npv);
-    BOOST_CHECK_MESSAGE(ssG.npv > 0.0, "sticky-strike NPV must be >0: " << ssG.npv);
+    BOOST_CHECK_MESSAGE(lvG.npv > 0.0, "local-vol NPV must be >0: " << lvG.npv);
 
     const Real npvTol = 10.0;
     BOOST_CHECK_MESSAGE(
-        std::fabs(sdG.npv - ssG.npv) < npvTol,
-        "sticky-delta and sticky-strike NPVs should agree: "
-        << "sd=" << sdG.npv << " ss=" << ssG.npv
-        << " diff=" << std::fabs(sdG.npv - ssG.npv));
+        std::fabs(sdG.npv - lvG.npv) < npvTol,
+        "sticky-delta and frozen local-vol NPVs should agree: "
+        << "sd=" << sdG.npv << " ss=" << lvG.npv
+        << " diff=" << std::fabs(sdG.npv - lvG.npv));
 
     // Deltas must differ due to skew (at least 0.01% relative difference).
     const Real minRelDiff = 1.0e-4;
-    const Real relDiff = std::fabs(sdG.spotDelta - ssG.spotDelta)
+    const Real relDiff = std::fabs(sdG.spotDelta - lvG.spotDelta)
                          / std::fabs(sdG.spotDelta);
     BOOST_CHECK_MESSAGE(
         relDiff > minRelDiff,
-        "sticky-delta and sticky-strike deltas should differ with non-zero skew: "
-        << "sd=" << sdG.spotDelta << " ss=" << ssG.spotDelta
+        "sticky-delta and local-vol deltas should differ with non-zero skew: "
+        << "sd=" << sdG.spotDelta << " ss=" << lvG.spotDelta
         << " relDiff=" << relDiff * 100.0 << "%"
         << " (min expected=" << minRelDiff * 100.0 << "%)");
 
-    // With EUR put skew: sticky-delta < sticky-strike.
+    // A call's delta is its Black delta plus vega times the move of its
+    // implied vol with spot at a fixed strike, which is about -skew with sticky
+    // delta and +skew under local vol (Hagan et al., 2002).  With EUR put skew
+    // (implied vol falling in the strike), the local-vol delta is the lower,
+    // by about twice vega times the skew, in the units of the deltas
     BOOST_CHECK_MESSAGE(
-        sdG.spotDelta < ssG.spotDelta,
-        "with EUR put skew, sticky-delta should be < sticky-strike: "
-        << "sd=" << sdG.spotDelta << " ss=" << ssG.spotDelta);
+        lvG.spotDelta < sdG.spotDelta,
+        "with EUR put skew, the local-vol delta should be < the sticky-delta one: "
+        << "sd=" << sdG.spotDelta << " lv=" << lvG.spotDelta);
+    const Real strike = ext::dynamic_pointer_cast<StrikedTypePayoff>(option->payoff())->strike();
+    const Real h = 0.001;
+    const Real skew = (mkt.surface->blackVol(mkt.expiry3M, strike + h) -
+                       mkt.surface->blackVol(mkt.expiry3M, strike - h)) / (2.0 * h);
+    const Real expectedGap = 2.0 * (sdG.vega / 0.01) * std::fabs(skew) * 0.01 * mkt.spot->value();
+    // the rule is first order: here the gap is 1273 against its 1050
+    BOOST_CHECK_CLOSE(sdG.spotDelta - lvG.spotDelta, expectedGap, 30.0);
 
     // navva == vanna in both modes.
     BOOST_CHECK_MESSAGE(sdG.navva == sdG.vanna,
         "sticky-delta: navva must equal vanna");
-    BOOST_CHECK_MESSAGE(ssG.navva == ssG.vanna,
-        "sticky-strike: navva must equal vanna");
+    BOOST_CHECK_MESSAGE(lvG.navva == lvG.vanna,
+        "local vol: navva must equal vanna");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

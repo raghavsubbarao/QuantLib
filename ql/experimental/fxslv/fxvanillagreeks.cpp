@@ -186,7 +186,6 @@ namespace QuantLib {
         const Date expiry = option_->exercise()->lastDate();
         const Time T_exp  = process_->time(expiry);
         const Real Bd     = process_->riskFreeRate()->discount(T_exp);
-        const Real Bf     = process_->dividendYield()->discount(T_exp);
 
         // ── Capture base values for all bumped quotes ─────────────────────────
         std::vector<Real> sigmas(atmVolQuotes_.size());
@@ -354,7 +353,7 @@ namespace QuantLib {
         } 
         else 
         {
-            // ── Sticky-strike path (localVol=true only) ───────────────────────
+            // ── Frozen local-vol path (localVol=true only) ────────────────────
             //
             // Build three frozen local vol surfaces at base, vol+dv, vol-dv.
             auto [times, strikes] = buildLvGrid();

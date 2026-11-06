@@ -31,7 +31,7 @@
     4.  Price a 3M EUR call (pillar tenor) under BS-FD and local-vol Dupire FD.
     5.  Full FX Greeks via FxVanillaBumpRisk (sticky-delta convention),
         theta being the roll of the market to the next business day.
-    6.  Sticky-delta vs sticky-strike delta comparison.
+    6.  Sticky-delta vs local-vol (frozen local vol) delta comparison.
     7.  FixedLocalVolSurface spot-check against Dupire.
 
     PART B — Stochastic Local Volatility (SLV)
@@ -345,7 +345,7 @@ int main(int, char*[]) {
                                    bfBumps, bfPillarTimes,
                                    notional,
                                    0.001, /*spotBump=*/
-                                   0.001, /*volBump=*/
+                                   0.01,  /*volBump=*/ // 1%: see FxVanillaBumpRisk on volga
                                    0.001, /*rrBump=*/
                                    0.001, /*bfBump=*/
                                    100, /*tGrid=*/
@@ -402,20 +402,23 @@ int main(int, char*[]) {
                   << "    Sega: same scaling with bfBump=0.1%, reported for 0.01%.\n\n";
 
         // ──────────────────────────────────────────────────────────────────────
-        //  Sticky-delta vs sticky-strike comparison
+        //  Sticky-delta vs local-vol comparison: local vol frozen in (t, K)
+        //  gives the local-vol model's own delta, under which implied vols at
+        //  a fixed strike move with spot by about the skew, the opposite of
+        //  sticky delta; with a put skew the call's delta is the lower.
         // ──────────────────────────────────────────────────────────────────────
         printSeparator();
-        std::cout << "  Sticky-delta vs Sticky-strike (Local vol Dupire FD)\n";
+        std::cout << "  Sticky-delta vs frozen local vol (Local vol Dupire FD)\n";
         printSeparator();
 
-        FxVanillaGreeks ssGreeks = riskCalc.calculate(/*localVol=*/true,
-                                                       FxVanillaBumpRisk::StickyType::Strike);
+        FxVanillaGreeks flvGreeks = riskCalc.calculate(/*localVol=*/true,
+                                                       FxVanillaBumpRisk::StickyType::LocalVol);
 
         printGreeks("Local vol Dupire FD (sticky-delta)", lvGreeks);
-        printGreeks("Local vol Dupire FD (sticky-strike)", ssGreeks);
+        printGreeks("Local vol Dupire FD (local vol frozen)", flvGreeks);
 
         const int wd = 44, wdv = 12;
-        std::cout << "\n  Difference (sticky-delta minus sticky-strike):\n"
+        std::cout << "\n  Difference (sticky-delta minus frozen local vol):\n"
                   << "  " << std::string(wd + wdv, '-') << "\n"
                   << std::fixed;
         auto diffRow = [&](const std::string& name, Real a, Real b, int prec = 2) {
@@ -423,16 +426,18 @@ int main(int, char*[]) {
                       << std::setw(wdv) << std::right << std::setprecision(prec)
                       << (a - b) << "\n";
         };
-        diffRow("Spot delta (USD per 1% spot)",  lvGreeks.spotDelta, ssGreeks.spotDelta);
-        diffRow("Fwd delta  (USD per 1% fwd)",   lvGreeks.fwdDelta,  ssGreeks.fwdDelta);
-        diffRow("Spot gamma (USD per 1% spot)",  lvGreeks.spotGamma, ssGreeks.spotGamma);
-        diffRow("Vega       (USD per 1% vol)",   lvGreeks.vega,      ssGreeks.vega);
-        diffRow("Vanna      (USD per 1%S x 1%vol)", lvGreeks.vanna,  ssGreeks.vanna);
-        diffRow("Volga      (USD per 1%vol x 1%vol)", lvGreeks.volga, ssGreeks.volga);
+        diffRow("Spot delta (USD per 1% spot)",  lvGreeks.spotDelta, flvGreeks.spotDelta);
+        diffRow("Fwd delta  (USD per 1% fwd)",   lvGreeks.fwdDelta,  flvGreeks.fwdDelta);
+        diffRow("Spot gamma (USD per 1% spot)",  lvGreeks.spotGamma, flvGreeks.spotGamma);
+        diffRow("Vega       (USD per 1% vol)",   lvGreeks.vega,      flvGreeks.vega);
+        diffRow("Vanna      (USD per 1%S x 1%vol)", lvGreeks.vanna,  flvGreeks.vanna);
+        diffRow("Volga      (USD per 1%vol x 1%vol)", lvGreeks.volga, flvGreeks.volga);
         std::cout << "  " << std::string(wd + wdv, '-') << "\n\n"
                   << "  Non-zero spot delta difference = skew adjustment to delta.\n"
-                  << "  With EUR put skew (negative RR), sticky-delta delta is lower\n"
-                  << "  because the vol surface falls as spot rises.\n\n";
+                  << "  With EUR put skew (negative RR), implied vol falls with the\n"
+                  << "  strike: under sticky delta a fixed-strike vol rises with spot,\n"
+                  << "  under local vol it falls, so the sticky-delta delta is higher,\n"
+                  << "  by about twice vega times the skew.\n\n";
 
         // ──────────────────────────────────────────────────────────────────────
         //  6. Local vol surface: Dupire vs FixedLocalVolSurface comparison
