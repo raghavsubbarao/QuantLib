@@ -30,7 +30,6 @@
 #include <ql/termstructure.hpp>
 #include <ql/time/calendars/weekendsonly.hpp>
 #include <ql/time/date.hpp>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -113,9 +112,10 @@ namespace QuantLib {
 
     //! Trading time: calendar time with slower holidays, and events
     /*! Trading time runs at rate 1 on business days of the calendar and
-        at rate \f$ w \f$ (the holiday weight, between 0 and 1) on every
-        other day, weekends included; events add (or, if diffuse, possibly
-        remove) trading time as they release their weights.  With \f$ x \f$
+        at rate \f$ w \f$ (the holiday weight, in \f$ (0, 1] \f$, e.g. 0.2
+        in FX) on every other day, weekends included; events add (or, if
+        diffuse, possibly remove) trading time as they release their
+        weights.  With \f$ x \f$
         the time in days since the reference instant,
         \f[
             D(x) = \int_0^x r(s)\,ds
@@ -125,8 +125,10 @@ namespace QuantLib {
         \f$ W_e \f$ released, so that the part of an event released by the
         reference instant has happened and does not count.  Trading time
         in years is \f$ D / 365 \f$; both tradingTime() forms evaluate
-        this, so they agree.  Trading time must never run backwards: this
-        is checked whenever the event weights or the reference date change.
+        this, so they agree.  Trading time must always run, so that it
+        maps one-to-one to calendar time: a holiday weight of 0, or negative
+        diffuse events stopping trading time, are rejected, the latter
+        whenever the event weights or the reference date change.
 
         The reference instant is the reference date, with its time of day
         if it carries one; events earlier on the reference day count only
@@ -146,12 +148,12 @@ namespace QuantLib {
         //! Fixed reference date.
         TradingTimeTermStructure(const Date& referenceDate,
                                  Calendar calendar = WeekendsOnly(),
-                                 Real holidayWeight = 0.0,
+                                 Real holidayWeight = 0.2,
                                  std::vector<ext::shared_ptr<TradingTimeEvent>> events = {});
 
         //! Reference date floating with the evaluation date.
         explicit TradingTimeTermStructure(Calendar calendar = WeekendsOnly(),
-                                          Real holidayWeight = 0.0,
+                                          Real holidayWeight = 0.2,
                                           std::vector<ext::shared_ptr<TradingTimeEvent>> events = {});
         //@}
 
@@ -179,16 +181,9 @@ namespace QuantLib {
         //! Actual/365 time from the reference date at which the trading time is reached, in years
         /*! The inverse of tradingTime(Time).  Trading time released by a
             jump passes at the jump's instant, which is returned for every
-            trading time it covers; where trading time stands still, the
-            earliest time is returned.  Trading time has a unique inverse
-            only where it always runs, see checkRateIsPositive().
+            trading time it covers.
         */
         Time calendarTime(Time tradingTime) const;
-        //! Fails unless trading time always runs, so that it maps one-to-one to calendar time
-        /*! It requires a positive holiday weight, and that no negative
-            diffuse event stops trading time while it releases.
-        */
-        void checkRateIsPositive() const;
         //@}
 
         //! \name Inspectors
@@ -212,9 +207,9 @@ namespace QuantLib {
         Real baseRate(const Date& day) const;
         // rebuilds the computed state if the reference date or the weights have changed
         void checkReference() const;
-        // fails if trading time would run slower than the floor rate after the
-        // reference instant while negative diffuse events release
-        void checkRateIsAbove(Real floor, const std::string& failure) const;
+        // fails if trading time would stand still or run backwards after the
+        // reference instant, while negative diffuse events release
+        void checkRateIsPositive() const;
 
         Real holidayWeight_;
         std::vector<ext::shared_ptr<TradingTimeEvent>> events_;

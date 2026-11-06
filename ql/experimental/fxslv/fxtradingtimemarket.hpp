@@ -63,9 +63,6 @@ namespace QuantLib {
               for reporting, e.g. with the average trading time per
               calendar year over the calibration horizon.
 
-        Trading time must always run, so that it maps one-to-one to
-        calendar time: holidays need a positive weight, see
-        TradingTimeTermStructure::checkRateIsPositive().
     */
     class FxTradingTimeMarket {
       public:

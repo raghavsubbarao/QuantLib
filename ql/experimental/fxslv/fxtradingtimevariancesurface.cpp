@@ -41,7 +41,6 @@ namespace QuantLib {
                                  TradingTimeDayCounter(
                                      tradingTimeVariance(surface)->tradingTimeStructure())),
       surface_(std::move(surface)), variance_(tradingTimeVariance(surface_)) {
-        variance_->tradingTimeStructure()->checkRateIsPositive();
         registerWith(surface_);
         enableExtrapolation(surface_->allowsExtrapolation());
     }

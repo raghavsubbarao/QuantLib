@@ -46,7 +46,6 @@ namespace QuantLib {
         QL_REQUIRE(tradingTime_->referenceDate() == curve_->referenceDate(),
                    "trading-time reference date (" << tradingTime_->referenceDate()
                        << ") differs from the curve's (" << curve_->referenceDate() << ")");
-        tradingTime_->checkRateIsPositive();
         checked_ = true;
     }
 

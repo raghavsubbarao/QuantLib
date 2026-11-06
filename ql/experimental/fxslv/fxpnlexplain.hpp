@@ -47,7 +47,7 @@ namespace QuantLib {
         FxRrBfQuotes::FlyType flyType;  //!< of the butterflies given in the markets
         FxSettleConvention settlement;
         FxExpiryCut cut;  //!< of the quoted tenors, and so of the surfaces built
-        Real holidayWeight = 0.0;  //!< trading-time weight of non-business days
+        Real holidayWeight = 0.2;  //!< trading-time weight of non-business days, in (0, 1]
     };
 
     //! The FX vol market on a date: spot, curves, quotes by tenor and events

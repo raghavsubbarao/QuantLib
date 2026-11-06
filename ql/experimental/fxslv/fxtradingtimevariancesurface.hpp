@@ -54,8 +54,6 @@ namespace QuantLib {
         calibrated on this surface are on the trading-time clock: local
         vol stays smooth over weekends and events.
 
-        Trading time must always run, see
-        TradingTimeTermStructure::checkRateIsPositive().
     */
     class FxTradingTimeVarianceSurface : public BlackVarianceTermStructure {
       public:
