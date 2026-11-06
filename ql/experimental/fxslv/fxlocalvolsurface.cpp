@@ -90,19 +90,24 @@ namespace QuantLib {
         Real dwdt;
         if (t == 0.0) {
             const Time dt = 0.0001;
-            const Real strikept = strike * dr * foreignCurve_->discount(t + dt, true) /
-                                  (domesticCurve_->discount(t + dt, true) * dq);
-            const Real wpt =
-                laterVariance(w, blackTS_->blackVariance(t + dt, strikept, true), strike, t, t + dt);
+            DiscountFactor drpt = domesticCurve_->discount(t + dt, true);
+            DiscountFactor dqpt = foreignCurve_->discount(t + dt, true);    
+            const Real strikept = strike * dr * dqpt / (drpt * dq);
+            const Real wpt = laterVariance(w, blackTS_->blackVariance(t + dt, strikept, true), 
+                                            strike, t, t + dt);
             dwdt = (wpt - w) / dt;
         } else {
             const Time dt = std::min<Time>(0.0001, t / 2.0);
-            const Real strikept = strike * dr * foreignCurve_->discount(t + dt, true) /
-                                  (domesticCurve_->discount(t + dt, true) * dq);
-            const Real strikemt = strike * dr * foreignCurve_->discount(t - dt, true) /
-                                  (domesticCurve_->discount(t - dt, true) * dq);
-            const Real wpt =
-                laterVariance(w, blackTS_->blackVariance(t + dt, strikept, true), strike, t, t + dt);
+            DiscountFactor drpt = domesticCurve_->discount(t + dt, true);
+            DiscountFactor drmt = domesticCurve_->discount(t - dt, true);
+            DiscountFactor dqpt = foreignCurve_->discount(t + dt, true);
+            DiscountFactor dqmt = foreignCurve_->discount(t - dt, true);
+
+            const Real strikept = strike * dr * dqpt / (drpt * dq);
+            const Real strikemt = strike * dr * dqmt / (drmt * dq);
+
+            const Real wpt = laterVariance(w, blackTS_->blackVariance(t + dt, strikept, true), 
+                                            strike, t, t + dt);
             Real wmt = blackTS_->blackVariance(t - dt, strikemt, true);
             if (laterVariance(wmt, w, strike, t - dt, t) == wmt)
                 wmt = w;  // they differ only by rounding

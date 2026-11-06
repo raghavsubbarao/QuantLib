@@ -225,15 +225,15 @@ int main(int, char*[]) {
 
         std::cout << sep << "\n";
         std::cout << std::setw(w0) << std::left  << "Model"
-                  << std::setw(w)  << std::right << "ATM%"
-                  << std::setw(w)  << std::right << "25P%"
-                  << std::setw(w)  << std::right << "25C%"
-                  << std::setw(w)  << std::right << "10P%"
-                  << std::setw(w)  << std::right << "10C%"
-                  << std::setw(w)  << std::right << "RR25%"
-                  << std::setw(w)  << std::right << "BF25%"
-                  << std::setw(w)  << std::right << "RR10%"
-                  << std::setw(w)  << std::right << "BF10%"
+                  << std::setw(w)  << std::right << "ATM"
+                  << std::setw(w)  << std::right << "25P"
+                  << std::setw(w)  << std::right << "25C"
+                  << std::setw(w)  << std::right << "10P"
+                  << std::setw(w)  << std::right << "10C"
+                  << std::setw(w)  << std::right << "RR25"
+                  << std::setw(w)  << std::right << "BF25"
+                  << std::setw(w)  << std::right << "RR10"
+                  << std::setw(w)  << std::right << "BF10"
                   << "\n";
         std::cout << sep << "\n\n";
 
