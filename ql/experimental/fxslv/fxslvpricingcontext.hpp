@@ -36,7 +36,6 @@
 #include <ql/termstructures/volatility/equityfx/blackvoltermstructure.hpp>
 #include <ql/termstructures/volatility/equityfx/localvoltermstructure.hpp>
 #include <ql/termstructures/yieldtermstructure.hpp>
-#include <ql/time/calendar.hpp>
 #include <ql/time/date.hpp>
 #include <ql/types.hpp>
 #include <vector>
@@ -62,7 +61,7 @@ namespace QuantLib {
         \code
         // 1. Assemble market data.
         FxSLVPricingContext ctx(spot, domesticTS, foreignTS, volSurface,
-                                localVolSurface, calendar);
+                                localVolSurface, settlement);
 
         // 2. Define calibration pillars (expiry, absolute strike).
         std::vector<StochVolCalibrator::Pillar> pillars = {
@@ -93,14 +92,15 @@ namespace QuantLib {
             \param localVol      Dupire local volatility surface derived from
                                  \p volSurface (supplied externally so the user
                                  can choose their own interpolation scheme)
-            \param calendar      calendar used for expiry date generation
+            \param settlement    settlement convention, giving the expiries of
+                                 the calibration tenors
         */
         FxSLVPricingContext(Handle<Quote>                    spot,
                             Handle<YieldTermStructure>       domesticTS,
                             Handle<YieldTermStructure>       foreignTS,
                             Handle<BlackVolTermStructure>    volSurface,
                             Handle<LocalVolTermStructure>    localVol,
-                            Calendar                         calendar);
+                            FxSettleConvention               settlement);
         //@}
 
         //! \name Calibration
@@ -178,7 +178,7 @@ namespace QuantLib {
         Handle<YieldTermStructure>    foreignTS_;
         Handle<BlackVolTermStructure> volSurface_;
         Handle<LocalVolTermStructure> localVol_;
-        Calendar                      calendar_;
+        FxSettleConvention            settlement_;
 
         ext::shared_ptr<HestonModel>          hestonModel_;
         ext::shared_ptr<LocalVolTermStructure> leverageFunction_;

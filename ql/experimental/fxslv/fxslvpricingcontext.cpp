@@ -31,10 +31,10 @@ namespace QuantLib {
                                              Handle<YieldTermStructure>    foreignTS,
                                              Handle<BlackVolTermStructure> volSurface,
                                              Handle<LocalVolTermStructure> localVol,
-                                             Calendar                      calendar)
+                                             FxSettleConvention            settlement)
     : spot_(std::move(spot)), domesticTS_(std::move(domesticTS)),
       foreignTS_(std::move(foreignTS)), volSurface_(std::move(volSurface)),
-      localVol_(std::move(localVol)), calendar_(std::move(calendar)) {
+      localVol_(std::move(localVol)), settlement_(std::move(settlement)) {
 
         QL_REQUIRE(!spot_.empty(),       "FxSLVPricingContext: spot handle is empty");
         QL_REQUIRE(!domesticTS_.empty(), "FxSLVPricingContext: domesticTS handle is empty");
@@ -55,7 +55,7 @@ namespace QuantLib {
 
         // Step 1 — Calibrate the stochastic volatility model (e.g. Heston).
         hestonCal.calibrate(spot_, domesticTS_, foreignTS_,
-                            volSurface_, calendar_, pillars);
+                            volSurface_, settlement_, pillars);
 
         hestonModel_   = ext::dynamic_pointer_cast<HestonModel>(
                              hestonCal.calibratedModel());

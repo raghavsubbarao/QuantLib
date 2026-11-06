@@ -17,6 +17,7 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
+#include <ql/experimental/fxslv/conventions/fxtenorexpiry.hpp>
 #include <ql/experimental/fxslv/stochvolcalibrator.hpp>
 #include <ql/math/optimization/levenbergmarquardt.hpp>
 #include <ql/models/equity/hestonmodelhelper.hpp>
@@ -24,6 +25,7 @@
 #include <ql/processes/hestonprocess.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/volatility/equityfx/hestonblackvolsurface.hpp>
+#include <ql/time/calendars/nullcalendar.hpp>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -57,7 +59,7 @@ namespace QuantLib {
                                      const Handle<YieldTermStructure>& domesticTS,
                                      const Handle<YieldTermStructure>& foreignTS,
                                      const Handle<BlackVolTermStructure>& volSurface,
-                                     const Calendar& calendar,
+                                     const FxSettleConvention& settlement,
                                      const std::vector<Pillar>& pillars) {
         QL_REQUIRE(!pillars.empty(), "HestonCalibrator: at least one calibration pillar required");
 
@@ -94,15 +96,16 @@ namespace QuantLib {
         helpers_.reserve(pillars.size());
 
         for (const auto& p : pillars) {
-            // Query the market vol surface for the calibration vol at this pillar.
-            const Date expiryDate = calendar.advance(refDate, p.expiry);
+            // The market vol at the pillar's FX expiry, which the helper
+            // takes as a tenor on a calendar: in days, on one without holidays
+            const Date expiryDate = fxExpiryDate(refDate, p.expiry, settlement);
             const Volatility marketVol =
                 volSurface->blackVol(expiryDate, p.strike, true);
 
             auto volQuote = ext::make_shared<SimpleQuote>(marketVol);
 
             auto helper = ext::make_shared<HestonModelHelper>(
-                p.expiry, calendar,
+                Period(static_cast<Integer>(expiryDate - refDate), Days), NullCalendar(),
                 spot, p.strike,
                 Handle<Quote>(volQuote),
                 domesticTS, foreignTS,

@@ -32,6 +32,7 @@
 #include "utilities.hpp"
 
 #include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/conventions/fxtenorexpiry.hpp>
 #include <ql/experimental/fxslv/fxslvpricingcontext.hpp>
 #include <ql/experimental/fxslv/slvleveragecalibrator.hpp>
 #include <ql/experimental/fxslv/stochvolcalibrator.hpp>
@@ -86,7 +87,8 @@ namespace {
     struct SLVMarket {
         Date today;
         DayCounter dc;
-        Calendar calendar;
+        Calendar calendar = WeekendsOnly();
+        FxSettleConvention settlement{WeekendsOnly(), 2};
 
         Handle<YieldTermStructure> usdTs;  // domestic
         Handle<YieldTermStructure> eurTs;  // foreign
@@ -121,7 +123,6 @@ namespace {
         SLVMarket() {
             today    = Date(2, January, 2024);
             dc       = Actual365Fixed();
-            calendar = WeekendsOnly();
             Settings::instance().evaluationDate() = today;
 
             usdTs = Handle<YieldTermStructure>(
@@ -170,9 +171,7 @@ namespace {
                 9*Months, 1*Years, 18*Months, 2*Years
             };
 
-            pillars.reserve(tenors.size());
-            for (const auto& p : tenors)
-                pillars.push_back(calendar.advance(today, p));
+            pillars = fxExpiryDates(today, tenors, settlement);
 
             rrPillarSQs.resize(pillars.size());
             bfPillarSQs.resize(pillars.size());
@@ -205,7 +204,7 @@ namespace {
                 today, spot, pillars, atms, rrs, bfs, deltas,
                 eurTs, usdTs, timeTs,
                 deltaType, atmType, flyType,
-                FxSettleConvention(calendar, 2), FxExpiryCut(10),
+                settlement, FxExpiryCut(10),
                 calendar, Following, true);
             volSurface->enableExtrapolation();
             volSurfaceHandle = Handle<BlackVolTermStructure>(volSurface);
@@ -215,7 +214,7 @@ namespace {
             // on arbitrage rather than substituting a value.  Its foreign curve and local vol are
             // passed on to the SLV calibration.
             localVolProcess = makeFxLocalVolProcess(spot, eurTs, usdTs,
-                                                    FxSettleConvention(calendar, 2),
+                                                    settlement,
                                                     volSurfaceHandle);
             eurFwdTs = localVolProcess->dividendYield();
             localVolHandle = localVolProcess->localVolatility();
@@ -227,6 +226,8 @@ namespace {
         // to three absolute strikes centred on the forward:
         //   K_{-5%} = 0.95 * F,   K_{ATM} = F,   K_{+5%} = 1.05 * F
         //
+        // at their FX expiries, F being the settlement forward of the expiry.
+        //
         std::vector<StochVolCalibrator::Pillar> hestonPillars() const {
             const std::vector<Period> calibTenors = {
                 1*Months, 3*Months, 6*Months, 1*Years, 2*Years
@@ -235,25 +236,19 @@ namespace {
 
             std::vector<StochVolCalibrator::Pillar> out;
             for (const auto& tenor : calibTenors) {
-                const Date expiry  = calendar.advance(today, tenor);
-                const Time T       = dc.yearFraction(today, expiry);
-                const Real fwd     = spot->value()
-                                     * eurTs->discount(T)
-                                     / usdTs->discount(T);
+                const Real fwd = volSurface->fwd(fxExpiryDate(today, tenor, settlement));
                 for (Real m : moneyness)
                     out.push_back({ tenor, m * fwd });
             }
             return out;
         }
 
-        // ── Helper: make a European vanilla option ───────────────────────────
+        // ── Helper: a European vanilla option of a tenor, struck at a ─────────
+        //    multiple of its settlement forward
         ext::shared_ptr<VanillaOption> makeEuropean(
                 Option::Type type, const Period& tenor, Real moneyness = 1.0) const {
-            const Date expiry  = calendar.advance(today, tenor);
-            const Time T       = dc.yearFraction(today, expiry);
-            const Real fwd     = spot->value()
-                                 * eurTs->discount(T)
-                                 / usdTs->discount(T);
+            const Date expiry = fxExpiryDate(today, tenor, settlement);
+            const Real fwd = volSurface->fwd(expiry);
             auto payoff   = ext::make_shared<PlainVanillaPayoff>(type, moneyness * fwd);
             auto exercise = ext::make_shared<EuropeanExercise>(expiry);
             return ext::make_shared<VanillaOption>(payoff, exercise);
@@ -314,7 +309,7 @@ BOOST_AUTO_TEST_CASE(testHestonCalibration) {
         BlackCalibrationHelper::ImpliedVolError);
 
     cal.calibrate(mkt.spot, mkt.usdTs, mkt.eurFwdTs,
-                  mkt.volSurfaceHandle, mkt.calendar,
+                  mkt.volSurfaceHandle, mkt.settlement,
                   mkt.hestonPillars());
 
     const auto heston = cal.calibratedHestonModel();
@@ -359,14 +354,14 @@ BOOST_AUTO_TEST_CASE(testHestonCalibrationWithFellerCondition) {
     HestonCalibrator infeasible(mkt.initialHestonParams(), endCriteria,
                                 BlackCalibrationHelper::ImpliedVolError, {}, true);
     BOOST_CHECK_THROW(infeasible.calibrate(mkt.spot, mkt.usdTs, mkt.eurFwdTs,
-                                           mkt.volSurfaceHandle, mkt.calendar,
+                                           mkt.volSurfaceHandle, mkt.settlement,
                                            mkt.hestonPillars()),
                       Error);
 
     HestonParams start = mkt.initialHestonParams();
     start.sigma = 0.15;  // 2 kappa theta = 0.03 > sigma^2
     HestonCalibrator cal(start, endCriteria, BlackCalibrationHelper::ImpliedVolError, {}, true);
-    cal.calibrate(mkt.spot, mkt.usdTs, mkt.eurFwdTs, mkt.volSurfaceHandle, mkt.calendar,
+    cal.calibrate(mkt.spot, mkt.usdTs, mkt.eurFwdTs, mkt.volSurfaceHandle, mkt.settlement,
                   mkt.hestonPillars());
     const auto heston = cal.calibratedHestonModel();
     const Real fellerLhs = 2.0 * heston->kappa() * heston->theta();
@@ -379,7 +374,7 @@ BOOST_AUTO_TEST_CASE(testHestonCalibrationWithFellerCondition) {
 
     // the condition costs fit: the unconstrained calibration is at least as good
     HestonCalibrator free(mkt.initialHestonParams(), endCriteria);
-    free.calibrate(mkt.spot, mkt.usdTs, mkt.eurFwdTs, mkt.volSurfaceHandle, mkt.calendar,
+    free.calibrate(mkt.spot, mkt.usdTs, mkt.eurFwdTs, mkt.volSurfaceHandle, mkt.settlement,
                    mkt.hestonPillars());
     BOOST_CHECK_LE(free.rmse(), cal.rmse() * (1.0 + 1.0e-6));
 }
@@ -392,7 +387,7 @@ BOOST_AUTO_TEST_CASE(testHestonCalibrationRejectsInvalidStart) {
     start.rho = -1.5;
     HestonCalibrator cal(start);
     BOOST_CHECK_THROW(cal.calibrate(mkt.spot, mkt.usdTs, mkt.eurFwdTs, mkt.volSurfaceHandle,
-                                    mkt.calendar, mkt.hestonPillars()),
+                                    mkt.settlement, mkt.hestonPillars()),
                       Error);
 }
 
@@ -409,14 +404,14 @@ BOOST_AUTO_TEST_CASE(testLeverageFunctionCalibration) {
     // Step 1: Calibrate Heston.
     HestonCalibrator hestonCal = SLVMarket::slvHestonCalibrator();
     hestonCal.calibrate(mkt.spot, mkt.usdTs, mkt.eurFwdTs,
-                        mkt.volSurfaceHandle, mkt.calendar,
+                        mkt.volSurfaceHandle, mkt.settlement,
                         mkt.hestonPillars());
 
     // Step 2: Calibrate the leverage function.
     HestonSLVLeverageCalibrator levCal(mkt.fastParams());
     levCal.setHestonModel(hestonCal.calibratedHestonModel());
 
-    const Date endDate = mkt.calendar.advance(mkt.today, 2*Years);
+    const Date endDate = mkt.pillars.back();  // the 2Y expiry, where local vol ends
     levCal.calibrate(mkt.localVolHandle, endDate);
 
     const auto leverageFct = levCal.leverageFunction();
@@ -454,12 +449,12 @@ BOOST_AUTO_TEST_CASE(testSLVPricingNonPillarTenor) {
     // Build the FX SLV pricing context.
     FxSLVPricingContext ctx(
         mkt.spot, mkt.usdTs, mkt.eurFwdTs,
-        mkt.volSurfaceHandle, mkt.localVolHandle, mkt.calendar);
+        mkt.volSurfaceHandle, mkt.localVolHandle, mkt.settlement);
 
     HestonCalibrator hestonCal = SLVMarket::slvHestonCalibrator();
     HestonSLVLeverageCalibrator levCal(mkt.fastParams());
 
-    const Date endDate = mkt.calendar.advance(mkt.today, 2*Years);
+    const Date endDate = mkt.pillars.back();  // the 2Y expiry, where local vol ends
     ctx.calibrate(hestonCal, levCal, mkt.hestonPillars(), endDate);
 
     // 4M is strictly between the 3M and 6M surface pillars.
@@ -521,12 +516,12 @@ BOOST_AUTO_TEST_CASE(testSLVGreeks) {
 
     FxSLVPricingContext ctx(
         mkt.spot, mkt.usdTs, mkt.eurFwdTs,
-        mkt.volSurfaceHandle, mkt.localVolHandle, mkt.calendar);
+        mkt.volSurfaceHandle, mkt.localVolHandle, mkt.settlement);
 
     HestonCalibrator hestonCal = SLVMarket::slvHestonCalibrator();
     HestonSLVLeverageCalibrator levCal(mkt.fastParams());
 
-    const Date endDate = mkt.calendar.advance(mkt.today, 2*Years);
+    const Date endDate = mkt.pillars.back();  // the 2Y expiry, where local vol ends
     ctx.calibrate(hestonCal, levCal, mkt.hestonPillars(), endDate);
 
     const FdmGridConfig grid{ 100, 100, 50, 0 };
@@ -562,14 +557,8 @@ BOOST_AUTO_TEST_CASE(testSLVGreeks) {
     BOOST_CHECK_MESSAGE(putDelta  < 0.0, "4M put delta must be <0: "  << putDelta);
 
     // ── Put-call parity ──────────────────────────────────────────────────────
-    // C - P = S * Bf - K * Bd  (discounted forward value)
-    const Period tenor = 4*Months;
-    const Date   expiry = mkt.calendar.advance(mkt.today, tenor);
-    const Time   T      = mkt.dc.yearFraction(mkt.today, expiry);
-    const Real   fwd    = S0 * mkt.eurTs->discount(T) / mkt.usdTs->discount(T);
-    const Real   Bd     = mkt.usdTs->discount(T);
-
-    // For ATM-forward strike K = fwd:  C - P = 0
+    // C - P = Bd (F - K), with F the settlement forward the process carries:
+    // for the strike K = F, C - P = 0
     const Real pcp    = call4M->NPV() - put4M->NPV();
     const Real parity = 0.0;  // S * Bf - K * Bd = S * Bf - F * Bd = 0 for K=F
 
@@ -616,11 +605,11 @@ BOOST_AUTO_TEST_CASE(testMixingFactorRepricesLocalVol) {
         for (Real mixingFactor : {0.1, 0.5, 1.0}) {
             FxSLVPricingContext ctx(
                 mkt.spot, mkt.usdTs, mkt.eurFwdTs,
-                mkt.volSurfaceHandle, mkt.localVolHandle, mkt.calendar);
+                mkt.volSurfaceHandle, mkt.localVolHandle, mkt.settlement);
             HestonCalibrator hestonCal = SLVMarket::slvHestonCalibrator();
             HestonSLVLeverageCalibrator levCal(mkt.fastParams(), mixingFactor);
             ctx.calibrate(hestonCal, levCal, mkt.hestonPillars(),
-                          mkt.calendar.advance(mkt.today, 2*Years));
+                          mkt.pillars.back());
 
             auto option = mkt.makeEuropean(Option::Call, 4*Months, moneyness);
             option->setPricingEngine(ctx.vanillaEngine(grid));

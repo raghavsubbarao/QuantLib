@@ -24,6 +24,7 @@
 #ifndef quantlib_stoch_vol_calibrator_hpp
 #define quantlib_stoch_vol_calibrator_hpp
 
+#include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
 #include <ql/handle.hpp>
 #include <ql/math/optimization/endcriteria.hpp>
 #include <ql/models/calibrationhelper.hpp>
@@ -59,6 +60,10 @@ namespace QuantLib {
         virtual ~StochVolCalibrator() = default;
 
         //! Calibration instrument specification: one vanilla option pillar.
+        /*! The option expires on the FX expiry date of its tenor from the
+            reference date of the curves (see fxExpiryDate()), so that it
+            rolls with them.
+        */
         struct Pillar {
             Period expiry;  //!< option tenor, e.g. 3*Months
             Real   strike;  //!< absolute strike in domestic currency
@@ -70,14 +75,14 @@ namespace QuantLib {
             \param domesticTS   domestic (pricing) yield term structure
             \param foreignTS    foreign (dividend / foreign risk-free) yield term structure
             \param volSurface   market Black implied volatility surface
-            \param calendar     calendar for expiry date generation
+            \param settlement   settlement convention, giving the expiries of the tenors
             \param pillars       (expiry, strike) pairs defining calibration instruments
         */
         virtual void calibrate(const Handle<Quote>&                        spot,
                                const Handle<YieldTermStructure>&           domesticTS,
                                const Handle<YieldTermStructure>&           foreignTS,
                                const Handle<BlackVolTermStructure>&        volSurface,
-                               const Calendar&                             calendar,
+                               const FxSettleConvention&                   settlement,
                                const std::vector<Pillar>&                  pillars) = 0;
 
         //! Returns the calibrated model.
@@ -164,7 +169,7 @@ namespace QuantLib {
                        const Handle<YieldTermStructure>&    domesticTS,
                        const Handle<YieldTermStructure>&    foreignTS,
                        const Handle<BlackVolTermStructure>& volSurface,
-                       const Calendar&                      calendar,
+                       const FxSettleConvention&            settlement,
                        const std::vector<Pillar>&           pillars) override;
 
         ext::shared_ptr<CalibratedModel> calibratedModel() const override;
