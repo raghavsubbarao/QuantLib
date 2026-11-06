@@ -68,8 +68,10 @@ namespace QuantLib {
                     DividendSchedule(), arguments_.exercise, mesher_, calculator,
                     process_->riskFreeRate()->referenceDate(),
                     process_->riskFreeRate()->dayCounter());
-                const FdmSolverDesc solverDesc = {
-                    mesher_, FdmBoundaryConditionSet(), conditions, calculator, maturity, tGrid_, 0};
+                const FdmSolverDesc solverDesc = {mesher_,    FdmBoundaryConditionSet(),
+                                                  conditions, calculator,
+                                                  maturity,   tGrid_,
+                                                  0};
                 // no overwrite of failed local vols: a failure is an error,
                 // not a number to substitute
                 const FdmBlackScholesSolver solver(
@@ -140,8 +142,8 @@ namespace QuantLib {
             process_->blackVolatility(), Handle<LocalVolTermStructure>(localVol_));
     }
 
-    ext::shared_ptr<FdmMesher>
-    FxVanillaBumpRisk::makeMesher(const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc) const {
+    ext::shared_ptr<FdmMesher> FxVanillaBumpRisk::makeMesher(
+        const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc) const {
         // the grid FdBlackScholesVanillaEngine would use for this market
         const auto payoff = ext::dynamic_pointer_cast<StrikedTypePayoff>(option_->payoff());
         QL_REQUIRE(payoff, "non-striked payoff given");
@@ -190,7 +192,8 @@ namespace QuantLib {
                 rolled->stateVariable(), rolled->dividendYield(), rolled->riskFreeRate(),
                 rolled->blackVolatility(), Handle<LocalVolTermStructure>(lv));
             // a market of its own, on a grid of its own
-            option_->setPricingEngine(makeEngineFor(rolledLocalVol, true, makeMesher(rolledLocalVol)));
+            option_->setPricingEngine(
+                makeEngineFor(rolledLocalVol, true, makeMesher(rolledLocalVol)));
         }
         return option_->NPV() * notional_ - todaysValue;
     }
@@ -363,7 +366,7 @@ namespace QuantLib {
         };
 
         if (sticky == StickyType::Strike) {
-            // ── Sticky-strike path ─────────────────────────────────────────────
+            // ── Sticky-strike path ────────────────────────────────────────────
             // Black at the option's implied vol, read from the surface as it
             // stands and held as spot moves.
             const auto payoff = ext::dynamic_pointer_cast<StrikedTypePayoff>(option_->payoff());

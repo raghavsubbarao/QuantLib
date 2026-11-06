@@ -622,7 +622,8 @@ BOOST_AUTO_TEST_CASE(testStickyDeltaVsLocalVolDelta) {
     // against 525 here), local vol below it by about as much, its rule being
     // the cruder (769 against 525)
     const FxVanillaGreeks ssG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Strike);
-    const FxVanillaGreeks ssBlack = riskCalc.calculate(false, FxVanillaBumpRisk::StickyType::Strike);
+    const FxVanillaGreeks ssBlack =
+        riskCalc.calculate(false, FxVanillaBumpRisk::StickyType::Strike);
     BOOST_CHECK_EQUAL(ssG.spotDelta, ssBlack.spotDelta);
     BOOST_CHECK_LT(lvG.spotDelta, ssG.spotDelta);
     BOOST_CHECK_CLOSE(sdG.spotDelta - ssG.spotDelta, expectedGap / 2.0, 10.0);
