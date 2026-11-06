@@ -616,6 +616,17 @@ BOOST_AUTO_TEST_CASE(testStickyDeltaVsLocalVolDelta) {
     // the rule is first order: here the gap is 1273 against its 1050
     BOOST_CHECK_CLOSE(sdG.spotDelta - lvG.spotDelta, expectedGap, 30.0);
 
+    // sticky strike, implied vols at fixed strikes not moving, is the Black
+    // delta at the option's vol, whether priced with local vol or not, and
+    // lies between: sticky delta is above it by vega times the skew (539
+    // against 525 here), local vol below it by about as much, its rule being
+    // the cruder (769 against 525)
+    const FxVanillaGreeks ssG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Strike);
+    const FxVanillaGreeks ssBlack = riskCalc.calculate(false, FxVanillaBumpRisk::StickyType::Strike);
+    BOOST_CHECK_EQUAL(ssG.spotDelta, ssBlack.spotDelta);
+    BOOST_CHECK_LT(lvG.spotDelta, ssG.spotDelta);
+    BOOST_CHECK_CLOSE(sdG.spotDelta - ssG.spotDelta, expectedGap / 2.0, 10.0);
+
     // navva == vanna in both modes.
     BOOST_CHECK_MESSAGE(sdG.navva == sdG.vanna,
         "sticky-delta: navva must equal vanna");

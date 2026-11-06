@@ -25,6 +25,7 @@
 #define quantlib_fx_vanilla_greeks_hpp
 
 #include <ql/instruments/vanillaoption.hpp>
+#include <ql/methods/finitedifferences/meshers/fdmmesher.hpp>
 #include <ql/processes/blackscholesprocess.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/experimental/fxslv/fxlocalvolsurface.hpp>
@@ -105,19 +106,26 @@ namespace QuantLib {
           No finite-difference grid is used and no Dupire computation occurs.
         - <b>Local-vol Dupire FD</b> (\c localVol=true)
 
-        When \c localVol=true, the \c StickyType parameter controls how the
-        volatility surface behaves when spot is bumped for Greek calculation:
+        The \c StickyType parameter controls how the volatility surface behaves
+        when spot is bumped for Greek calculation:
         - <b>StickyType::Delta</b> (default): the FX variance surface re-anchors
           in delta space when spot moves (market convention), and the local vol
           is rebuilt from it.
+        - <b>StickyType::Strike</b>: implied vols at fixed strikes do not move
+          with spot.  A vanilla's price depends only on its own implied vol, so
+          its greeks are Black's at that vol held as spot moves, whichever the
+          \c localVol flag: delta and gamma at the option's implied vol,
+          vega, vanna and volga with it read from the bumped surface, theta
+          from the Black roll.
         - <b>StickyType::LocalVol</b>: the Dupire local vol is frozen in (t,K)
           space via \c FixedLocalVolSurface before bumping: the local-vol
           model's own delta.  It is not sticky strike: under local vol, implied
           vols at a fixed strike move with spot by about the skew
           \f$ \partial\sigma/\partial K \f$, the opposite of sticky delta's
           \f$ -\partial\sigma/\partial K \f$ (Hagan et al., 2002), so that with
-          a put skew a call's local-vol delta is below its Black delta, and its
-          sticky-delta one above.
+          a put skew a call's local-vol delta is below its sticky-strike (Black)
+          delta, and its sticky-delta one above.  Only effective when
+          \c localVol=true.
 
         <b>Scaling conventions:</b>
         Greeks are reported per the standard FX desk conventions:
@@ -147,6 +155,9 @@ namespace QuantLib {
             //! Sticky-delta (market convention): the FX variance surface
             //! re-anchors in delta space when spot moves.
             Delta,
+            //! Sticky-strike: implied vols at fixed strikes do not move with
+            //! spot; Black greeks at the option's implied vol.
+            Strike,
             //! Local vol frozen: the Dupire local vol grid is frozen in (t,K)
             //! space before bumping spot, giving the local-vol model's own
             //! delta.  Only effective when \c localVol=true.
@@ -237,11 +248,16 @@ namespace QuantLib {
                                      std::ostream& out = std::cout) const;
 
       private:
+        // the finite-difference grid for the option in the given market
+        ext::shared_ptr<FdmMesher>
+        makeMesher(const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc) const;
+        // finite-difference engines on the given grid
         ext::shared_ptr<PricingEngine>
         makeEngineFor(const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc,
-                      bool localVol) const;
-
-        ext::shared_ptr<PricingEngine> makeEngine(bool localVol) const;
+                      bool localVol,
+                      const ext::shared_ptr<FdmMesher>& mesher) const;
+        ext::shared_ptr<PricingEngine> makeEngine(bool localVol,
+                                                  const ext::shared_ptr<FdmMesher>& mesher) const;
         // Dupire local vol of the process's surface, allowing periods without variance
         void buildLocalVol(Volatility fallbackVol);
         ext::shared_ptr<PricingEngine> makeAnalyticEngine() const;

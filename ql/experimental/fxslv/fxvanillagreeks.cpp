@@ -22,7 +22,14 @@
 #include <ql/exercise.hpp>
 #include <ql/pricingengines/vanilla/analyticeuropeanengine.hpp>
 #include <ql/pricingengines/vanilla/fdblackscholesvanillaengine.hpp>
+#include <ql/methods/finitedifferences/meshers/fdmblackscholesmesher.hpp>
+#include <ql/methods/finitedifferences/meshers/fdmmeshercomposite.hpp>
 #include <ql/methods/finitedifferences/solvers/fdmbackwardsolver.hpp>
+#include <ql/methods/finitedifferences/solvers/fdmblackscholessolver.hpp>
+#include <ql/methods/finitedifferences/stepconditions/fdmstepconditioncomposite.hpp>
+#include <ql/methods/finitedifferences/utilities/fdminnervaluecalculator.hpp>
+#include <ql/termstructures/volatility/equityfx/blackconstantvol.hpp>
+#include <ql/time/calendars/nullcalendar.hpp>
 #include <ql/settings.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <cmath>
@@ -35,6 +42,48 @@ namespace QuantLib {
     namespace {
         // Reference tenor for rega/sega time-scaling: 1 month.
         const Real T_1M = 1.0 / 12.0;
+
+        // Finite-difference Black-Scholes engine on a given spot mesher, as
+        // FdBlackScholesVanillaEngine prices but for the grid: that engine
+        // sizes its grid from the market it prices, so that each bump of the
+        // market would reprice on a different grid, and second differences
+        // such as volga take the change of grid for a sensitivity.
+        class FixedMeshFdBlackScholesEngine : public VanillaOption::engine {
+          public:
+            FixedMeshFdBlackScholesEngine(ext::shared_ptr<GeneralizedBlackScholesProcess> process,
+                                          ext::shared_ptr<FdmMesher> mesher,
+                                          Size tGrid,
+                                          bool localVol)
+            : process_(std::move(process)), mesher_(std::move(mesher)), tGrid_(tGrid),
+              localVol_(localVol) {
+                registerWith(process_);
+            }
+
+            void calculate() const override {
+                const auto payoff = ext::dynamic_pointer_cast<StrikedTypePayoff>(arguments_.payoff);
+                QL_REQUIRE(payoff, "non-striked payoff given");
+                const Time maturity = process_->time(arguments_.exercise->lastDate());
+                const auto calculator = ext::make_shared<FdmLogInnerValue>(payoff, mesher_, 0);
+                const auto conditions = FdmStepConditionComposite::vanillaComposite(
+                    DividendSchedule(), arguments_.exercise, mesher_, calculator,
+                    process_->riskFreeRate()->referenceDate(),
+                    process_->riskFreeRate()->dayCounter());
+                const FdmSolverDesc solverDesc = {
+                    mesher_, FdmBoundaryConditionSet(), conditions, calculator, maturity, tGrid_, 0};
+                // no overwrite of failed local vols: a failure is an error,
+                // not a number to substitute
+                const FdmBlackScholesSolver solver(
+                    Handle<GeneralizedBlackScholesProcess>(process_), payoff->strike(), solverDesc,
+                    FdmSchemeDesc::Douglas(), localVol_, -Null<Real>());
+                results_.value = solver.valueAt(process_->x0());
+            }
+
+          private:
+            ext::shared_ptr<GeneralizedBlackScholesProcess> process_;
+            ext::shared_ptr<FdmMesher> mesher_;
+            Size tGrid_;
+            bool localVol_;
+        };
     }
 
     FxVanillaBumpRisk::FxVanillaBumpRisk(ext::shared_ptr<VanillaOption> option,
@@ -91,21 +140,27 @@ namespace QuantLib {
             process_->blackVolatility(), Handle<LocalVolTermStructure>(localVol_));
     }
 
-    ext::shared_ptr<PricingEngine> FxVanillaBumpRisk::makeEngineFor(const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc,
-                                                                    bool localVol) const 
-    {
-        // no overwrite of failed local vols: a failure is an error, not a
-        // number to substitute
-        return ext::make_shared<FdBlackScholesVanillaEngine>(proc, tGrid_, xGrid_,
-                                                             0, /*dampingSteps=*/
-                                                             FdmSchemeDesc::Douglas(),
-                                                             localVol,
-                                                             -Null<Real>() /*illegalLocalVolOverwrite*/
-                                                             );
+    ext::shared_ptr<FdmMesher>
+    FxVanillaBumpRisk::makeMesher(const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc) const {
+        // the grid FdBlackScholesVanillaEngine would use for this market
+        const auto payoff = ext::dynamic_pointer_cast<StrikedTypePayoff>(option_->payoff());
+        QL_REQUIRE(payoff, "non-striked payoff given");
+        const Time maturity = proc->time(option_->exercise()->lastDate());
+        return ext::make_shared<FdmMesherComposite>(ext::make_shared<FdmBlackScholesMesher>(
+            xGrid_, proc, maturity, payoff->strike(), Null<Real>(), Null<Real>(), 0.0001, 1.5,
+            std::pair<Real, Real>(payoff->strike(), 0.1)));
     }
 
-    ext::shared_ptr<PricingEngine> FxVanillaBumpRisk::makeEngine(bool localVol) const {
-        return makeEngineFor(localVol ? localVolProcess_ : process_, localVol);
+    ext::shared_ptr<PricingEngine>
+    FxVanillaBumpRisk::makeEngineFor(const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc,
+                                     bool localVol,
+                                     const ext::shared_ptr<FdmMesher>& mesher) const {
+        return ext::make_shared<FixedMeshFdBlackScholesEngine>(proc, mesher, tGrid_, localVol);
+    }
+
+    ext::shared_ptr<PricingEngine>
+    FxVanillaBumpRisk::makeEngine(bool localVol, const ext::shared_ptr<FdmMesher>& mesher) const {
+        return makeEngineFor(localVol ? localVolProcess_ : process_, localVol, mesher);
     }
 
 
@@ -131,11 +186,11 @@ namespace QuantLib {
                 rolled->blackVolatility(), rolled->riskFreeRate(), rolled->dividendYield(),
                 rolled->stateVariable(), 1.0e-7, 0.0, localVolFallback_);
             lv->enableExtrapolation();
-            option_->setPricingEngine(makeEngineFor(
-                ext::make_shared<GeneralizedBlackScholesProcess>(
-                    rolled->stateVariable(), rolled->dividendYield(), rolled->riskFreeRate(),
-                    rolled->blackVolatility(), Handle<LocalVolTermStructure>(lv)),
-                true));
+            const auto rolledLocalVol = ext::make_shared<GeneralizedBlackScholesProcess>(
+                rolled->stateVariable(), rolled->dividendYield(), rolled->riskFreeRate(),
+                rolled->blackVolatility(), Handle<LocalVolTermStructure>(lv));
+            // a market of its own, on a grid of its own
+            option_->setPricingEngine(makeEngineFor(rolledLocalVol, true, makeMesher(rolledLocalVol)));
         }
         return option_->NPV() * notional_ - todaysValue;
     }
@@ -186,6 +241,9 @@ namespace QuantLib {
         const Date expiry = option_->exercise()->lastDate();
         const Time T_exp  = process_->time(expiry);
         const Real Bd     = process_->riskFreeRate()->discount(T_exp);
+
+        // one grid, today's, for every bump of the market
+        const auto mesher = makeMesher(process_);
 
         // ── Capture base values for all bumped quotes ─────────────────────────
         std::vector<Real> sigmas(atmVolQuotes_.size());
@@ -304,12 +362,61 @@ namespace QuantLib {
             return r;
         };
 
+        if (sticky == StickyType::Strike) {
+            // ── Sticky-strike path ─────────────────────────────────────────────
+            // Black at the option's implied vol, read from the surface as it
+            // stands and held as spot moves.
+            const auto payoff = ext::dynamic_pointer_cast<StrikedTypePayoff>(option_->payoff());
+            QL_REQUIRE(payoff, "non-striked payoff given");
+            auto engineAtTheVolNow = [&]() {
+                const Volatility vol =
+                    process_->blackVolatility()->blackVol(expiry, payoff->strike(), true);
+                const auto frozen = ext::make_shared<GeneralizedBlackScholesProcess>(
+                    Handle<Quote>(spotQuote_), process_->dividendYield(), process_->riskFreeRate(),
+                    Handle<BlackVolTermStructure>(ext::make_shared<BlackConstantVol>(
+                        process_->blackVolatility()->referenceDate(), NullCalendar(), vol,
+                        process_->blackVolatility()->dayCounter())));
+                return ext::make_shared<AnalyticEuropeanEngine>(frozen);
+            };
+            auto valueAtSpot = [&](Real spot) {
+                spotQuote_->setValue(spot);
+                const Real v = option_->NPV() * notional_;
+                spotQuote_->setValue(S);
+                return v;
+            };
+
+            option_->setPricingEngine(engineAtTheVolNow());
+            const Real V0 = option_->NPV() * notional_;
+            const Real Vup = valueAtSpot(S + ds), Vdn = valueAtSpot(S - ds);
+
+            shiftAtms(+dv);
+            option_->setPricingEngine(engineAtTheVolNow());
+            const Real Vvp = option_->NPV() * notional_;
+            const Real Vpp = valueAtSpot(S + ds), Vmp = valueAtSpot(S - ds);
+            shiftAtms(-dv);
+            option_->setPricingEngine(engineAtTheVolNow());
+            const Real Vvm = option_->NPV() * notional_;
+            const Real Vpm = valueAtSpot(S + ds), Vmm = valueAtSpot(S - ds);
+            restoreAtms();
+
+            // at today's spot, the surface as it stands: the sticky rule does
+            // not matter for theta and for the risk reversal and butterfly bumps
+            option_->setPricingEngine(makeAnalyticEngine());
+            const Real theta_raw = rollTheta(false, V0);
+            option_->setPricingEngine(makeAnalyticEngine());
+            auto [rega, sega] = computeRegaSega();
+
+            option_->setPricingEngine(engineAtTheVolNow());
+            return scaleResults(V0, Vup, Vdn, Vvp, Vvm, Vpp, Vpm, Vmp, Vmm,
+                                theta_raw, rega, sega);
+        }
+
         if (!localVol || sticky == StickyType::Delta) {
             // ── BS analytic path (localVol=false) or sticky-delta local vol ──
             // localVol=false: analytical Black-Scholes, using the implied vol
             // interpolated from the FX variance surface at the option's (T, K).
             // localVol=true + sticky-delta: FD engine with Dupire local vol.
-            const auto engine = localVol ? makeEngine(true) : makeAnalyticEngine();
+            const auto engine = localVol ? makeEngine(true, mesher) : makeAnalyticEngine();
             option_->setPricingEngine(engine);
 
             const Real V0  = option_->NPV() * notional_;
@@ -368,9 +475,9 @@ namespace QuantLib {
 
             restoreAtms();
 
-            auto engBase = makeEngineFor(stickyBase, true);
-            auto engVp   = makeEngineFor(stickyVp,   true);
-            auto engVm   = makeEngineFor(stickyVm,   true);
+            auto engBase = makeEngineFor(stickyBase, true, mesher);
+            auto engVp   = makeEngineFor(stickyVp,   true, mesher);
+            auto engVm   = makeEngineFor(stickyVm,   true, mesher);
 
             // Base NPV and spot delta/gamma (frozen local vol, spot bumped).
             option_->setPricingEngine(engBase);
@@ -385,7 +492,7 @@ namespace QuantLib {
             // Theta, from the roll of the market: local vol is not frozen
             // over it, the surface being rolled, so it is measured from
             // today's value with the same, unfrozen, local vol.
-            option_->setPricingEngine(makeEngine(true));
+            option_->setPricingEngine(makeEngine(true, mesher));
             const Real theta_raw = rollTheta(true, option_->NPV() * notional_);
 
             // Vega and volga using vol-bumped frozen surfaces.
@@ -412,7 +519,7 @@ namespace QuantLib {
 
             // Rega/sega: use non-frozen Dupire engine (sticky-delta dynamics
             // for vol-surface input sensitivities, per user requirement).
-            option_->setPricingEngine(makeEngine(true));
+            option_->setPricingEngine(makeEngine(true, mesher));
             auto [rega, sega] = computeRegaSega();
 
             // Leave option with the base frozen engine.

@@ -31,7 +31,7 @@
     4.  Price a 3M EUR call (pillar tenor) under BS-FD and local-vol Dupire FD.
     5.  Full FX Greeks via FxVanillaBumpRisk (sticky-delta convention),
         theta being the roll of the market to the next business day.
-    6.  Sticky-delta vs local-vol (frozen local vol) delta comparison.
+    6.  Sticky-delta, sticky-strike and local-vol (frozen local vol) deltas.
     7.  FixedLocalVolSurface spot-check against Dupire.
 
     PART B — Stochastic Local Volatility (SLV)
@@ -408,13 +408,19 @@ int main(int, char*[]) {
         //  sticky delta; with a put skew the call's delta is the lower.
         // ──────────────────────────────────────────────────────────────────────
         printSeparator();
-        std::cout << "  Sticky-delta vs frozen local vol (Local vol Dupire FD)\n";
+        std::cout << "  Sticky-delta, sticky-strike and frozen local vol deltas\n";
         printSeparator();
 
         FxVanillaGreeks flvGreeks = riskCalc.calculate(/*localVol=*/true,
                                                        FxVanillaBumpRisk::StickyType::LocalVol);
 
+        // sticky strike: implied vols at fixed strikes held, so Black at the
+        // option's vol; it lies between the two
+        FxVanillaGreeks ssGreeks = riskCalc.calculate(/*localVol=*/true,
+                                                      FxVanillaBumpRisk::StickyType::Strike);
+
         printGreeks("Local vol Dupire FD (sticky-delta)", lvGreeks);
+        printGreeks("Sticky-strike (Black at the option's vol)", ssGreeks);
         printGreeks("Local vol Dupire FD (local vol frozen)", flvGreeks);
 
         const int wd = 44, wdv = 12;
