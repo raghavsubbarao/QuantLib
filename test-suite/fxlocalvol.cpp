@@ -25,6 +25,7 @@
 #include "utilities.hpp"
 
 #include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/conventions/fxtenorexpiry.hpp>
 #include <ql/experimental/fxslv/fxlocalvolsurface.hpp>
 #include <ql/experimental/fxslv/fxsettlementforeigncurve.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
@@ -583,14 +584,14 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
         9*Months, 1*Years,  18*Months, 2*Years
     };
 
-    std::vector<Date>                       pillars;
+    const FxSettleConvention settlement(calendar, 2);
+    const std::vector<Date> pillars = fxExpiryDates(today, tenors, settlement);
     std::vector<Handle<Quote>>              atms;
     std::vector<std::vector<Handle<Quote>>> rrs, bfs;
     std::vector<ext::shared_ptr<SimpleQuote>> atmSQs;
     std::vector<std::vector<ext::shared_ptr<SimpleQuote>>> rrSQs, bfSQs;
 
     for (Size i = 0; i < tenors.size(); ++i) {
-        pillars.push_back(calendar.advance(today, tenors[i]));
         auto a   = ext::make_shared<SimpleQuote>(mktVols[i].atm);
         auto r25 = ext::make_shared<SimpleQuote>(mktVols[i].rr25);
         auto r10 = ext::make_shared<SimpleQuote>(mktVols[i].rr10);
@@ -615,28 +616,25 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
         today, spot, pillars, atms, rrs, bfs, deltas,
         eurTs, usdTs, timeTs,
         DeltaVolQuote::Fwd, DeltaVolQuote::AtmFwd, FxRrBfQuotes::SmileStrangle,
-        FxSettleConvention(calendar, 2), FxExpiryCut(10),
+        settlement, FxExpiryCut(10),
         calendar, Following, true);
     volSurface->enableExtrapolation();
     Handle<BlackVolTermStructure> volHandle(volSurface);
 
     // ── Local-vol process: settlement forward and Dupire local vol ──────────
-    const auto process = makeFxLocalVolProcess(spot, eurTs, usdTs, FxSettleConvention(calendar, 2),
-                                               volHandle);
+    const auto process = makeFxLocalVolProcess(spot, eurTs, usdTs, settlement, volHandle);
     const Handle<YieldTermStructure> eurFwdTs = process->dividendYield();
     const Handle<LocalVolTermStructure> localVolHandle = process->localVolatility();
 
     // ── SLV calibration ──────────────────────────────────────────────────────
-    // Use 5 tenors × 3 strikes for Heston calibration.
+    // Use 5 tenors × 3 strikes for Heston calibration, around the settlement
+    // forwards of their FX expiries.
     const std::vector<Period> calibTenors = {
         1*Months, 3*Months, 6*Months, 1*Years, 2*Years
     };
     std::vector<StochVolCalibrator::Pillar> hestonPillars;
     for (const auto& tenor : calibTenors) {
-        const Date   expiry = calendar.advance(today, tenor);
-        const Time   T      = dc.yearFraction(today, expiry);
-        const Real   fwd    = spotSQ->value()
-                              * eurTs->discount(T) / usdTs->discount(T);
+        const Real fwd = volSurface->fwd(fxExpiryDate(today, tenor, settlement));
         for (Real m : { 0.95, 1.00, 1.05 })
             hestonPillars.push_back({ tenor, m * fwd });
     }
@@ -648,7 +646,7 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
     hp.sigma = 0.15;
     hp.rho   = -0.25;
 
-    FxSLVPricingContext ctx(spot, usdTs, eurFwdTs, volHandle, localVolHandle, calendar);
+    FxSLVPricingContext ctx(spot, usdTs, eurFwdTs, volHandle, localVolHandle, settlement);
 
     // under the Feller condition: the SLV calibration fails with a fit
     // violating it strongly, as the unconstrained one does
@@ -665,7 +663,7 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
 
     HestonSLVLeverageCalibrator levCal(fdmP);
 
-    const Date endDate = calendar.advance(today, 2*Years);
+    const Date endDate = pillars.back();  // the 2Y expiry, where local vol ends
     ctx.calibrate(hestonCal, levCal, hestonPillars, endDate);
 
     // Heston fit quality check.
@@ -674,10 +672,8 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
 
     // ── Price a 4M ATM-forward call ──────────────────────────────────────────
     // 4M is strictly between the 3M (surface pillar) and 6M (surface pillar).
-    const Date   expiry4M = calendar.advance(today, 4*Months);
-    const Time   T4M      = dc.yearFraction(today, expiry4M);
-    const Real   fwd4M    = spotSQ->value()
-                            * eurTs->discount(T4M) / usdTs->discount(T4M);
+    const Date expiry4M = fxExpiryDate(today, 4*Months, settlement);
+    const Real fwd4M = volSurface->fwd(expiry4M);
 
     auto payoff4M   = ext::make_shared<PlainVanillaPayoff>(Option::Call, fwd4M);
     auto exercise4M = ext::make_shared<EuropeanExercise>(expiry4M);

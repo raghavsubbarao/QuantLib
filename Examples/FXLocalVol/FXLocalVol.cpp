@@ -50,6 +50,7 @@
 // FX vol surface
 #include <ql/experimental/fxslv/fxlocalvolsurface.hpp>
 #include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
+#include <ql/experimental/fxslv/conventions/fxtenorexpiry.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
 #include <ql/experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp>
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
@@ -159,18 +160,17 @@ int main(int, char*[]) {
         DeltaVolQuote::AtmType    atmType   = DeltaVolQuote::AtmFwd;
         FxRrBfQuotes::FlyType   flyType   = FxRrBfQuotes::SmileStrangle;
 
-        // Eleven pillar tenors: O/N through 2Y, generated from the reference date.
+        // Eleven pillar tenors: O/N through 2Y, at their FX expiries from the
+        // reference date (see fxExpiryDate()).
         const Calendar calendar = WeekendsOnly();
+        const FxSettleConvention settlement(calendar, 2);
         const std::vector<Period> tenors = {1*Days, 1*Weeks, 2*Weeks,
                                             1*Months, 2*Months, 3*Months,
                                             6*Months, 9*Months, 1*Years,
                                             18*Months, 2*Years};
         const std::vector<std::string> tenorLabels = {"O/N","1W","2W","1M","2M","3M","6M","9M","1Y","18M","2Y"};
 
-        std::vector<Date> pillars;
-        pillars.reserve(tenors.size());
-        for (const auto& p : tenors)
-            pillars.push_back(calendar.advance(today, p));
+        const std::vector<Date> pillars = fxExpiryDates(today, tenors, settlement);
 
         // Market quotes — indicative EURUSD levels as of Jan 2024.
         // ATM vol rises from 6.2% at O/N to 10.0% at 2Y.
@@ -227,7 +227,7 @@ int main(int, char*[]) {
         // ──────────────────────────────────────────────────────────────────────
         auto fxVolSurface = ext::make_shared<fxVarianceSurfaceNCP<FxSabrSmileSection>>(today, spot, pillars, atms, rrs, bfs, deltas,
                                                                                        eurTs, usdTs, timeTs, deltaType, atmType, flyType,
-                                                                                       FxSettleConvention(calendar, 2), FxExpiryCut(10),
+                                                                                       settlement, FxExpiryCut(10),
                                                                                        calendar, Following, true);
 
         fxVolSurface->enableExtrapolation();
@@ -241,7 +241,7 @@ int main(int, char*[]) {
         //     there, and report how often it is used, rather than fail.
         // ──────────────────────────────────────────────────────────────────────
         const Volatility localVolFallback = 0.01;
-        auto process = makeFxLocalVolProcess(spot, eurTs, usdTs, FxSettleConvention(WeekendsOnly(), 2),
+        auto process = makeFxLocalVolProcess(spot, eurTs, usdTs, settlement,
                                              Handle<BlackVolTermStructure>(fxVolSurface),
                                              localVolFallback);
         // the foreign curve consistent with the process's forward
@@ -460,9 +460,8 @@ int main(int, char*[]) {
 
         std::vector<StochVolCalibrator::Pillar> hestonPillars;
         for (const auto& tenor : calibTenors) {
-            const Date   expiry = calendar.advance(today, tenor);
-            const Time   Tc     = dc.yearFraction(today, expiry);
-            const Real   fwdC   = spotSQ->value() * eurTs->discount(Tc) / usdTs->discount(Tc);
+            // around the settlement forward of the tenor's FX expiry
+            const Real fwdC = fxVolSurface->fwd(fxExpiryDate(today, tenor, settlement));
             for (Real m : { 0.95, 1.00, 1.05 })
                 hestonPillars.push_back({ tenor, m * fwdC });
         }
@@ -483,7 +482,7 @@ int main(int, char*[]) {
         // and is the factory for pricing engines.
         Handle<BlackVolTermStructure> volHandle(fxVolSurface);
 
-        FxSLVPricingContext slvCtx(spot, usdTs, eurFwdTs, volHandle, localVolHandle, calendar);
+        FxSLVPricingContext slvCtx(spot, usdTs, eurFwdTs, volHandle, localVolHandle, settlement);
 
         // Enforce the Feller condition: the SLV leverage calibration fails, or
         // goes far off, with a Heston fit violating it strongly, as the
@@ -502,7 +501,7 @@ int main(int, char*[]) {
 
         HestonSLVLeverageCalibrator levCal(fdmParams);
 
-        const Date slvEndDate = calendar.advance(today, 2*Years);
+        const Date slvEndDate = pillars.back();  // the 2Y expiry, where local vol ends
         slvCtx.calibrate(hestonCal, levCal, hestonPillars, slvEndDate);
 
         // ── Print Heston calibration results ────────────────────────────────
@@ -573,10 +572,9 @@ int main(int, char*[]) {
                   << "\n"
                   << "  " << std::string(36, '-') << "\n";
         for (const auto& tenor : { 1*Months, 3*Months, 6*Months, 1*Years, 2*Years }) {
-            const Date   expiryL = calendar.advance(today, tenor);
+            const Date   expiryL = fxExpiryDate(today, tenor, settlement);
             const Time   TL      = dc.yearFraction(today, expiryL);
-            const Real   fwdL    = spotSQ->value()
-                                   * eurTs->discount(TL) / usdTs->discount(TL);
+            const Real   fwdL    = fxVolSurface->fwd(expiryL);
             const Real   L       = leverageFct->localVol(TL, fwdL, true);
             std::string  lbl;
             if      (tenor == 1*Months) lbl = "1M";
@@ -608,10 +606,8 @@ int main(int, char*[]) {
         std::cout << "  4M EUR call  —  non-pillar tenor (between 3M and 6M pillars)\n";
         printSeparator();
 
-        const Date   expiry4M = calendar.advance(today, 4*Months);
-        const Time   T4M      = dc.yearFraction(today, expiry4M);
-        const Real   fwd4M    = spotSQ->value()
-                                * eurTs->discount(T4M) / usdTs->discount(T4M);
+        const Date   expiry4M = fxExpiryDate(today, 4*Months, settlement);
+        const Real   fwd4M    = fxVolSurface->fwd(expiry4M);
 
         auto payoff4M   = ext::make_shared<PlainVanillaPayoff>(Option::Call, fwd4M);
         auto exercise4M = ext::make_shared<EuropeanExercise>(expiry4M);
