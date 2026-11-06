@@ -106,11 +106,18 @@ namespace {
         DeltaVolQuote::AtmType   atmType;
         FxRrBfQuotes::FlyType  flyType;
 
+        FxSettleConvention settlement{WeekendsOnly(), 2};
+        Real holidayWeight;
+
         ext::shared_ptr<fxVarianceSurfaceNCP<TestSmileSection>> surface;
+        // the local-vol process in calendar time, from makeFxLocalVolProcess
         ext::shared_ptr<GeneralizedBlackScholesProcess> process;
+        // the local-vol process on the trading-time clock, for pricing
+        ext::shared_ptr<GeneralizedBlackScholesProcess> tradingTimeProcess;
 
         explicit FxMarket(Real holidayWeight = 0.2,
-                          std::vector<ext::shared_ptr<TradingTimeEvent>> events = {}) {
+                          std::vector<ext::shared_ptr<TradingTimeEvent>> events = {})
+        : holidayWeight(holidayWeight) {
             today    = Date(2, January, 2024);
             expiry3M = Date(2, April,   2024);
             expiry6M = Date(2, July,    2024);
@@ -173,9 +180,35 @@ namespace {
                 WeekendsOnly(), Following, true);
             surface->enableExtrapolation();
 
-            process = makeFxLocalVolProcess(spot, eurTs, usdTs,
-                                            FxSettleConvention(WeekendsOnly(), 2),
+            process = makeFxLocalVolProcess(spot, eurTs, usdTs, settlement,
                                             Handle<BlackVolTermStructure>(surface));
+            tradingTimeProcess =
+                FxTradingTimeMarket(spot, eurTs, usdTs, settlement, surface).localVolProcess();
+        }
+
+        // The quotes, for the P&L explain; the pillars are the 3M and 6M expiries
+        FxVolMarket volMarket() const {
+            FxVolMarket market;
+            market.date = today;
+            market.spot = spot->value();
+            market.foreignCurve = eurTs;
+            market.domesticCurve = usdTs;
+            for (Size i = 0; i < pillars.size(); ++i) {
+                market.atms.push_back(atms[i]->value());
+                market.riskReversals.push_back({rrs[i][0]->value(), rrs[i][1]->value()});
+                market.butterflies.push_back({bfs[i][0]->value(), bfs[i][1]->value()});
+            }
+            return market;
+        }
+
+        // The roll of the market to the next business day, for theta
+        ext::shared_ptr<FxVolMarketRoll> roll() const {
+            const FxVanillaPnlExplain<TestSmileSection> explain(
+                {3 * Months, 6 * Months},
+                FxVolConventions{deltas, deltaType, atmType, flyType, settlement, FxExpiryCut(10),
+                                 holidayWeight});
+            return ext::make_shared<FxPnlExplainRoll<TestSmileSection>>(
+                explain, volMarket(), settlement.calendar().advance(today, 1, Days));
         }
 
         // Build a 3M EUR call at ATM forward
@@ -209,10 +242,10 @@ BOOST_AUTO_TEST_CASE(testLocalVolSurfaceNonNegative) {
 
     FxMarket mkt;
 
-    FxLocalVolSurface lv(mkt.process->blackVolatility(),
-                         mkt.process->riskFreeRate(),
-                         mkt.process->dividendYield(),
-                         mkt.process->stateVariable());
+    FxLocalVolSurface lv(mkt.tradingTimeProcess->blackVolatility(),
+                         mkt.tradingTimeProcess->riskFreeRate(),
+                         mkt.tradingTimeProcess->dividendYield(),
+                         mkt.tradingTimeProcess->stateVariable());
     lv.enableExtrapolation();
 
     std::vector<Time> times  = { 1.0/12, 3.0/12, 6.0/12 };
@@ -239,7 +272,7 @@ BOOST_AUTO_TEST_CASE(testFixedLocalVolConsistency) {
     FxMarket mkt;
     auto option = mkt.makeAtmCall();
 
-    FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs);
+    FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs);
 
     std::vector<Time> times   = { 1.0/12, 3.0/12, 6.0/12 };
     std::vector<Real> strikes = { 0.95, 1.00, 1.05, 1.10 };
@@ -247,10 +280,10 @@ BOOST_AUTO_TEST_CASE(testFixedLocalVolConsistency) {
     auto fixedLV = riskCalc.buildFixedLocalVolSurface(times, strikes);
     fixedLV->enableExtrapolation();
 
-    FxLocalVolSurface lvDupire(mkt.process->blackVolatility(),
-                               mkt.process->riskFreeRate(),
-                               mkt.process->dividendYield(),
-                               mkt.process->stateVariable());
+    FxLocalVolSurface lvDupire(mkt.tradingTimeProcess->blackVolatility(),
+                               mkt.tradingTimeProcess->riskFreeRate(),
+                               mkt.tradingTimeProcess->dividendYield(),
+                               mkt.tradingTimeProcess->stateVariable());
     lvDupire.enableExtrapolation();
 
     const Real tol = 1e-10;
@@ -281,7 +314,7 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
     // ── Call Greeks ──────────────────────────────────────────────────────────
     {
         auto option = mkt.makeAtmCall();
-        FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+        FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                    mkt.rrPillarSQs, mkt.rrPillarTimes,
                                    mkt.bfPillarSQs, mkt.bfPillarTimes,
                                    /*notional=*/1.0e6,
@@ -290,6 +323,7 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
                                    /*rrBump=*/0.001,
                                    /*bfBump=*/0.001,
                                    /*tGrid=*/50, /*xGrid=*/50);
+        riskCalc.setRoll(mkt.roll());  // theta is that of the roll to the next day
 
         FxVanillaGreeks g = riskCalc.calculate(/*localVol=*/true);
 
@@ -310,7 +344,7 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
     // ── Put Greeks ───────────────────────────────────────────────────────────
     {
         auto option = mkt.makeAtmPut();
-        FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+        FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                    mkt.rrPillarSQs, mkt.rrPillarTimes,
                                    mkt.bfPillarSQs, mkt.bfPillarTimes,
                                    /*notional=*/1.0e6,
@@ -319,6 +353,7 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
                                    /*rrBump=*/0.001,
                                    /*bfBump=*/0.001,
                                    /*tGrid=*/50, /*xGrid=*/50);
+        riskCalc.setRoll(mkt.roll());  // theta is that of the roll to the next day
 
         FxVanillaGreeks g = riskCalc.calculate(/*localVol=*/true);
 
@@ -331,6 +366,40 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
         BOOST_CHECK_MESSAGE(g.vega      > 0.0, "put vega must be positive: "   << g.vega);
         BOOST_CHECK_MESSAGE(g.volga     > 0.0, "put volga must be positive: "  << g.volga);
     }
+}
+
+BOOST_AUTO_TEST_CASE(testThetaIsTheRollOfTheMarket) {
+    BOOST_TEST_MESSAGE("Testing that FX vanilla theta is the P&L of the roll of the market...");
+
+    FxMarket mkt;
+    auto option = mkt.makeAtmCall();
+    const Real notional = 1.0e6;
+    FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs, {}, {}, {},
+                               {}, notional);
+    // without a roll, there is no theta: holding today's surface fixed while
+    // the date moves is not defined
+    BOOST_CHECK(riskCalc.calculate(/*localVol=*/false).theta == Null<Real>());
+
+    // with one, the Black theta is the P&L the explain reports from today's
+    // market to the rolled one, i.e. with no market move
+    const FxVanillaPnlExplain<TestSmileSection> explain(
+        {3 * Months, 6 * Months},
+        FxVolConventions{mkt.deltas, mkt.deltaType, mkt.atmType, mkt.flyType, mkt.settlement,
+                         FxExpiryCut(10), mkt.holidayWeight});
+    const Date next = mkt.settlement.calendar().advance(mkt.today, 1, Days);
+    const auto roll = ext::make_shared<FxPnlExplainRoll<TestSmileSection>>(explain, mkt.volMarket(), next);
+    riskCalc.setRoll(roll);
+    const Real theta = riskCalc.calculate(/*localVol=*/false).theta;
+    const auto strike = ext::dynamic_pointer_cast<StrikedTypePayoff>(option->payoff())->strike();
+    const FxPnlExplainResult r = explain.explain(Option::Call, strike, mkt.expiry3M, notional,
+                                                 mkt.volMarket(), roll->rolled());
+    BOOST_CHECK_LT(theta, 0.0);
+    BOOST_CHECK_CLOSE(theta, r.total, 1.0e-4);
+    // ...which the explain splits into the theta at today's vol and the vol roll
+    BOOST_CHECK_CLOSE(theta, r.theta + r.volRollAtm + r.volRollRiskReversal + r.volRollButterfly +
+                                 r.volRollOther, 1.0);
+    // the evaluation date is today's again
+    BOOST_CHECK_EQUAL(Settings::instance().evaluationDate(), mkt.today);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -352,11 +421,11 @@ BOOST_AUTO_TEST_CASE(testPutCallParity) {
     auto callOption = mkt.makeAtmCall();
     auto putOption  = mkt.makeAtmPut();
 
-    FxVanillaBumpRisk callCalc(callOption, mkt.process, mkt.spotSQ, mkt.atmSQs,
+    FxVanillaBumpRisk callCalc(callOption, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                 mkt.rrPillarSQs, mkt.rrPillarTimes,
                                 mkt.bfPillarSQs, mkt.bfPillarTimes,
                                 notional, 0.001, 0.001, 0.001, 0.001, 50, 50);
-    FxVanillaBumpRisk putCalc(putOption, mkt.process, mkt.spotSQ, mkt.atmSQs,
+    FxVanillaBumpRisk putCalc(putOption, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                mkt.rrPillarSQs, mkt.rrPillarTimes,
                                mkt.bfPillarSQs, mkt.bfPillarTimes,
                                notional, 0.001, 0.001, 0.001, 0.001, 50, 50);
@@ -401,7 +470,7 @@ BOOST_AUTO_TEST_CASE(testDeltaGammaConsistency) {
 
     const Real notional = 1.0;  // unit notional for this test
 
-    FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+    FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                 mkt.rrPillarSQs, mkt.rrPillarTimes,
                                 mkt.bfPillarSQs, mkt.bfPillarTimes,
                                 notional, 0.001, 0.001, 0.001, 0.001, 50, 50);
@@ -441,7 +510,7 @@ BOOST_AUTO_TEST_CASE(testBsVsLocalVolPricing) {
     auto option = mkt.makeAtmCall();
     const Real notional = 1.0e6;
 
-    FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+    FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                 mkt.rrPillarSQs, mkt.rrPillarTimes,
                                 mkt.bfPillarSQs, mkt.bfPillarTimes,
                                 notional, 0.001, 0.001, 0.001, 0.001, 100, 100);
@@ -470,7 +539,7 @@ BOOST_AUTO_TEST_CASE(testStickyDeltaVsStickyStrike) {
     auto option = mkt.makeAtmCall();
     const Real notional = 1.0e6;
 
-    FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+    FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                 mkt.rrPillarSQs, mkt.rrPillarTimes,
                                 mkt.bfPillarSQs, mkt.bfPillarTimes,
                                 notional,
@@ -1187,7 +1256,7 @@ BOOST_AUTO_TEST_CASE(testFxVanillaBumpRiskLocalVolDefined) {
     BOOST_TEST_MESSAGE("Testing that the bump-risk local vol needs no substitute values...");
 
     FxMarket m;
-    FxVanillaBumpRisk riskCalc(m.makeAtmCall(), m.process, m.spotSQ, m.atmSQs);
+    FxVanillaBumpRisk riskCalc(m.makeAtmCall(), m.tradingTimeProcess, m.spotSQ, m.atmSQs);
     std::vector<Time> times;
     std::vector<Real> strikes;
     for (Size i = 1; i <= 20; ++i)

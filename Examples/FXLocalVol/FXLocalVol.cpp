@@ -26,9 +26,11 @@
     1.  Market data: EURUSD pillar quotes (ATM, 25d/10d RR, 25d/10d BF)
         for eleven tenors: O/N, 1W, 2W, 1M, 2M, 3M, 6M, 9M, 1Y, 18M, 2Y.
     2.  Calibrate fxVarianceSurfaceNCP<quadraticSmileSection>.
-    3.  Wrap in a GeneralizedBlackScholesProcess.
+    3.  Wrap in a GeneralizedBlackScholesProcess on the trading-time clock
+        of the surface (FxTradingTimeMarket).
     4.  Price a 3M EUR call (pillar tenor) under BS-FD and local-vol Dupire FD.
-    5.  Full FX Greeks via FxVanillaBumpRisk (sticky-delta convention).
+    5.  Full FX Greeks via FxVanillaBumpRisk (sticky-delta convention),
+        theta being the roll of the market to the next business day.
     6.  Sticky-delta vs sticky-strike delta comparison.
     7.  FixedLocalVolSurface spot-check against Dupire.
 
@@ -51,6 +53,8 @@
 #include <ql/experimental/fxslv/fxlocalvolsurface.hpp>
 #include <ql/experimental/fxslv/conventions/fxsettlementconvention.hpp>
 #include <ql/experimental/fxslv/conventions/fxtenorexpiry.hpp>
+#include <ql/experimental/fxslv/fxpnlexplain.hpp>
+#include <ql/experimental/fxslv/fxtradingtimemarket.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
 #include <ql/experimental/fxslv/smilesections/fxsmilesectionbystrike.hpp>
 #include <ql/experimental/fxslv/tradingtimetermstructure.hpp>
@@ -114,7 +118,7 @@ static void printGreeks(const std::string& label, const FxVanillaGreeks& g) {
     row("Fwd delta   (USD per 1% fwd)",           g.fwdDelta,  2);
     row("Spot gamma  (USD per 1% spot move)",     g.spotGamma, 2);
     row("Fwd gamma   (USD per 1% fwd move)",      g.fwdGamma,  2);
-    row("Theta       (USD/day)",                  g.theta,     2);
+    row("Theta       (USD, roll to next day)",    g.theta,     2);
     row("Vega        (USD per 1% vol)",           g.vega,      2);
     row("Rega        (USD per 0.1% 1M RR)",       g.rega,      2);
     row("Sega        (USD per 0.01% 1M BF)",      g.sega,      2);
@@ -235,17 +239,43 @@ int main(int, char*[]) {
         // ──────────────────────────────────────────────────────────────────────
         //  3. Build the local-vol process.  It takes its forward from the
         //     spot date to the delivery date of each expiry, as the surface
-        //     does, and its local vol by Dupire from the surface.  The
+        //     does, and its local vol by Dupire from the surface, on the
+        //     surface's trading-time clock: there local vol is smooth over
+        //     weekends and events, which in calendar time it is not.  The
         //     short-dated wings of this surface have calendar arbitrage, so
         //     local vol is not defined everywhere: opt in to a fallback
         //     there, and report how often it is used, rather than fail.
+        //
+        //     The SLV of part B still runs in calendar time, on the same
+        //     process in calendar time.
         // ──────────────────────────────────────────────────────────────────────
         const Volatility localVolFallback = 0.01;
-        auto process = makeFxLocalVolProcess(spot, eurTs, usdTs, settlement,
-                                             Handle<BlackVolTermStructure>(fxVolSurface),
-                                             localVolFallback);
+        const FxTradingTimeMarket tradingTimeMarket(spot, eurTs, usdTs, settlement, fxVolSurface,
+                                                    localVolFallback);
+        auto process = tradingTimeMarket.localVolProcess();
+        auto calendarProcess = makeFxLocalVolProcess(spot, eurTs, usdTs, settlement,
+                                                     Handle<BlackVolTermStructure>(fxVolSurface),
+                                                     localVolFallback);
         // the foreign curve consistent with the process's forward
-        const Handle<YieldTermStructure> eurFwdTs = process->dividendYield();
+        const Handle<YieldTermStructure> eurFwdTs = calendarProcess->dividendYield();
+
+        // The same market as the P&L explain takes it, for the roll of the
+        // market to the next business day, which gives theta
+        FxVolMarket volMarket;
+        volMarket.date = today;
+        volMarket.spot = spotSQ->value();
+        volMarket.foreignCurve = eurTs;
+        volMarket.domesticCurve = usdTs;
+        for (const auto& v : mkt) {
+            volMarket.atms.push_back(v.atm);
+            volMarket.riskReversals.push_back({v.rr25, v.rr10});
+            volMarket.butterflies.push_back({v.bf25, v.bf10});
+        }
+        const FxVanillaPnlExplain<FxSabrSmileSection> explain(
+            tenors, FxVolConventions{deltas, deltaType, atmType, flyType, settlement,
+                                     FxExpiryCut(10), weekendWeight});
+        const auto roll = ext::make_shared<FxPnlExplainRoll<FxSabrSmileSection>>(
+            explain, volMarket, calendar.advance(today, 1, Days), localVolFallback);
 
         // ──────────────────────────────────────────────────────────────────────
         //  4. Define the option: 3M EUR call at ATM forward
@@ -323,6 +353,7 @@ int main(int, char*[]) {
                                    );
         // the same fallback as the process's local vol, see 3.
         riskCalc.setLocalVolFallback(localVolFallback);
+        riskCalc.setRoll(roll);
 
         FxVanillaGreeks lvGreeks = riskCalc.calculate(/*localVol=*/true);
         std::cout << "  Local vol fallback (" << localVolFallback * 100.0 << "%) used at "
@@ -436,11 +467,11 @@ int main(int, char*[]) {
         // ══════════════════════════════════════════════════════════════════════
 
         // ──────────────────────────────────────────────────────────────────────
-        //  7. The Dupire local vol surface: the process's, built in 3.  In
-        //     trading time it is lower over weekends, zero where no variance
-        //     accrues, and uses the fallback where it is not defined.
+        //  7. The Dupire local vol surface in calendar time, built in 3, for
+        //     the SLV calibration.  It is lower over weekends, and uses the
+        //     fallback where it is not defined.
         // ──────────────────────────────────────────────────────────────────────
-        const Handle<LocalVolTermStructure> localVolHandle = process->localVolatility();
+        const Handle<LocalVolTermStructure> localVolHandle = calendarProcess->localVolatility();
         const auto localVolSurface =
             ext::dynamic_pointer_cast<FxLocalVolSurface>(localVolHandle.currentLink());
 
@@ -661,13 +692,18 @@ int main(int, char*[]) {
         const Real slvVega = (slvVolUp - slvVolDn) / (2.0 * dVol) * 0.01;
 
         // ── Local vol theta (proxy) ───────────────────────────────────────────
-        // Advance evaluation date by one calendar day using the LV engine;
-        // re-calibrating the full SLV model just for theta is impractical
-        // in an interactive example.
-        Settings::instance().evaluationDate() = today + 1;
-        const Real lvNpvTomorrow = call4M_lv->NPV() * notional;
+        // The roll of the market to the next business day, priced with local
+        // vol; re-calibrating the full SLV model just for theta is
+        // impractical in an interactive example.
+        Settings::instance().evaluationDate() = roll->nextDate();
+        auto call4M_rolled = ext::make_shared<VanillaOption>(payoff4M, exercise4M);
+        call4M_rolled->setPricingEngine(MakeFdBlackScholesVanillaEngine(roll->rolledProcess())
+                                            .withTGrid(100)
+                                            .withXGrid(100)
+                                            .withLocalVol(true));
+        const Real lvNpvRolled = call4M_rolled->NPV() * notional;
         Settings::instance().evaluationDate() = today;
-        const Real lvTheta4M = lvNpvTomorrow - lvNpv4M;  // USD per calendar day
+        const Real lvTheta4M = lvNpvRolled - lvNpv4M;  // USD over the roll
 
         // ── Print results ─────────────────────────────────────────────────────
         const int wl = 44, wv = 14;
@@ -691,15 +727,15 @@ int main(int, char*[]) {
         row("Spot delta  (USD per 1% spot move)", slvDelta);
         row("Spot gamma  (USD per (1% spot)²)",   slvGamma);
         row("Vega        (USD per 1% vol move)",  slvVega);
-        row("Theta       (USD/day, LV proxy)",    lvTheta4M);
+        row("Theta       (USD, roll, LV proxy)",  lvTheta4M);
         std::cout << "  " << std::string(wl + wv, '-') << "\n";
 
         std::cout << "\n  Note: Theta shown is the local-vol proxy.  Computing\n"
                   << "  SLV theta exactly requires re-calibrating the leverage\n"
                   << "  function at the shifted date — typically done overnight.\n\n";
 
-        std::cout << "  Local vol fallback used at " << localVolSurface->fallbacks()
-                  << " points in the SLV and local-vol pricing above.\n\n";
+        std::cout << "  Calendar-time local vol fallback used at " << localVolSurface->fallbacks()
+                  << " points in the SLV calibration and pricing above.\n\n";
 
         printSeparator();
         std::cout << "  Done.\n";

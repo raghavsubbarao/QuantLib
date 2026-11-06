@@ -80,6 +80,7 @@ namespace QuantLib {
     }
 
     void FxVanillaBumpRisk::buildLocalVol(Volatility fallbackVol) {
+        localVolFallback_ = fallbackVol;
         localVol_ = ext::make_shared<FxLocalVolSurface>(
             process_->blackVolatility(), process_->riskFreeRate(), process_->dividendYield(),
             process_->stateVariable(), 1.0e-7, 0.0, fallbackVol);
@@ -110,6 +111,33 @@ namespace QuantLib {
 
     ext::shared_ptr<PricingEngine> FxVanillaBumpRisk::makeAnalyticEngine() const {
         return ext::make_shared<AnalyticEuropeanEngine>(process_);
+    }
+
+    Real FxVanillaBumpRisk::rollTheta(bool localVol, Real todaysValue) const {
+        if (!roll_)
+            return Null<Real>();
+        // the rolled market is built, and priced, on its own date
+        struct EvaluationDateRestorer {
+            Date date = Settings::instance().evaluationDate();
+            ~EvaluationDateRestorer() { Settings::instance().evaluationDate() = date; }
+        } restorer;
+        Settings::instance().evaluationDate() = roll_->nextDate();
+        const auto rolled = roll_->rolledProcess();
+        QL_REQUIRE(rolled, "null rolled process");
+        if (!localVol) {
+            option_->setPricingEngine(ext::make_shared<AnalyticEuropeanEngine>(rolled));
+        } else {
+            auto lv = ext::make_shared<FxLocalVolSurface>(
+                rolled->blackVolatility(), rolled->riskFreeRate(), rolled->dividendYield(),
+                rolled->stateVariable(), 1.0e-7, 0.0, localVolFallback_);
+            lv->enableExtrapolation();
+            option_->setPricingEngine(makeEngineFor(
+                ext::make_shared<GeneralizedBlackScholesProcess>(
+                    rolled->stateVariable(), rolled->dividendYield(), rolled->riskFreeRate(),
+                    rolled->blackVolatility(), Handle<LocalVolTermStructure>(lv)),
+                true));
+        }
+        return option_->NPV() * notional_ - todaysValue;
     }
 
     std::pair<std::vector<Time>, std::vector<Real>> FxVanillaBumpRisk::buildLvGrid() const {
@@ -282,10 +310,8 @@ namespace QuantLib {
             // localVol=false: analytical Black-Scholes, using the implied vol
             // interpolated from the FX variance surface at the option's (T, K).
             // localVol=true + sticky-delta: FD engine with Dupire local vol.
-            if (!localVol)
-                option_->setPricingEngine(makeAnalyticEngine());
-            else
-                option_->setPricingEngine(makeEngine(true));
+            const auto engine = localVol ? makeEngine(true) : makeAnalyticEngine();
+            option_->setPricingEngine(engine);
 
             const Real V0  = option_->NPV() * notional_;
 
@@ -301,11 +327,8 @@ namespace QuantLib {
             const Real Vvm = option_->NPV() * notional_;
             restoreAtms();
 
-            const Date today = Settings::instance().evaluationDate();
-            Settings::instance().evaluationDate() = today + 1;
-            const Real Vnext = option_->NPV() * notional_;
-            Settings::instance().evaluationDate() = today;
-            const Real theta_raw = Vnext - V0;
+            const Real theta_raw = rollTheta(localVol, V0);
+            option_->setPricingEngine(engine);
 
             spotQuote_->setValue(S + ds);
             shiftAtms(+dv);
@@ -360,12 +383,11 @@ namespace QuantLib {
             const Real Vdn = option_->NPV() * notional_;
             spotQuote_->setValue(S);
 
-            // Theta (frozen local vol, evaluation date shifted).
-            const Date today = Settings::instance().evaluationDate();
-            Settings::instance().evaluationDate() = today + 1;
-            const Real Vnext = option_->NPV() * notional_;
-            Settings::instance().evaluationDate() = today;
-            const Real theta_raw = Vnext - V0;
+            // Theta, from the roll of the market: local vol is not frozen
+            // over it, the surface being rolled, so it is measured from
+            // today's value with the same, unfrozen, local vol.
+            option_->setPricingEngine(makeEngine(true));
+            const Real theta_raw = rollTheta(true, option_->NPV() * notional_);
 
             // Vega and volga using vol-bumped frozen surfaces.
             option_->setPricingEngine(engVp);

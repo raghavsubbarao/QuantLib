@@ -45,7 +45,8 @@ namespace QuantLib {
         \li \c fwdDelta   — forward-USD per 1% forward move (= spotDelta / B_d)
         \li \c spotGamma  — USD (spot-delta change per 1% spot move)
         \li \c fwdGamma   — forward-USD (fwd-delta change per 1% fwd move)
-        \li \c theta      — USD per calendar day
+        \li \c theta      — USD over the roll of the market to its next date
+                              (see FxVanillaBumpRisk::setRoll()); null without one
         \li \c vega       — USD per 1% (100 bp) parallel ATM vol move
         \li \c rega       — USD per 0.1% 1M-equivalent RR move
         \li \c sega       — USD per 0.01% 1M-equivalent BF move
@@ -72,6 +73,23 @@ namespace QuantLib {
         Real vanna;
         Real navva;
         Real volga;
+    };
+
+    //! A market rolled to a later date, for the theta of the roll
+    /*! The rolled market is that of the next date, with the vols held as
+        the roll prescribes, e.g. eventless vols held per tenor (see
+        FxVanillaPnlExplain::rolled() and FxPnlExplainRoll).
+    */
+    class FxVolMarketRoll {
+      public:
+        virtual ~FxVolMarketRoll() = default;
+        //! The date the market rolls to.
+        virtual Date nextDate() const = 0;
+        //! The process on the rolled market
+        /*! It is called with the evaluation date set to nextDate(), on
+            which its curves and surface are built.
+        */
+        virtual ext::shared_ptr<GeneralizedBlackScholesProcess> rolledProcess() const = 0;
     };
 
     //! FX vanilla option risk calculator via bump-and-reval.
@@ -102,6 +120,11 @@ namespace QuantLib {
           so the 1M pillar moves by \c rrBump (default 10 bp) and longer tenors
           move by a smaller amount proportional to \f$ 1/\sqrt{T} \f$.
         - Sega bumps each BF pillar similarly with \c bfBump (default 10 bp at 1M).
+        - Theta is the P&L of the roll of the market to its next date, the
+          option repriced on the rolled market; there is none without a roll
+          (see setRoll()).  Holding today's surface fixed while the date moves
+          is not defined: the surface is anchored to today's date, and on the
+          trading-time clock its curves must agree with it.
 
         \ingroup vanillaengines
     */
@@ -178,6 +201,14 @@ namespace QuantLib {
         //! Number of times the local vol fallback was used.
         Size localVolFallbacks() const { return localVol_->fallbacks(); }
 
+        //! The roll of the market giving theta
+        /*! Its rolled process should be built as the one given here is, e.g.
+            both on the trading-time clock (FxTradingTimeMarket); with local
+            vol, theta takes the rolled process's Dupire local vol, with the
+            same fallback.
+        */
+        void setRoll(ext::shared_ptr<const FxVolMarketRoll> roll) { roll_ = std::move(roll); }
+
         //! Compute all Greeks via bump-and-reval.
         FxVanillaGreeks calculate(bool localVol = true,
                                   StickyType sticky = StickyType::Delta) const;
@@ -208,6 +239,9 @@ namespace QuantLib {
         makeStickyProcess(const std::vector<Time>& times,
                           const std::vector<Real>& strikes) const;
 
+        // P&L of the roll of the market, from today's value; null without a roll
+        Real rollTheta(bool localVol, Real todaysValue) const;
+
         ext::shared_ptr<VanillaOption> option_;
         ext::shared_ptr<GeneralizedBlackScholesProcess> process_;
         ext::shared_ptr<SimpleQuote> spotQuote_;
@@ -224,6 +258,8 @@ namespace QuantLib {
         // the local vol, and the process with it given explicitly
         ext::shared_ptr<FxLocalVolSurface> localVol_;
         ext::shared_ptr<GeneralizedBlackScholesProcess> localVolProcess_;
+        Volatility localVolFallback_ = Null<Volatility>();
+        ext::shared_ptr<const FxVolMarketRoll> roll_;
     };
 
 }
