@@ -187,8 +187,9 @@ namespace QuantLib {
         //! The variance surface of a market quoted with smile strangles.
         ext::shared_ptr<Surface<Section>> surface(const FxVolMarket& market) const;
         //! The market on the trading-time clock of its surface, for local vol and SLV.
-        FxTradingTimeMarket tradingTimeMarket(const FxVolMarket& market,
-                                              Volatility localVolFallback = Null<Volatility>()) const;
+        FxTradingTimeMarket
+        tradingTimeMarket(const FxVolMarket& market,
+                          Volatility localVolFallback = Null<Volatility>()) const;
         //@}
 
       private:

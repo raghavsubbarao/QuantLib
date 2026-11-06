@@ -387,7 +387,8 @@ BOOST_AUTO_TEST_CASE(testThetaIsTheRollOfTheMarket) {
         FxVolConventions{mkt.deltas, mkt.deltaType, mkt.atmType, mkt.flyType, mkt.settlement,
                          FxExpiryCut(10), mkt.holidayWeight});
     const Date next = mkt.settlement.calendar().advance(mkt.today, 1, Days);
-    const auto roll = ext::make_shared<FxPnlExplainRoll<TestSmileSection>>(explain, mkt.volMarket(), next);
+    const auto roll =
+        ext::make_shared<FxPnlExplainRoll<TestSmileSection>>(explain, mkt.volMarket(), next);
     riskCalc.setRoll(roll);
     const Real theta = riskCalc.calculate(/*localVol=*/false).theta;
     const auto strike = ext::dynamic_pointer_cast<StrikedTypePayoff>(option->payoff())->strike();
