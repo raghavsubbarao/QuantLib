@@ -250,12 +250,9 @@ int main(int, char*[]) {
         //     process in calendar time.
         // ──────────────────────────────────────────────────────────────────────
         const Volatility localVolFallback = 0.01;
-        const FxTradingTimeMarket tradingTimeMarket(spot, eurTs, usdTs, settlement, fxVolSurface,
-                                                    localVolFallback);
-        auto process = tradingTimeMarket.localVolProcess();
-        auto calendarProcess = makeFxLocalVolProcess(spot, eurTs, usdTs, settlement,
-                                                     Handle<BlackVolTermStructure>(fxVolSurface),
-                                                     localVolFallback);
+        auto process = makeFxLocalVolProcess(spot, eurTs, usdTs, settlement,
+                                             Handle<BlackVolTermStructure>(fxVolSurface),
+                                             localVolFallback);
         // the foreign curve consistent with the process's forward
         const Handle<YieldTermStructure> eurFwdTs = calendarProcess->dividendYield();
 

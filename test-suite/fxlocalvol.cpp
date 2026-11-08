@@ -875,7 +875,7 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
     Handle<BlackVolTermStructure> volHandle(volSurface);
 
     // ── Local-vol process: settlement forward and Dupire local vol ──────────
-    const auto process = makeFxLocalVolProcess(spot, foreignTs, domesticTs, settlement, volHandle);
+    const auto process = makeFxLocalVolProcess(spot, eurTs, usdTs, settlement, volHandle);
     const Handle<YieldTermStructure> eurFwdTs = process->dividendYield();
     const Handle<LocalVolTermStructure> localVolHandle = process->localVolatility();
 
@@ -899,7 +899,7 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
     hp.sigma = 0.15;
     hp.rho   = -0.25;
 
-    FxSLVPricingContext ctx(spot, domesticTs, eurFwdTs, volHandle, localVolHandle, settlement);
+    FxSLVPricingContext ctx(spot, usdTs, eurFwdTs, volHandle, localVolHandle, settlement);
 
     // under the Feller condition: the SLV calibration fails with a fit
     // violating it strongly, as the unconstrained one does
