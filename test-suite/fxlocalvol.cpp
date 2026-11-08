@@ -45,6 +45,7 @@
 #include <ql/instruments/vanillaoption.hpp>
 #include <ql/exercise.hpp>
 #include <ql/instruments/payoffs.hpp>
+#include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/termstructures/yield/flatforward.hpp>
 #include <ql/quotes/deltavolquote.hpp>
@@ -79,14 +80,38 @@ namespace {
     // that Dupire and SLV depend on, so these tests use SABR (SVI also works).
     using TestSmileSection = FxSabrSmileSection;
 
+    // The quotes of a test market: 3M and 6M pillars, 25 and 10 delta
+    struct FxMarketQuotes {
+        struct Vol { Real atm, rr25, bf25, rr10, bf10; };
+        Real spot, foreignRate, domesticRate;
+        DeltaVolQuote::DeltaType deltaType;
+        DeltaVolQuote::AtmType atmType;
+        std::vector<Vol> vols;
+
+        // EUR/USD: forward deltas, no premium adjustment
+        static FxMarketQuotes eurusd() {
+            return {1.0850, 0.04, 0.0525, DeltaVolQuote::Fwd, DeltaVolQuote::AtmFwd,
+                    {{0.0850, -0.014, 0.0045, -0.0280, 0.0095},     // 3M
+                     {0.0900, -0.016, 0.0050, -0.0310, 0.0105}}};   // 6M
+        }
+        // USD/JPY: premium in USD, the foreign currency, so premium-adjusted
+        // spot deltas and a delta-neutral ATM, as quoted up to 1Y
+        static FxMarketQuotes usdjpy() {
+            return {150.0, 0.0525, 0.001, DeltaVolQuote::PaSpot,
+                    DeltaVolQuote::AtmDeltaNeutral,
+                    {{0.1000, -0.015, 0.0035, -0.0280, 0.0120},     // 3M
+                     {0.1050, -0.018, 0.0040, -0.0330, 0.0135}}};   // 6M
+        }
+    };
+
     struct FxMarket {
         Date today;
         Date expiry3M;
         Date expiry6M;
 
         DayCounter dc;
-        Handle<YieldTermStructure> eurTs; // foreign
-        Handle<YieldTermStructure> usdTs; // domestic
+        Handle<YieldTermStructure> foreignTs; // foreign
+        Handle<YieldTermStructure> domesticTs; // domestic
         Handle<TradingTimeTermStructure> timeTs;
 
         ext::shared_ptr<SimpleQuote> spotSQ;
@@ -106,40 +131,49 @@ namespace {
         DeltaVolQuote::AtmType   atmType;
         FxRrBfQuotes::FlyType  flyType;
 
-        ext::shared_ptr<fxVarianceSurfaceNCP<TestSmileSection>> surface;
-        ext::shared_ptr<GeneralizedBlackScholesProcess> process;
+        FxSettleConvention settlement{WeekendsOnly(), 2};
+        Real holidayWeight;
 
-        explicit FxMarket(Real holidayWeight = 0.0,
-                          std::vector<ext::shared_ptr<TradingTimeEvent>> events = {}) {
+        ext::shared_ptr<fxVarianceSurfaceNCP<TestSmileSection>> surface;
+        // the local-vol process in calendar time, from makeFxLocalVolProcess
+        ext::shared_ptr<GeneralizedBlackScholesProcess> process;
+        // the local-vol process on the trading-time clock, for pricing
+        ext::shared_ptr<GeneralizedBlackScholesProcess> tradingTimeProcess;
+
+        explicit FxMarket(Real holidayWeight = 0.2,
+                          std::vector<ext::shared_ptr<TradingTimeEvent>> events = {})
+        : FxMarket(FxMarketQuotes::eurusd(), holidayWeight, std::move(events)) {}
+
+        explicit FxMarket(const FxMarketQuotes& quotes,
+                          Real holidayWeight = 0.2,
+                          std::vector<ext::shared_ptr<TradingTimeEvent>> events = {})
+        : holidayWeight(holidayWeight) {
             today    = Date(2, January, 2024);
             expiry3M = Date(2, April,   2024);
             expiry6M = Date(2, July,    2024);
             Settings::instance().evaluationDate() = today;
             dc = Actual365Fixed();
 
-            eurTs = Handle<YieldTermStructure>(
-                ext::make_shared<FlatForward>(0, NullCalendar(), 0.04, dc));
-            usdTs = Handle<YieldTermStructure>(
-                ext::make_shared<FlatForward>(0, NullCalendar(), 0.0525, dc));
+            foreignTs = Handle<YieldTermStructure>(
+                ext::make_shared<FlatForward>(0, NullCalendar(), quotes.foreignRate, dc));
+            domesticTs = Handle<YieldTermStructure>(
+                ext::make_shared<FlatForward>(0, NullCalendar(), quotes.domesticRate, dc));
             timeTs = Handle<TradingTimeTermStructure>(ext::make_shared<TradingTimeTermStructure>(
                 today, WeekendsOnly(), holidayWeight, std::move(events)));
 
-            spotSQ = ext::make_shared<SimpleQuote>(1.0850);
+            spotSQ = ext::make_shared<SimpleQuote>(quotes.spot);
             spot   = Handle<Quote>(spotSQ);
 
-            deltaType = DeltaVolQuote::Fwd;
-            atmType   = DeltaVolQuote::AtmFwd;
+            deltaType = quotes.deltaType;
+            atmType   = quotes.atmType;
             flyType   = FxRrBfQuotes::SmileStrangle;
             deltas    = { 0.25, 0.10 };
 
             // Two pillars: 3M and 6M
             pillars = { expiry3M, expiry6M };
 
-            struct Vol { Real atm, rr25, bf25, rr10, bf10; };
-            std::vector<Vol> mkt = {
-                { 0.0850, -0.014, 0.0045, -0.0280, 0.0095 }, // 3M
-                { 0.0900, -0.016, 0.0050, -0.0310, 0.0105 }, // 6M
-            };
+            const std::vector<FxMarketQuotes::Vol>& mkt = quotes.vols;
+            QL_REQUIRE(mkt.size() == pillars.size(), "one set of vols per pillar needed");
 
             rrPillarSQs.resize(pillars.size());
             bfPillarSQs.resize(pillars.size());
@@ -167,21 +201,47 @@ namespace {
 
             surface = ext::make_shared<fxVarianceSurfaceNCP<TestSmileSection>>(
                 today, spot, pillars, atms, rrs, bfs, deltas,
-                eurTs, usdTs, timeTs,
+                foreignTs, domesticTs, timeTs,
                 deltaType, atmType, flyType,
                 FxSettleConvention(WeekendsOnly(), 2), FxExpiryCut(10),
                 WeekendsOnly(), Following, true);
             surface->enableExtrapolation();
 
-            process = makeFxLocalVolProcess(spot, eurTs, usdTs,
-                                            FxSettleConvention(WeekendsOnly(), 2),
+            process = makeFxLocalVolProcess(spot, foreignTs, domesticTs, settlement,
                                             Handle<BlackVolTermStructure>(surface));
+            tradingTimeProcess =
+                FxTradingTimeMarket(spot, foreignTs, domesticTs, settlement, surface).localVolProcess();
+        }
+
+        // The quotes, for the P&L explain; the pillars are the 3M and 6M expiries
+        FxVolMarket volMarket() const {
+            FxVolMarket market;
+            market.date = today;
+            market.spot = spot->value();
+            market.foreignCurve = foreignTs;
+            market.domesticCurve = domesticTs;
+            for (Size i = 0; i < pillars.size(); ++i) {
+                market.atms.push_back(atms[i]->value());
+                market.riskReversals.push_back({rrs[i][0]->value(), rrs[i][1]->value()});
+                market.butterflies.push_back({bfs[i][0]->value(), bfs[i][1]->value()});
+            }
+            return market;
+        }
+
+        // The roll of the market to the next business day, for theta
+        ext::shared_ptr<FxVolMarketRoll> roll() const {
+            const FxVanillaPnlExplain<TestSmileSection> explain(
+                {3 * Months, 6 * Months},
+                FxVolConventions{deltas, deltaType, atmType, flyType, settlement, FxExpiryCut(10),
+                                 holidayWeight});
+            return ext::make_shared<FxPnlExplainRoll<TestSmileSection>>(
+                explain, volMarket(), settlement.calendar().advance(today, 1, Days));
         }
 
         // Build a 3M EUR call at ATM forward
         ext::shared_ptr<VanillaOption> makeAtmCall() const {
             Time T   = dc.yearFraction(today, expiry3M);
-            Real fwd = spot->value() * eurTs->discount(T) / usdTs->discount(T);
+            Real fwd = spot->value() * foreignTs->discount(T) / domesticTs->discount(T);
             auto payoff   = ext::make_shared<PlainVanillaPayoff>(Option::Call, fwd);
             auto exercise = ext::make_shared<EuropeanExercise>(expiry3M);
             return ext::make_shared<VanillaOption>(payoff, exercise);
@@ -190,7 +250,7 @@ namespace {
         // Build a 3M EUR put at ATM forward
         ext::shared_ptr<VanillaOption> makeAtmPut() const {
             Time T   = dc.yearFraction(today, expiry3M);
-            Real fwd = spot->value() * eurTs->discount(T) / usdTs->discount(T);
+            Real fwd = spot->value() * foreignTs->discount(T) / domesticTs->discount(T);
             auto payoff   = ext::make_shared<PlainVanillaPayoff>(Option::Put, fwd);
             auto exercise = ext::make_shared<EuropeanExercise>(expiry3M);
             return ext::make_shared<VanillaOption>(payoff, exercise);
@@ -209,10 +269,10 @@ BOOST_AUTO_TEST_CASE(testLocalVolSurfaceNonNegative) {
 
     FxMarket mkt;
 
-    FxLocalVolSurface lv(mkt.process->blackVolatility(),
-                         mkt.process->riskFreeRate(),
-                         mkt.process->dividendYield(),
-                         mkt.process->stateVariable());
+    FxLocalVolSurface lv(mkt.tradingTimeProcess->blackVolatility(),
+                         mkt.tradingTimeProcess->riskFreeRate(),
+                         mkt.tradingTimeProcess->dividendYield(),
+                         mkt.tradingTimeProcess->stateVariable());
     lv.enableExtrapolation();
 
     std::vector<Time> times  = { 1.0/12, 3.0/12, 6.0/12 };
@@ -239,7 +299,7 @@ BOOST_AUTO_TEST_CASE(testFixedLocalVolConsistency) {
     FxMarket mkt;
     auto option = mkt.makeAtmCall();
 
-    FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs);
+    FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs);
 
     std::vector<Time> times   = { 1.0/12, 3.0/12, 6.0/12 };
     std::vector<Real> strikes = { 0.95, 1.00, 1.05, 1.10 };
@@ -247,10 +307,10 @@ BOOST_AUTO_TEST_CASE(testFixedLocalVolConsistency) {
     auto fixedLV = riskCalc.buildFixedLocalVolSurface(times, strikes);
     fixedLV->enableExtrapolation();
 
-    FxLocalVolSurface lvDupire(mkt.process->blackVolatility(),
-                               mkt.process->riskFreeRate(),
-                               mkt.process->dividendYield(),
-                               mkt.process->stateVariable());
+    FxLocalVolSurface lvDupire(mkt.tradingTimeProcess->blackVolatility(),
+                               mkt.tradingTimeProcess->riskFreeRate(),
+                               mkt.tradingTimeProcess->dividendYield(),
+                               mkt.tradingTimeProcess->stateVariable());
     lvDupire.enableExtrapolation();
 
     const Real tol = 1e-10;
@@ -281,15 +341,16 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
     // ── Call Greeks ──────────────────────────────────────────────────────────
     {
         auto option = mkt.makeAtmCall();
-        FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+        FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                    mkt.rrPillarSQs, mkt.rrPillarTimes,
                                    mkt.bfPillarSQs, mkt.bfPillarTimes,
                                    /*notional=*/1.0e6,
                                    /*spotBump=*/0.001,
-                                   /*volBump=*/0.001,
+                                   /*volBump=*/0.01,
                                    /*rrBump=*/0.001,
                                    /*bfBump=*/0.001,
                                    /*tGrid=*/50, /*xGrid=*/50);
+        riskCalc.setRoll(mkt.roll());  // theta is that of the roll to the next day
 
         FxVanillaGreeks g = riskCalc.calculate(/*localVol=*/true);
 
@@ -300,7 +361,9 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
         BOOST_CHECK_MESSAGE(g.fwdGamma  > 0.0, "call fwd gamma must be >0: "    << g.fwdGamma);
         BOOST_CHECK_MESSAGE(g.theta     < 0.0, "call theta must be negative: "  << g.theta);
         BOOST_CHECK_MESSAGE(g.vega      > 0.0, "call vega must be positive: "   << g.vega);
-        BOOST_CHECK_MESSAGE(g.volga     > 0.0, "call volga must be positive: "  << g.volga);
+        // at the money forward d1 d2 = -sigma^2 T / 4: volga is about 0, slightly negative
+        BOOST_CHECK_MESSAGE(std::fabs(g.volga) < 1.0e-3 * g.vega,
+                            "call volga at the money should be about 0: " << g.volga);
 
         // navva == vanna (identity, not approximate)
         BOOST_CHECK_MESSAGE(g.navva == g.vanna,
@@ -310,15 +373,16 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
     // ── Put Greeks ───────────────────────────────────────────────────────────
     {
         auto option = mkt.makeAtmPut();
-        FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+        FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                    mkt.rrPillarSQs, mkt.rrPillarTimes,
                                    mkt.bfPillarSQs, mkt.bfPillarTimes,
                                    /*notional=*/1.0e6,
                                    /*spotBump=*/0.001,
-                                   /*volBump=*/0.001,
+                                   /*volBump=*/0.01,
                                    /*rrBump=*/0.001,
                                    /*bfBump=*/0.001,
                                    /*tGrid=*/50, /*xGrid=*/50);
+        riskCalc.setRoll(mkt.roll());  // theta is that of the roll to the next day
 
         FxVanillaGreeks g = riskCalc.calculate(/*localVol=*/true);
 
@@ -329,8 +393,63 @@ BOOST_AUTO_TEST_CASE(testGreekSigns) {
         BOOST_CHECK_MESSAGE(g.fwdGamma  > 0.0, "put fwd gamma must be >0: "    << g.fwdGamma);
         BOOST_CHECK_MESSAGE(g.theta     < 0.0, "put theta must be negative: "  << g.theta);
         BOOST_CHECK_MESSAGE(g.vega      > 0.0, "put vega must be positive: "   << g.vega);
-        BOOST_CHECK_MESSAGE(g.volga     > 0.0, "put volga must be positive: "  << g.volga);
+        // at the money forward d1 d2 = -sigma^2 T / 4: volga is about 0, slightly negative
+        BOOST_CHECK_MESSAGE(std::fabs(g.volga) < 1.0e-3 * g.vega,
+                            "put volga at the money should be about 0: " << g.volga);
     }
+
+    // ── Out of the money, d1 and d2 have the same sign and volga is positive ─
+    for (Real moneyness : {0.95, 1.05}) {
+        const Option::Type type = moneyness > 1.0 ? Option::Call : Option::Put;
+        const Real strike = moneyness * mkt.surface->fwd(mkt.expiry3M);
+        auto option = ext::make_shared<VanillaOption>(
+            ext::make_shared<PlainVanillaPayoff>(type, strike),
+            ext::make_shared<EuropeanExercise>(mkt.expiry3M));
+        FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs, {}, {},
+                                   {}, {}, 1.0e6, 0.001, 0.01, 0.001, 0.001, 50, 50);
+        for (bool localVol : {false, true}) {
+            const FxVanillaGreeks g = riskCalc.calculate(localVol);
+            BOOST_CHECK_MESSAGE(g.volga > 0.0, (localVol ? "local-vol " : "Black ")
+                                                   << (type == Option::Call ? "call" : "put")
+                                                   << " volga at " << moneyness
+                                                   << " F must be positive: " << g.volga);
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(testThetaIsTheRollOfTheMarket) {
+    BOOST_TEST_MESSAGE("Testing that FX vanilla theta is the P&L of the roll of the market...");
+
+    FxMarket mkt;
+    auto option = mkt.makeAtmCall();
+    const Real notional = 1.0e6;
+    FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs, {}, {}, {},
+                               {}, notional);
+    // without a roll, there is no theta: holding today's surface fixed while
+    // the date moves is not defined
+    BOOST_CHECK(riskCalc.calculate(/*localVol=*/false).theta == Null<Real>());
+
+    // with one, the Black theta is the P&L the explain reports from today's
+    // market to the rolled one, i.e. with no market move
+    const FxVanillaPnlExplain<TestSmileSection> explain(
+        {3 * Months, 6 * Months},
+        FxVolConventions{mkt.deltas, mkt.deltaType, mkt.atmType, mkt.flyType, mkt.settlement,
+                         FxExpiryCut(10), mkt.holidayWeight});
+    const Date next = mkt.settlement.calendar().advance(mkt.today, 1, Days);
+    const auto roll =
+        ext::make_shared<FxPnlExplainRoll<TestSmileSection>>(explain, mkt.volMarket(), next);
+    riskCalc.setRoll(roll);
+    const Real theta = riskCalc.calculate(/*localVol=*/false).theta;
+    const auto strike = ext::dynamic_pointer_cast<StrikedTypePayoff>(option->payoff())->strike();
+    const FxPnlExplainResult r = explain.explain(Option::Call, strike, mkt.expiry3M, notional,
+                                                 mkt.volMarket(), roll->rolled());
+    BOOST_CHECK_LT(theta, 0.0);
+    BOOST_CHECK_CLOSE(theta, r.total, 1.0e-4);
+    // ...which the explain splits into the theta at today's vol and the vol roll
+    BOOST_CHECK_CLOSE(theta, r.theta + r.volRollAtm + r.volRollRiskReversal + r.volRollButterfly +
+                                 r.volRollOther, 1.0);
+    // the evaluation date is today's again
+    BOOST_CHECK_EQUAL(Settings::instance().evaluationDate(), mkt.today);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -341,22 +460,16 @@ BOOST_AUTO_TEST_CASE(testPutCallParity) {
     BOOST_TEST_MESSAGE("Testing FX local vol: put-call parity...");
 
     FxMarket mkt;
-
-    Time T   = mkt.dc.yearFraction(mkt.today, mkt.expiry3M);
-    Real Bd  = mkt.usdTs->discount(T);
-    Real Bf  = mkt.eurTs->discount(T);
-    Real fwd = mkt.spot->value() * Bf / Bd;
-
     const Real notional = 1.0e6;
 
     auto callOption = mkt.makeAtmCall();
     auto putOption  = mkt.makeAtmPut();
 
-    FxVanillaBumpRisk callCalc(callOption, mkt.process, mkt.spotSQ, mkt.atmSQs,
+    FxVanillaBumpRisk callCalc(callOption, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                 mkt.rrPillarSQs, mkt.rrPillarTimes,
                                 mkt.bfPillarSQs, mkt.bfPillarTimes,
                                 notional, 0.001, 0.001, 0.001, 0.001, 50, 50);
-    FxVanillaBumpRisk putCalc(putOption, mkt.process, mkt.spotSQ, mkt.atmSQs,
+    FxVanillaBumpRisk putCalc(putOption, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                mkt.rrPillarSQs, mkt.rrPillarTimes,
                                mkt.bfPillarSQs, mkt.bfPillarTimes,
                                notional, 0.001, 0.001, 0.001, 0.001, 50, 50);
@@ -371,17 +484,20 @@ BOOST_AUTO_TEST_CASE(testPutCallParity) {
         "put-call parity violation: call-put=" << (callG.npv - putG.npv)
         << " (tolerance=" << priceTol << ")");
 
-    // Gamma parity: call gamma == put gamma (both in USD per 1% spot^2)
-    const Real gammaTol = 0.01; // $0.01 in scaled units
+    // Gamma and vega parity: C - P is linear in the forward, so the call's
+    // and the put's are equal in the model.  The finite-difference local vol
+    // pricing meets parity only to about 9 USD here, converging to it no
+    // closer as the grid is refined, nor in calendar time: the local vol in
+    // the wings of its spot grid is large (0.3 to 0.9 against 0.09 at the
+    // money), and capping it at 0.15 restores parity to 0.02 USD.  Being
+    // vol and spot dependent, that error leaves call and put gamma 0.06% and
+    // vega 0.12% apart on this grid (0.01% and 0.08% on 400 points).
     BOOST_CHECK_MESSAGE(
-        std::fabs(callG.spotGamma - putG.spotGamma) < gammaTol,
+        std::fabs(callG.spotGamma - putG.spotGamma) < 1.0e-3 * callG.spotGamma,
         "gamma parity violation: call gamma=" << callG.spotGamma
         << " put gamma=" << putG.spotGamma);
-
-    // Vega parity: call vega == put vega
-    const Real vegaTol = 0.10;
     BOOST_CHECK_MESSAGE(
-        std::fabs(callG.vega - putG.vega) < vegaTol,
+        std::fabs(callG.vega - putG.vega) < 2.0e-3 * callG.vega,
         "vega parity violation: call vega=" << callG.vega
         << " put vega=" << putG.vega);
 }
@@ -401,7 +517,7 @@ BOOST_AUTO_TEST_CASE(testDeltaGammaConsistency) {
 
     const Real notional = 1.0;  // unit notional for this test
 
-    FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+    FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                 mkt.rrPillarSQs, mkt.rrPillarTimes,
                                 mkt.bfPillarSQs, mkt.bfPillarTimes,
                                 notional, 0.001, 0.001, 0.001, 0.001, 50, 50);
@@ -441,7 +557,7 @@ BOOST_AUTO_TEST_CASE(testBsVsLocalVolPricing) {
     auto option = mkt.makeAtmCall();
     const Real notional = 1.0e6;
 
-    FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+    FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                 mkt.rrPillarSQs, mkt.rrPillarTimes,
                                 mkt.bfPillarSQs, mkt.bfPillarTimes,
                                 notional, 0.001, 0.001, 0.001, 0.001, 100, 100);
@@ -460,17 +576,17 @@ BOOST_AUTO_TEST_CASE(testBsVsLocalVolPricing) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Test 7: Sticky-delta vs sticky-strike deltas differ when skew is present
+//  Test 7: Sticky-delta and local-vol (frozen local vol) deltas, with skew
 // ─────────────────────────────────────────────────────────────────────────────
 
-BOOST_AUTO_TEST_CASE(testStickyDeltaVsStickyStrike) {
-    BOOST_TEST_MESSAGE("Testing FX local vol: sticky-delta vs sticky-strike deltas differ...");
+BOOST_AUTO_TEST_CASE(testStickyDeltaVsLocalVolDelta) {
+    BOOST_TEST_MESSAGE("Testing FX local vol: sticky-delta and local-vol deltas...");
 
     FxMarket mkt;
     auto option = mkt.makeAtmCall();
     const Real notional = 1.0e6;
 
-    FxVanillaBumpRisk riskCalc(option, mkt.process, mkt.spotSQ, mkt.atmSQs,
+    FxVanillaBumpRisk riskCalc(option, mkt.tradingTimeProcess, mkt.spotSQ, mkt.atmSQs,
                                 mkt.rrPillarSQs, mkt.rrPillarTimes,
                                 mkt.bfPillarSQs, mkt.bfPillarTimes,
                                 notional,
@@ -482,45 +598,182 @@ BOOST_AUTO_TEST_CASE(testStickyDeltaVsStickyStrike) {
                                 /*lvTimePts=*/15, /*lvStrikePts=*/30);
 
     FxVanillaGreeks sdG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Delta);
-    FxVanillaGreeks ssG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Strike);
+    FxVanillaGreeks lvG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::LocalVol);
 
     BOOST_CHECK_MESSAGE(sdG.spotDelta > 0.0,
         "sticky-delta call spot delta must be >0: " << sdG.spotDelta);
-    BOOST_CHECK_MESSAGE(ssG.spotDelta > 0.0,
-        "sticky-strike call spot delta must be >0: " << ssG.spotDelta);
+    BOOST_CHECK_MESSAGE(lvG.spotDelta > 0.0,
+        "local-vol call spot delta must be >0: " << lvG.spotDelta);
 
     BOOST_CHECK_MESSAGE(sdG.npv > 0.0, "sticky-delta NPV must be >0: " << sdG.npv);
-    BOOST_CHECK_MESSAGE(ssG.npv > 0.0, "sticky-strike NPV must be >0: " << ssG.npv);
+    BOOST_CHECK_MESSAGE(lvG.npv > 0.0, "local-vol NPV must be >0: " << lvG.npv);
 
     const Real npvTol = 10.0;
     BOOST_CHECK_MESSAGE(
-        std::fabs(sdG.npv - ssG.npv) < npvTol,
-        "sticky-delta and sticky-strike NPVs should agree: "
-        << "sd=" << sdG.npv << " ss=" << ssG.npv
-        << " diff=" << std::fabs(sdG.npv - ssG.npv));
+        std::fabs(sdG.npv - lvG.npv) < npvTol,
+        "sticky-delta and frozen local-vol NPVs should agree: "
+        << "sd=" << sdG.npv << " ss=" << lvG.npv
+        << " diff=" << std::fabs(sdG.npv - lvG.npv));
 
     // Deltas must differ due to skew (at least 0.01% relative difference).
     const Real minRelDiff = 1.0e-4;
-    const Real relDiff = std::fabs(sdG.spotDelta - ssG.spotDelta)
+    const Real relDiff = std::fabs(sdG.spotDelta - lvG.spotDelta)
                          / std::fabs(sdG.spotDelta);
     BOOST_CHECK_MESSAGE(
         relDiff > minRelDiff,
-        "sticky-delta and sticky-strike deltas should differ with non-zero skew: "
-        << "sd=" << sdG.spotDelta << " ss=" << ssG.spotDelta
+        "sticky-delta and local-vol deltas should differ with non-zero skew: "
+        << "sd=" << sdG.spotDelta << " ss=" << lvG.spotDelta
         << " relDiff=" << relDiff * 100.0 << "%"
         << " (min expected=" << minRelDiff * 100.0 << "%)");
 
-    // With EUR put skew: sticky-delta < sticky-strike.
+    // A call's delta is its Black delta plus vega times the move of its
+    // implied vol with spot at a fixed strike, which is about -skew with sticky
+    // delta and +skew under local vol (Hagan et al., 2002).  With EUR put skew
+    // (implied vol falling in the strike), the local-vol delta is the lower,
+    // by about twice vega times the skew, in the units of the deltas
     BOOST_CHECK_MESSAGE(
-        sdG.spotDelta < ssG.spotDelta,
-        "with EUR put skew, sticky-delta should be < sticky-strike: "
-        << "sd=" << sdG.spotDelta << " ss=" << ssG.spotDelta);
+        lvG.spotDelta < sdG.spotDelta,
+        "with EUR put skew, the local-vol delta should be < the sticky-delta one: "
+        << "sd=" << sdG.spotDelta << " lv=" << lvG.spotDelta);
+    const Real strike = ext::dynamic_pointer_cast<StrikedTypePayoff>(option->payoff())->strike();
+    const Real h = 0.001;
+    const Real skew = (mkt.surface->blackVol(mkt.expiry3M, strike + h) -
+                       mkt.surface->blackVol(mkt.expiry3M, strike - h)) / (2.0 * h);
+    const Real expectedGap = 2.0 * (sdG.vega / 0.01) * std::fabs(skew) * 0.01 * mkt.spot->value();
+    // the rule is first order: here the gap is 1273 against its 1050
+    BOOST_CHECK_CLOSE(sdG.spotDelta - lvG.spotDelta, expectedGap, 30.0);
+
+    // sticky strike, implied vols at fixed strikes not moving, is the Black
+    // delta at the option's vol, whether priced with local vol or not, and
+    // lies between: sticky delta is above it by vega times the skew (539
+    // against 525 here), local vol below it by about as much, its rule being
+    // the cruder (769 against 525)
+    const FxVanillaGreeks ssG = riskCalc.calculate(true, FxVanillaBumpRisk::StickyType::Strike);
+    const FxVanillaGreeks ssBlack =
+        riskCalc.calculate(false, FxVanillaBumpRisk::StickyType::Strike);
+    BOOST_CHECK_EQUAL(ssG.spotDelta, ssBlack.spotDelta);
+    BOOST_CHECK_LT(lvG.spotDelta, ssG.spotDelta);
+    BOOST_CHECK_CLOSE(sdG.spotDelta - ssG.spotDelta, expectedGap / 2.0, 10.0);
 
     // navva == vanna in both modes.
     BOOST_CHECK_MESSAGE(sdG.navva == sdG.vanna,
         "sticky-delta: navva must equal vanna");
-    BOOST_CHECK_MESSAGE(ssG.navva == ssG.vanna,
-        "sticky-strike: navva must equal vanna");
+    BOOST_CHECK_MESSAGE(lvG.navva == lvG.vanna,
+        "local vol: navva must equal vanna");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Premium-adjusted greeks
+// ─────────────────────────────────────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(testPremiumAdjustedBlackGreeks) {
+    BOOST_TEST_MESSAGE("Testing FX premium-adjusted greeks against Black...");
+
+    // USD/JPY, the premium in USD: with sticky strike, the greeks are
+    // Black's at the option's vol, and the premium-adjusted delta of a
+    // call (put) is B_d (K/S) N(d2) (-B_d (K/S) N(-d2)), Reiswich and
+    // Wystup (2010); its gamma is B_d K/S^2 [n(d2)/(sigma sqrt(T)) - w N(w d2)]
+    FxMarket mkt(FxMarketQuotes::usdjpy());
+    const Real notional = 1.0e6;   // USD
+    const Real S = mkt.spot->value();
+    const auto& process = mkt.tradingTimeProcess;
+    const Real Bd = process->riskFreeRate()->discount(mkt.expiry3M);
+    const Real F = S * process->dividendYield()->discount(mkt.expiry3M) / Bd;
+    const CumulativeNormalDistribution N;
+    const NormalDistribution n;
+
+    struct Case { Option::Type type; Real strike; };
+    // ATM forward, out of the money and deep in the money
+    for (const Case& c : {Case{Option::Call, F}, Case{Option::Put, F},
+                          Case{Option::Call, 1.04 * F}, Case{Option::Put, 0.96 * F},
+                          Case{Option::Call, 0.85 * F}}) {
+        auto option = ext::make_shared<VanillaOption>(
+            ext::make_shared<PlainVanillaPayoff>(c.type, c.strike),
+            ext::make_shared<EuropeanExercise>(mkt.expiry3M));
+        FxVanillaBumpRisk riskCalc(option, process, mkt.spotSQ, mkt.atmSQs, {}, {}, {}, {},
+                                   notional);
+        const FxVanillaGreeks g =
+            riskCalc.calculate(false, FxVanillaBumpRisk::StickyType::Strike);
+        const FxPremiumAdjustedGreeks& pa = g.premiumAdjusted;
+
+        const Real K = c.strike;
+        const Real w = (c.type == Option::Call) ? 1.0 : -1.0;
+        const Real stdDev = std::sqrt(process->blackVolatility()->blackVariance(mkt.expiry3M, K));
+        const Real d2 = std::log(F / K) / stdDev - 0.5 * stdDev;
+        const Real delta = 0.01 * notional * w * Bd * K * N(w * d2);
+        const Real gamma = 1.0e-4 * notional * Bd * K * (n(d2) / stdDev - w * N(w * d2));
+
+        BOOST_TEST_INFO("type " << c.type << ", strike " << K);
+        BOOST_CHECK_CLOSE(pa.spotDelta, delta, 0.01);
+        BOOST_CHECK_CLOSE(pa.fwdDelta, delta / Bd, 0.01);
+        BOOST_CHECK_CLOSE(pa.spotGamma, gamma, 0.1);
+        BOOST_CHECK_CLOSE(pa.fwdGamma, gamma / Bd, 0.1);
+        // the adjustment: 1% of the value off the delta, 1% of vega off vanna
+        BOOST_CHECK_CLOSE(pa.spotDelta, g.spotDelta - 0.01 * g.npv, 1.0e-10);
+        BOOST_CHECK_CLOSE(pa.vanna, g.vanna - 0.01 * g.vega, 1.0e-10);
+        // the premium makes the delta smaller in the size of a call, larger
+        // in that of a put
+        BOOST_CHECK_LT(pa.spotDelta, g.spotDelta);
+        // deep in the money, a call's premium-adjusted gamma is negative:
+        // as spot rises, the value in USD, V/S, grows faster than delta
+        if (c.type == Option::Call && K < 0.9 * F) {
+            BOOST_CHECK_GT(g.spotGamma, 0.0);
+            BOOST_CHECK_LT(pa.spotGamma, 0.0);
+        }
+    }
+
+}
+
+BOOST_AUTO_TEST_CASE(testPremiumAdjustedParityWithLocalVol) {
+    BOOST_TEST_MESSAGE("Testing FX premium-adjusted greeks: parity under local vol "
+                       "on a premium-adjusted market...");
+
+    // USD/JPY, its smile quoted in premium-adjusted deltas
+    FxMarket mkt(FxMarketQuotes::usdjpy());
+    const Real notional = 1.0e6;
+    const auto& process = mkt.tradingTimeProcess;
+    const Real Bd = process->riskFreeRate()->discount(mkt.expiry3M);
+
+    auto callOption = mkt.makeAtmCall();
+    auto putOption = mkt.makeAtmPut();
+    const Real K = ext::dynamic_pointer_cast<StrikedTypePayoff>(callOption->payoff())->strike();
+
+    FxVanillaBumpRisk callCalc(callOption, process, mkt.spotSQ, mkt.atmSQs, mkt.rrPillarSQs,
+                               mkt.rrPillarTimes, mkt.bfPillarSQs, mkt.bfPillarTimes, notional,
+                               0.001, 0.01, 0.001, 0.001, 50, 50);
+    FxVanillaBumpRisk putCalc(putOption, process, mkt.spotSQ, mkt.atmSQs, mkt.rrPillarSQs,
+                              mkt.rrPillarTimes, mkt.bfPillarSQs, mkt.bfPillarTimes, notional,
+                              0.001, 0.01, 0.001, 0.001, 50, 50);
+    const FxVanillaGreeks call = callCalc.calculate(true);
+    const FxVanillaGreeks put = putCalc.calculate(true);
+
+    // the local-vol prices are those of the smile
+    const FxVanillaGreeks callBlack = callCalc.calculate(false);
+    BOOST_CHECK_CLOSE(call.npv, callBlack.npv, 1.0);
+
+    // plain greeks: the call's delta exceeds the put's by B_f, in the units
+    // of the deltas 0.01 S B_f, and their gammas are equal.  On the
+    // finite-difference grid the delta gap is off by 0.23% at 50 points,
+    // converging with the grid (0.067%, 0.026%, 0.016% at 100, 200, 400;
+    // 1e-14 with Black), the same on EUR/USD; the gammas differ by 0.08%
+    // (see testPutCallParity)
+    const Real S = mkt.spot->value();
+    const Real Bf = process->dividendYield()->discount(mkt.expiry3M);
+    BOOST_CHECK_CLOSE(call.spotDelta - put.spotDelta, 0.01 * notional * S * Bf, 0.3);
+    BOOST_CHECK_SMALL(call.spotGamma - put.spotGamma, 1.0e-3 * call.spotGamma);
+
+    // premium-adjusted: the call's delta exceeds the put's by K B_d / S, and
+    // its gamma falls short by K B_d / S^2, in the units of the greeks; the
+    // same grid errors (here 0.23% on the deltas, 0.5% on the gammas)
+    const FxPremiumAdjustedGreeks& cpa = call.premiumAdjusted;
+    const FxPremiumAdjustedGreeks& ppa = put.premiumAdjusted;
+    BOOST_CHECK_CLOSE(cpa.spotDelta - ppa.spotDelta, 0.01 * notional * K * Bd, 0.3);
+    BOOST_CHECK_CLOSE(cpa.fwdDelta - ppa.fwdDelta, 0.01 * notional * K, 0.3);
+    BOOST_CHECK_CLOSE(cpa.spotGamma - ppa.spotGamma, -1.0e-4 * notional * K * Bd, 1.0);
+    // vanna: C - P does not depend on vol.  The grid's parity error depends
+    // on vol, and leaves call and put vanna 0.8% apart here (0.4% to 0.6% on
+    // EUR/USD), on any grid
+    BOOST_CHECK_SMALL(cpa.vanna - ppa.vanna, 1.5e-2 * std::fabs(cpa.vanna));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -550,9 +803,9 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
     const DayCounter dc       = Actual365Fixed();
     const Calendar   calendar = WeekendsOnly();
 
-    const Handle<YieldTermStructure> usdTs(
+    const Handle<YieldTermStructure> domesticTs(
         ext::make_shared<FlatForward>(0, NullCalendar(), 0.0525, dc));  // domestic
-    const Handle<YieldTermStructure> eurTs(
+    const Handle<YieldTermStructure> foreignTs(
         ext::make_shared<FlatForward>(0, NullCalendar(), 0.0400, dc));  // foreign
 
     auto spotSQ = ext::make_shared<SimpleQuote>(1.0850);
@@ -614,7 +867,7 @@ BOOST_AUTO_TEST_CASE(testSLVCalibrationAndRisk) {
 
     auto volSurface = ext::make_shared<fxVarianceSurfaceNCP<TestSmileSection>>(
         today, spot, pillars, atms, rrs, bfs, deltas,
-        eurTs, usdTs, timeTs,
+        foreignTs, domesticTs, timeTs,
         DeltaVolQuote::Fwd, DeltaVolQuote::AtmFwd, FxRrBfQuotes::SmileStrangle,
         settlement, FxExpiryCut(10),
         calendar, Following, true);
@@ -731,7 +984,7 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceFollowsQuotes) {
     // between the pillars, so that an interpolated smile is built and cached
     const Date d(15, May, 2024);
     const Time t = m.surface->timeFromReference(d);
-    const Real strike = m.spot->value() * m.eurTs->discount(t) / m.usdTs->discount(t);
+    const Real strike = m.spot->value() * m.foreignTs->discount(t) / m.domesticTs->discount(t);
     const Volatility before = m.surface->blackVol(d, strike);
 
     Flag flag;
@@ -761,7 +1014,7 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceAtmVariance) {
         TestSmileSection pillar(
             m.pillars[i], m.spot,
             ext::make_shared<FxRrBfQuotes>(m.atms[i], m.rrs[i], m.bfs[i], m.deltas, m.flyType),
-            m.eurTs, m.usdTs, m.deltaType, m.atmType, Actual365Fixed(),
+            m.foreignTs, m.domesticTs, m.deltaType, m.atmType, Actual365Fixed(),
             FxSettleConvention(WeekendsOnly(), 2), m.today);
         const Time T = m.dc.yearFraction(m.today, m.pillars[i]);
         BOOST_CHECK_SMALL(std::sqrt(m.surface->atmVar(m.pillars[i]) / T) - pillar.atmVol(), 1.0e-12);
@@ -772,11 +1025,14 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceAtmVariance) {
     const Real w = (tau(mid) - tau(m.expiry3M)) / (tau(m.expiry6M) - tau(m.expiry3M));
     BOOST_CHECK_SMALL(m.surface->atmVar(mid) - ((1.0 - w) * var3M + w * var6M), 1.0e-12);
 
-    // before the first pillar, proportional to trading time, so flat over a weekend
-    const Date saturday(3, February, 2024), monday(5, February, 2024);
+    // before the first pillar, proportional to trading time, so a weekend's
+    // two days at 0.2 accrue 0.4 of a business day's variance
+    const Date saturday(3, February, 2024), monday(5, February, 2024), tuesday(6, February, 2024);
     BOOST_CHECK_SMALL(m.surface->atmVar(saturday) - var3M * tau(saturday) / tau(m.expiry3M),
                       1.0e-12);
-    BOOST_CHECK_SMALL(m.surface->atmVar(monday) - m.surface->atmVar(saturday), 1.0e-12);
+    BOOST_CHECK_CLOSE((m.surface->atmVar(monday) - m.surface->atmVar(saturday)) /
+                          (m.surface->atmVar(tuesday) - m.surface->atmVar(monday)),
+                      0.4, 1.0e-8);
 
     // after the last pillar, at the last pillar's rate per unit of trading time
     const Date later(2, October, 2024);
@@ -791,7 +1047,7 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceReproducesPillars) {
         TestSmileSection pillar(
             m.pillars[i], m.spot,
             ext::make_shared<FxRrBfQuotes>(m.atms[i], m.rrs[i], m.bfs[i], m.deltas, m.flyType),
-            m.eurTs, m.usdTs, m.deltaType, m.atmType, Actual365Fixed(),
+            m.foreignTs, m.domesticTs, m.deltaType, m.atmType, Actual365Fixed(),
             FxSettleConvention(WeekendsOnly(), 2), m.today);
         for (Real strike : {1.00, 1.05, 1.085, 1.12, 1.17})
             BOOST_CHECK_SMALL(m.surface->blackVariance(m.pillars[i], strike) - pillar.variance(strike),
@@ -803,14 +1059,15 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceInTradingTime) {
     BOOST_TEST_MESSAGE("Testing that the variance surface accrues variance in trading time...");
 
     FxMarket m;
-    // at a given forward moneyness, nothing accrues over a weekend, which
-    // has no trading time here, although the forward moves with the carry;
-    // the two nodes are separate smile fits, equal up to fitting noise
-    const Date saturday(3, February, 2024), monday(5, February, 2024);
+    // at a given forward moneyness, a weekend's two days at 0.2 accrue 0.4 of
+    // a business day's variance, although the forward moves with the carry.
+    // The nodes are separate smile fits to the scaled quotes: to 2e-5 of a
+    // day's variance at the money, and about 0.5% of it in the wings
+    const Date saturday(3, February, 2024), monday(5, February, 2024), tuesday(6, February, 2024);
     for (Real k : {0.93, 1.0, 1.07}) {
-        const Real wSaturday = m.surface->blackVariance(saturday, k * m.surface->fwd(saturday));
-        const Real wMonday = m.surface->blackVariance(monday, k * m.surface->fwd(monday));
-        BOOST_CHECK_SMALL(wMonday - wSaturday, 1.0e-10);
+        auto w = [&](const Date& d) { return m.surface->blackVariance(d, k * m.surface->fwd(d)); };
+        BOOST_CHECK_CLOSE((w(monday) - w(saturday)) / (w(tuesday) - w(monday)), 0.4,
+                          k == 1.0 ? 1.0e-2 : 1.0);
     }
 
     // through the pillars and beyond, variance at a given forward moneyness
@@ -831,8 +1088,8 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceInTradingTime) {
     }
 
     BOOST_CHECK_THROW(fxVarianceSurfaceNCP<TestSmileSection>(
-                          m.today, m.spot, m.pillars, m.atms, m.rrs, m.bfs, m.deltas, m.eurTs,
-                          m.usdTs, m.timeTs, m.deltaType, m.atmType, m.flyType,
+                          m.today, m.spot, m.pillars, m.atms, m.rrs, m.bfs, m.deltas, m.foreignTs,
+                          m.domesticTs, m.timeTs, m.deltaType, m.atmType, m.flyType,
                           FxSettleConvention(WeekendsOnly(), 2), FxExpiryCut(10), WeekendsOnly(), Following,
                           true, 0.0),
                       Error);
@@ -845,11 +1102,11 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceEventBetweenPillars) {
     const Date eventDate(10, April, 2024);  // a Wednesday between the pillars
     const Real timeOfDay = 13.0 / 24.0, size = 2.0;
     auto timeTs = Handle<TradingTimeTermStructure>(ext::make_shared<TradingTimeTermStructure>(
-        m.today, WeekendsOnly(), 0.0,
+        m.today, WeekendsOnly(), 0.2,
         std::vector<ext::shared_ptr<TradingTimeEvent>>{ext::make_shared<JumpTradingTimeEvent>(
             eventDate, timeOfDay, makeQuoteHandle(size))}));
     fxVarianceSurfaceNCP<TestSmileSection> surface(
-        m.today, m.spot, m.pillars, m.atms, m.rrs, m.bfs, m.deltas, m.eurTs, m.usdTs, timeTs,
+        m.today, m.spot, m.pillars, m.atms, m.rrs, m.bfs, m.deltas, m.foreignTs, m.domesticTs, timeTs,
         m.deltaType, m.atmType, m.flyType, FxSettleConvention(WeekendsOnly(), 2),
         FxExpiryCut(10));
 
@@ -881,7 +1138,7 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceShortAndLongTenors) {
             bfs.push_back({q(bf25), q(3.2 * bf25)});
         }
         return fxVarianceSurfaceNCP<TestSmileSection>(
-            m.today, m.spot, pillars, atms, rrs, bfs, m.deltas, m.eurTs, m.usdTs, m.timeTs,
+            m.today, m.spot, pillars, atms, rrs, bfs, m.deltas, m.foreignTs, m.domesticTs, m.timeTs,
             m.deltaType, m.atmType, m.flyType, FxSettleConvention(WeekendsOnly(), 2),
         FxExpiryCut(10));
     };
@@ -907,7 +1164,7 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceTradingTimeReference) {
     FxMarket m;
     auto surfaceWith = [&](const Handle<TradingTimeTermStructure>& timeTs) {
         return fxVarianceSurfaceNCP<TestSmileSection>(
-            m.today, m.spot, m.pillars, m.atms, m.rrs, m.bfs, m.deltas, m.eurTs, m.usdTs, timeTs,
+            m.today, m.spot, m.pillars, m.atms, m.rrs, m.bfs, m.deltas, m.foreignTs, m.domesticTs, timeTs,
             m.deltaType, m.atmType, m.flyType, FxSettleConvention(WeekendsOnly(), 2),
         FxExpiryCut(10));
     };
@@ -915,12 +1172,12 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceTradingTimeReference) {
 
     // a fixed trading-time curve from another date
     const auto shifted = surfaceWith(Handle<TradingTimeTermStructure>(
-        ext::make_shared<TradingTimeTermStructure>(m.today - 3, WeekendsOnly(), 0.0)));
+        ext::make_shared<TradingTimeTermStructure>(m.today - 3, WeekendsOnly(), 0.2)));
     BOOST_CHECK_THROW(shifted.blackVariance(d, m.spot->value()), Error);
 
     // a floating one agrees until the evaluation date moves
     const auto floating = surfaceWith(Handle<TradingTimeTermStructure>(
-        ext::make_shared<TradingTimeTermStructure>(WeekendsOnly(), 0.0)));
+        ext::make_shared<TradingTimeTermStructure>(WeekendsOnly(), 0.2)));
     const Real before = floating.blackVariance(d, m.spot->value());
     BOOST_CHECK_SMALL(before - m.surface->blackVariance(d, m.spot->value()), 1.0e-15);
     // moving the evaluation date must not throw; using the surface then does
@@ -939,7 +1196,7 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceSettlementForward) {
         TestSmileSection pillar(
             m.pillars[i], m.spot,
             ext::make_shared<FxRrBfQuotes>(m.atms[i], m.rrs[i], m.bfs[i], m.deltas, m.flyType),
-            m.eurTs, m.usdTs, m.deltaType, m.atmType, Actual365Fixed(), settlement, m.today);
+            m.foreignTs, m.domesticTs, m.deltaType, m.atmType, Actual365Fixed(), settlement, m.today);
         BOOST_CHECK_CLOSE(m.surface->fwd(m.pillars[i]), pillar.forward(), 1.0e-12);
     }
 
@@ -949,8 +1206,8 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceSettlementForward) {
     const Date spotDate = settlement.valueDate(m.today), delivery = settlement.valueDate(friday);
     BOOST_CHECK_EQUAL(delivery, Date(16, April, 2024));
     const Real expected = m.spot->value() *
-                          (m.eurTs->discount(delivery) / m.eurTs->discount(spotDate)) /
-                          (m.usdTs->discount(delivery) / m.usdTs->discount(spotDate));
+                          (m.foreignTs->discount(delivery) / m.foreignTs->discount(spotDate)) /
+                          (m.domesticTs->discount(delivery) / m.domesticTs->discount(spotDate));
     BOOST_CHECK_CLOSE(m.surface->fwd(friday), expected, 1.0e-12);
     const Time tFriday = m.surface->timeFromReference(friday);
     BOOST_CHECK_CLOSE(m.surface->fwd(tFriday), expected, 1.0e-12);
@@ -961,9 +1218,9 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceSettlementForward) {
 
     // curves referenced to the spot date give the same surface
     const Handle<YieldTermStructure> eurFromSpot(
-        ext::make_shared<FlatForward>(2, WeekendsOnly(), 0.04, m.dc));
+        ext::make_shared<FlatForward>(2, WeekendsOnly(), 0.24, m.dc));
     const Handle<YieldTermStructure> usdFromSpot(
-        ext::make_shared<FlatForward>(2, WeekendsOnly(), 0.0525, m.dc));
+        ext::make_shared<FlatForward>(2, WeekendsOnly(), 0.2525, m.dc));
     BOOST_REQUIRE_EQUAL(eurFromSpot->referenceDate(), spotDate);
     fxVarianceSurfaceNCP<TestSmileSection> fromSpot(
         m.today, m.spot, m.pillars, m.atms, m.rrs, m.bfs, m.deltas, eurFromSpot, usdFromSpot,
@@ -982,7 +1239,7 @@ BOOST_AUTO_TEST_CASE(testVarianceSurfaceNodeSpacing) {
     FxMarket m;
     auto surfaceWith = [&](Time spacing) {
         return fxVarianceSurfaceNCP<TestSmileSection>(
-            m.today, m.spot, m.pillars, m.atms, m.rrs, m.bfs, m.deltas, m.eurTs, m.usdTs,
+            m.today, m.spot, m.pillars, m.atms, m.rrs, m.bfs, m.deltas, m.foreignTs, m.domesticTs,
             m.timeTs, m.deltaType, m.atmType, m.flyType, FxSettleConvention(WeekendsOnly(), 2),
             FxExpiryCut(10),
             WeekendsOnly(), Following, true, spacing);
@@ -1016,18 +1273,25 @@ BOOST_AUTO_TEST_CASE(testMakeFxLocalVolProcess) {
     const auto localVol =
         ext::dynamic_pointer_cast<FxLocalVolSurface>(m.process->localVolatility().currentLink());
     BOOST_REQUIRE(localVol);
-    BOOST_CHECK(m.process->riskFreeRate().currentLink() == m.usdTs.currentLink());
+    BOOST_CHECK(m.process->riskFreeRate().currentLink() == m.domesticTs.currentLink());
     BOOST_CHECK(m.process->blackVolatility().currentLink() == m.surface);
 
-    // one forward for the process and the surface, and local vol zero over a weekend
+    // one forward for the process and the surface, and local vol lower over a weekend
     for (const Date& d : {Date(12, April, 2024), Date(13, April, 2024), m.expiry6M}) {
         const Time t = m.surface->timeFromReference(d) + 0.4 / 365.0;
         BOOST_CHECK_CLOSE(m.spot->value() * m.process->dividendYield()->discount(t) /
                               m.process->riskFreeRate()->discount(t),
                           m.surface->fwd(t), 1.0e-12);
     }
-    const Time saturday = m.surface->timeFromReference(Date(3, February, 2024)) + 0.5 / 365.0;
-    BOOST_CHECK_EQUAL(m.process->localVolatility()->localVol(saturday, 1.085, true), 0.0);
+    // where variance accrues at a fifth of the rate, local vol is about sqrt(0.2) of
+    // that of the business days around it
+    auto localVolOn = [&](const Date& d) {
+        return m.process->localVolatility()->localVol(m.surface->timeFromReference(d) + 0.5 / 365.0,
+                                                      1.085, true);
+    };
+    const Real weekend = localVolOn(Date(3, February, 2024));
+    const Real around = std::sqrt(localVolOn(Date(2, February, 2024)) * localVolOn(Date(5, February, 2024)));
+    BOOST_CHECK_CLOSE(weekend / around, std::sqrt(0.2), 0.1);
 
     // without a fallback, undefined local vol fails; with one, it is counted
     const Date today(2, January, 2024);
@@ -1069,8 +1333,8 @@ BOOST_AUTO_TEST_CASE(testFxSettlementForeignCurve) {
     }
 
     // it follows its curves
-    RelinkableHandle<YieldTermStructure> foreign(m.eurTs.currentLink());
-    auto curve = ext::make_shared<FxSettlementForeignCurve>(foreign, m.usdTs,
+    RelinkableHandle<YieldTermStructure> foreign(m.foreignTs.currentLink());
+    auto curve = ext::make_shared<FxSettlementForeignCurve>(foreign, m.domesticTs,
                                                            FxSettleConvention(WeekendsOnly(), 2));
     const Time t1Y = m.surface->timeFromReference(Date(2, January, 2025));
     const Real before = curve->discount(t1Y);
@@ -1081,34 +1345,40 @@ BOOST_AUTO_TEST_CASE(testFxSettlementForeignCurve) {
     BOOST_CHECK(curve->discount(t1Y) < before);
 }
 
-BOOST_AUTO_TEST_CASE(testFxLocalVolSurfaceWithoutWeekendVariance) {
-    BOOST_TEST_MESSAGE("Testing Dupire local vol where trading time stops over weekends...");
+BOOST_AUTO_TEST_CASE(testFxLocalVolSurfaceOverWeekends) {
+    BOOST_TEST_MESSAGE("Testing Dupire local vol where trading time slows over weekends...");
 
     FxMarket m;
     FxLocalVolSurface lv(m.process->blackVolatility(), m.process->riskFreeRate(),
                          m.process->dividendYield(), m.process->stateVariable());
     lv.enableExtrapolation();
 
-    // defined everywhere, zero exactly over weekends, positive otherwise
+    // defined and positive everywhere, and lower over weekends, where
+    // variance accrues at a fifth of the rate
     Size weekend = 0, weekday = 0;
+    Real weekendMax = 0.0, weekdayMin = QL_MAX_REAL;
     for (Real strike : {1.03, 1.06, 1.085, 1.11, 1.14}) {
         for (Size i = 1; i < 365; ++i) {
             const Time t = (i + 0.5) / 4.0 / 365.0;
             const Date d = m.today + Integer(std::floor(t * 365.0));
             Volatility vol = Null<Volatility>();
             BOOST_REQUIRE_NO_THROW(vol = lv.localVol(t, strike, true));
+            BOOST_CHECK(vol > 0.0);
             if (d.weekday() == Saturday || d.weekday() == Sunday) {
-                BOOST_CHECK_EQUAL(vol, 0.0);
+                if (strike == 1.085)
+                    weekendMax = std::max(weekendMax, vol);
                 ++weekend;
             } else {
-                BOOST_CHECK(vol > 0.0);
+                if (strike == 1.085)
+                    weekdayMin = std::min(weekdayMin, vol);
                 ++weekday;
             }
         }
     }
     BOOST_CHECK(weekend > 0 && weekday > 0);
+    BOOST_CHECK_LT(weekendMax, weekdayMin);
 
-    // on weekdays, QuantLib's Dupire on the same inputs agrees
+    // QuantLib's Dupire on the same inputs agrees
     LocalVolSurface upstream(m.process->blackVolatility(), m.process->riskFreeRate(),
                              m.process->dividendYield(), m.process->stateVariable());
     upstream.enableExtrapolation();
@@ -1117,12 +1387,13 @@ BOOST_AUTO_TEST_CASE(testFxLocalVolSurfaceWithoutWeekendVariance) {
         BOOST_CHECK_CLOSE(lv.localVol(t, strike, true), upstream.localVol(t, strike, true), 1.0e-10);
     }
 
-    // a floor, where given, applies over weekends too
+    // a floor, where given, applies over weekends too, where local vol is
+    // about 0.042 at the money
     FxLocalVolSurface floored(m.process->blackVolatility(), m.process->riskFreeRate(),
-                              m.process->dividendYield(), m.process->stateVariable(), 1.0e-7, 0.01);
+                              m.process->dividendYield(), m.process->stateVariable(), 1.0e-7, 0.05);
     floored.enableExtrapolation();
     const Time saturday = m.surface->timeFromReference(Date(3, February, 2024)) + 0.5 / 365.0;
-    BOOST_CHECK_EQUAL(floored.localVol(saturday, 1.085, true), 0.01);
+    BOOST_CHECK_EQUAL(floored.localVol(saturday, 1.085, true), 0.05);
 }
 
 BOOST_AUTO_TEST_CASE(testFxLocalVolSurfaceArbitrage) {
@@ -1169,7 +1440,7 @@ BOOST_AUTO_TEST_CASE(testFxVanillaBumpRiskLocalVolDefined) {
     BOOST_TEST_MESSAGE("Testing that the bump-risk local vol needs no substitute values...");
 
     FxMarket m;
-    FxVanillaBumpRisk riskCalc(m.makeAtmCall(), m.process, m.spotSQ, m.atmSQs);
+    FxVanillaBumpRisk riskCalc(m.makeAtmCall(), m.tradingTimeProcess, m.spotSQ, m.atmSQs);
     std::vector<Time> times;
     std::vector<Real> strikes;
     for (Size i = 1; i <= 20; ++i)
@@ -1188,7 +1459,7 @@ BOOST_AUTO_TEST_CASE(testTradingTimeFormsAgree) {
     const Date today(5, January, 2024);  // a Friday
     Settings::instance().evaluationDate() = today;
     for (const Calendar& calendar : {Calendar(WeekendsOnly()), Calendar(TARGET())}) {
-        for (Real w : {0.0, 0.3, 1.0}) {
+        for (Real w : {0.2, 0.3, 1.0}) {
             TradingTimeTermStructure ts(today, calendar, w);
             // every day for seven years, beyond any fixed holiday horizon
             for (Date d = today; d <= today + 7 * Years; ++d) {
@@ -1210,7 +1481,7 @@ BOOST_AUTO_TEST_CASE(testTradingTimeIsMonotonicAndContinuous) {
 
     const Date today(5, January, 2024);
     Settings::instance().evaluationDate() = today;
-    for (Real w : {0.0, 0.3, 1.0}) {
+    for (Real w : {0.2, 0.3, 1.0}) {
         TradingTimeTermStructure ts(today, TARGET(), w);
         // in tenths of a day over two months, including weekends and New Year
         const Real step = 0.1 / 365.0;
@@ -1230,10 +1501,10 @@ BOOST_AUTO_TEST_CASE(testTradingTimeIsMonotonicAndContinuous) {
             BOOST_CHECK_SMALL(ts.tradingTime(3.0) - 3.0, 1.0e-14);
     }
 
-    // with weekends not counted, a week has five trading days whatever its first day
-    TradingTimeTermStructure ts(today, WeekendsOnly(), 0.0);
+    // with weekend days weighted 0.2, a week has 5.4 trading days whatever its first day
+    TradingTimeTermStructure ts(today, WeekendsOnly(), 0.2);
     for (Integer start = 0; start < 7; ++start)
-        BOOST_CHECK_SMALL(ts.tradingTime(today + start, today + start + 7) * 365.0 - 5.0, 1.0e-12);
+        BOOST_CHECK_SMALL(ts.tradingTime(today + start, today + start + 7) * 365.0 - 5.4, 1.0e-12);
 }
 
 BOOST_AUTO_TEST_CASE(testTradingTimeEventJumps) {
@@ -1244,9 +1515,9 @@ BOOST_AUTO_TEST_CASE(testTradingTimeEventJumps) {
     const Date eventDate(10, January, 2024);  // the next Wednesday
     const Real timeOfDay = 13.5 / 24.0;
     auto size = ext::make_shared<SimpleQuote>(2.0);
-    TradingTimeTermStructure plain(today, WeekendsOnly(), 0.0);
+    TradingTimeTermStructure plain(today, WeekendsOnly(), 0.2);
     TradingTimeTermStructure ts(
-        today, WeekendsOnly(), 0.0,
+        today, WeekendsOnly(), 0.2,
         {ext::make_shared<JumpTradingTimeEvent>(eventDate, timeOfDay, Handle<Quote>(size)),
          ext::make_shared<JumpTradingTimeEvent>(Date(4, January, 2024), 0.5,
                                                 makeQuoteHandle(5.0))});
@@ -1268,7 +1539,7 @@ BOOST_AUTO_TEST_CASE(testTradingTimeEventJumps) {
 
     // the jump follows its quote, and the change is notified
     auto observed = ext::make_shared<TradingTimeTermStructure>(
-        today, WeekendsOnly(), 0.0,
+        today, WeekendsOnly(), 0.2,
         std::vector<ext::shared_ptr<TradingTimeEvent>>{
             ext::make_shared<JumpTradingTimeEvent>(eventDate, timeOfDay, Handle<Quote>(size))});
     Flag flag;
@@ -1309,7 +1580,7 @@ BOOST_AUTO_TEST_CASE(testTradingTimeEventsNeedExplicitTimes) {
                       Error);
     BOOST_CHECK_THROW(DiffuseTradingTimeEvent(eventDate, eventDate + 1, w), Error);
 
-    BOOST_CHECK_THROW(TradingTimeTermStructure(eventDate, WeekendsOnly(), 0.0,
+    BOOST_CHECK_THROW(TradingTimeTermStructure(eventDate, WeekendsOnly(), 0.2,
                                                {ext::shared_ptr<TradingTimeEvent>()}),
                       Error);
 #ifdef QL_HIGH_RESOLUTION_DATE
@@ -1336,9 +1607,9 @@ BOOST_AUTO_TEST_CASE(testTradingTimeRateDecisionWithPressConference) {
     const Real decision = 14.0 / 24.0, pressStart = 14.5 / 24.0, pressEnd = 15.5 / 24.0;
     auto jumpWeight = ext::make_shared<SimpleQuote>(1.0);
     auto pressWeight = ext::make_shared<SimpleQuote>(0.5);
-    TradingTimeTermStructure plain(today, WeekendsOnly(), 0.0);
+    TradingTimeTermStructure plain(today, WeekendsOnly(), 0.2);
     auto ts = ext::make_shared<TradingTimeTermStructure>(
-        today, WeekendsOnly(), 0.0,
+        today, WeekendsOnly(), 0.2,
         std::vector<ext::shared_ptr<TradingTimeEvent>>{
             ext::make_shared<JumpTradingTimeEvent>(meeting, decision, Handle<Quote>(jumpWeight)),
             ext::make_shared<DiffuseTradingTimeEvent>(meeting, pressStart, meeting, pressEnd,
@@ -1424,12 +1695,14 @@ BOOST_AUTO_TEST_CASE(testTradingTimeDiffuseEvents) {
     halfDay->setValue(0.5);
     BOOST_CHECK(flag.isUp());
     BOOST_CHECK_SMALL(days(*observed, christmasEve, christmasEve + 1) - 1.5, 1.0e-9);
-    // more than the day's own rate cannot be taken away
+    // more than the day's own rate cannot be taken away, nor all of it:
+    // trading time must always run
     halfDay->setValue(-1.5);
     BOOST_CHECK_THROW(observed->tradingTime(christmasEve + 1), Error);
-    // the whole day exactly can
     halfDay->setValue(-1.0);
-    BOOST_CHECK_SMALL(days(*observed, christmasEve, christmasEve + 1), 1.0e-9);
+    BOOST_CHECK_THROW(observed->tradingTime(christmasEve + 1), Error);
+    halfDay->setValue(-0.9);
+    BOOST_CHECK_SMALL(days(*observed, christmasEve, christmasEve + 1) - 0.1, 1.0e-9);
 }
 
 BOOST_AUTO_TEST_CASE(testTradingTimeNegativeWeightsNeedCover) {
@@ -1440,27 +1713,28 @@ BOOST_AUTO_TEST_CASE(testTradingTimeNegativeWeightsNeedCover) {
     const Date saturday(6, January, 2024);
     const auto negative = ext::make_shared<DiffuseTradingTimeEvent>(
         saturday, 10.0 / 24.0, saturday, 12.0 / 24.0, makeQuoteHandle(-0.05));
-    // alone on a weekend not counted, it would run trading time backwards
-    TradingTimeTermStructure alone(today, WeekendsOnly(), 0.0, {negative});
+    // alone, it would take 0.6 days per day from a weekend running at 0.2,
+    // and run trading time backwards
+    TradingTimeTermStructure alone(today, WeekendsOnly(), 0.2, {negative});
     BOOST_CHECK_THROW(alone.tradingTime(today + 7), Error);
-    // overlapped by an event giving at least as much, it is accepted
+    // overlapped by an event giving enough for trading time to keep running, it is accepted
     const auto cover = ext::make_shared<DiffuseTradingTimeEvent>(
         saturday, 9.0 / 24.0, saturday, 13.0 / 24.0, makeQuoteHandle(0.1));
-    TradingTimeTermStructure covered(today, WeekendsOnly(), 0.0, {negative, cover});
-    BOOST_CHECK_SMALL(covered.tradingTime(today + 7) * 365.0 - 5.05, 1.0e-9);
+    TradingTimeTermStructure covered(today, WeekendsOnly(), 0.2, {negative, cover});
+    BOOST_CHECK_SMALL(covered.tradingTime(today + 7) * 365.0 - 5.45, 1.0e-9);
     // a cover that is too small, or misses part of it, is not enough
     TradingTimeTermStructure tooSmall(
-        today, WeekendsOnly(), 0.0,
+        today, WeekendsOnly(), 0.2,
         {negative, ext::make_shared<DiffuseTradingTimeEvent>(saturday, 9.0 / 24.0, saturday,
-                                                             13.0 / 24.0, makeQuoteHandle(0.09))});
+                                                             13.0 / 24.0, makeQuoteHandle(0.06))});
     BOOST_CHECK_THROW(tooSmall.tradingTime(today + 7), Error);
     TradingTimeTermStructure partial(
-        today, WeekendsOnly(), 0.0,
+        today, WeekendsOnly(), 0.2,
         {negative, ext::make_shared<DiffuseTradingTimeEvent>(saturday, 11.0 / 24.0, saturday,
                                                              13.0 / 24.0, makeQuoteHandle(1.0))});
     BOOST_CHECK_THROW(partial.tradingTime(today + 7), Error);
     // a negative event already over by the reference date is not checked
-    TradingTimeTermStructure past(saturday + 1, WeekendsOnly(), 0.0, {negative});
+    TradingTimeTermStructure past(saturday + 1, WeekendsOnly(), 0.2, {negative});
     BOOST_CHECK_NO_THROW(past.tradingTime(saturday + 8));
 }
 
@@ -1470,8 +1744,8 @@ BOOST_AUTO_TEST_CASE(testTradingTimeEventInProgress) {
     const Date today(10, January, 2024);  // a Wednesday
     Settings::instance().evaluationDate() = today;
     // released evenly from yesterday to tomorrow, so half of it by today
-    TradingTimeTermStructure plain(today, WeekendsOnly(), 0.0);
-    TradingTimeTermStructure ts(today, WeekendsOnly(), 0.0,
+    TradingTimeTermStructure plain(today, WeekendsOnly(), 0.2);
+    TradingTimeTermStructure ts(today, WeekendsOnly(), 0.2,
                                 {ext::make_shared<DiffuseTradingTimeEvent>(
                                     today - 1, 0.0, today + 1, 0.0, makeQuoteHandle(1.0))});
     BOOST_CHECK_SMALL((ts.tradingTime(today + 1) - plain.tradingTime(today + 1)) * 365.0 - 0.5,
@@ -1484,7 +1758,7 @@ BOOST_AUTO_TEST_CASE(testTradingTimeEventInProgress) {
     BOOST_CHECK_SMALL(intervals[0].second * 365.0 - 1.0, 1.0e-9);
 
     // once over, it is gone
-    TradingTimeTermStructure later(today + 1, WeekendsOnly(), 0.0, ts.events());
+    TradingTimeTermStructure later(today + 1, WeekendsOnly(), 0.2, ts.events());
     BOOST_CHECK(later.eventIntervals().empty());
 }
 
@@ -1501,9 +1775,9 @@ BOOST_AUTO_TEST_CASE(testTradingTimeIntradayReference) {
                                                   makeQuoteHandle(4.0))};
 
     Settings::instance().evaluationDate() = now;
-    TradingTimeTermStructure fixed(now, WeekendsOnly(), 0.0, events);
-    TradingTimeTermStructure floating(WeekendsOnly(), 0.0, events);
-    TradingTimeTermStructure fromDay(day, WeekendsOnly(), 0.0, events);
+    TradingTimeTermStructure fixed(now, WeekendsOnly(), 0.2, events);
+    TradingTimeTermStructure floating(WeekendsOnly(), 0.2, events);
+    TradingTimeTermStructure fromDay(day, WeekendsOnly(), 0.2, events);
     for (const TradingTimeTermStructure* ts : {&fixed, &floating}) {
         BOOST_CHECK_EQUAL(ts->referenceDate(), now);
         // the 10:00 jump has happened; half the diffuse event is left, and the 16:00 jump
@@ -1586,7 +1860,7 @@ namespace {
                                      FxRrBfQuotes::SmileStrangle,
                                      FxSettleConvention(WeekendsOnly(), 2),
                                      FxExpiryCut(10),
-                                     0.0};
+                                     0.2};
         Date today = Date(2, January, 2024);  // a Tuesday
 
         static Handle<YieldTermStructure> curve(const Date& d, Rate r) {
@@ -1645,7 +1919,6 @@ BOOST_AUTO_TEST_CASE(testTradingTimeCalendarTimeIsItsInverse) {
     TradingTimeTermStructure ts(today, TARGET(), 0.2,
                                 {ext::make_shared<JumpTradingTimeEvent>(
                                     eventDate, eventTime, makeQuoteHandle(eventWeight))});
-    BOOST_CHECK_NO_THROW(ts.checkRateIsPositive());
 
     // trading time at calendar times, in tenths of a day over a month, maps back
     for (Size i = 0; i <= 300; ++i) {
@@ -1666,9 +1939,9 @@ BOOST_AUTO_TEST_CASE(testTradingTimeCalendarTimeIsItsInverse) {
             BOOST_CHECK_SMALL(ts.tradingTime(t) - tau, 1.0e-11);
     }
 
-    // trading time standing still has no unique inverse
-    TradingTimeTermStructure still(today, TARGET(), 0.0);
-    BOOST_CHECK_THROW(still.checkRateIsPositive(), Error);
+    // trading time standing still would have no unique inverse: holidays
+    // need a positive weight
+    BOOST_CHECK_THROW(TradingTimeTermStructure(today, TARGET(), 0.0), Error);
 }
 
 BOOST_AUTO_TEST_CASE(testTradingTimeDayCounterAndCurve) {
@@ -1677,14 +1950,14 @@ BOOST_AUTO_TEST_CASE(testTradingTimeDayCounterAndCurve) {
     FxMarket m(0.2);
     const TradingTimeDayCounter dc(m.timeTs);
     const Handle<YieldTermStructure> curve(
-        ext::make_shared<TradingTimeYieldTermStructure>(m.usdTs, m.timeTs));
+        ext::make_shared<TradingTimeYieldTermStructure>(m.domesticTs, m.timeTs));
     for (Integer d : {1, 4, 5, 6, 30, 91, 400}) {
         const Date date = m.today + d;
         // year fractions are trading times...
         BOOST_CHECK_SMALL(dc.yearFraction(m.today, date) - m.timeTs->tradingTime(date), 1.0e-15);
         BOOST_CHECK_SMALL(curve->timeFromReference(date) - m.timeTs->tradingTime(date), 1.0e-15);
         // ...and discount factors at dates are unchanged
-        BOOST_CHECK_CLOSE(curve->discount(date), m.usdTs->discount(date), 1.0e-9);
+        BOOST_CHECK_CLOSE(curve->discount(date), m.domesticTs->discount(date), 1.0e-9);
     }
     // a weekend takes little trading time but its carry: the rate per year of
     // trading time is higher over it than over a business day
@@ -1693,12 +1966,10 @@ BOOST_AUTO_TEST_CASE(testTradingTimeDayCounterAndCurve) {
     const Rate businessDay = curve->forwardRate(monday, tuesday, dc, Continuous).rate();
     BOOST_CHECK_CLOSE(weekend / businessDay, 2.0 / 0.4, 1.0e-6);
 
-    // holidays need a positive weight, and both reference dates must agree
-    FxMarket still;
-    BOOST_CHECK_THROW(TradingTimeYieldTermStructure(still.usdTs, still.timeTs), Error);
+    // both reference dates must agree
     const Handle<TradingTimeTermStructure> later(
         ext::make_shared<TradingTimeTermStructure>(m.today + 1, WeekendsOnly(), 0.2));
-    BOOST_CHECK_THROW(TradingTimeYieldTermStructure(m.usdTs, later), Error);
+    BOOST_CHECK_THROW(TradingTimeYieldTermStructure(m.domesticTs, later), Error);
 }
 
 BOOST_AUTO_TEST_CASE(testFxTradingTimeMarketPreservesPrices) {
@@ -1710,8 +1981,8 @@ BOOST_AUTO_TEST_CASE(testFxTradingTimeMarketPreservesPrices) {
                                                makeQuoteHandle(1.5))};
     FxMarket m(0.2, events);
     const FxSettleConvention settlement(WeekendsOnly(), 2);
-    const FxTradingTimeMarket tm(m.spot, m.eurTs, m.usdTs, settlement, m.surface);
-    auto calendarProcess = makeFxLocalVolProcess(m.spot, m.eurTs, m.usdTs, settlement,
+    const FxTradingTimeMarket tm(m.spot, m.foreignTs, m.domesticTs, settlement, m.surface);
+    auto calendarProcess = makeFxLocalVolProcess(m.spot, m.foreignTs, m.domesticTs, settlement,
                                                  Handle<BlackVolTermStructure>(m.surface));
     auto tradingProcess = ext::make_shared<GeneralizedBlackScholesProcess>(
         tm.spot(), tm.settlementForeignCurve(), tm.domesticCurve(), tm.volSurface());
@@ -2086,8 +2357,9 @@ BOOST_AUTO_TEST_CASE(testFxPnlExplainEventReleasedOvernight) {
     // day, so the variance lost overnight is larger by the event's less the
     // smaller loss of the ordinary day: v times the remaining eventless trading
     // time over today's (up to the interpolation between the pillars)
-    const TradingTimeTermStructure base0(data.today, data.conventions.settlement.calendar(), 0.0);
-    const TradingTimeTermStructure base1(next, data.conventions.settlement.calendar(), 0.0);
+    const Calendar& cal = data.conventions.settlement.calendar();
+    const Real weight = data.conventions.holidayWeight;
+    const TradingTimeTermStructure base0(data.today, cal, weight), base1(next, cal, weight);
     const Real expected =
         v * base1.tradingTime(next, expiry) / base0.tradingTime(data.today, expiry);
     BOOST_CHECK_CLOSE((w0 - w1) - (u0 - u1), expected, 2.0);

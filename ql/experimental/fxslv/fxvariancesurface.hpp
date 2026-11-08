@@ -34,7 +34,6 @@
 #include <ql/time/daycounters/actual365fixed.hpp>
 #include <ql/math/interpolation.hpp>
 #include <ql/experimental/fxslv/smilesections/fxsmilesection.hpp>
-#include <ql/experimental/fxslv/smilesections/fxcostsmilesection.hpp>
 #include <ql/quote.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
 #include <ql/pricingengines/blackformula.hpp>

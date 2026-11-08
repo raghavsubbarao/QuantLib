@@ -27,6 +27,8 @@
 #include <ql/experimental/fxslv/fxeventvariance.hpp>
 #include <ql/experimental/fxslv/conventions/fxexpirycut.hpp>
 #include <ql/experimental/fxslv/conventions/fxtenorexpiry.hpp>
+#include <ql/experimental/fxslv/fxtradingtimemarket.hpp>
+#include <ql/experimental/fxslv/fxvanillagreeks.hpp>
 #include <ql/experimental/fxslv/fxvariancesurface.hpp>
 #include <ql/math/distributions/normaldistribution.hpp>
 #include <ql/pricingengines/blackdeltacalculator.hpp>
@@ -47,7 +49,7 @@ namespace QuantLib {
         FxRrBfQuotes::FlyType flyType;  //!< of the butterflies given in the markets
         FxSettleConvention settlement;
         FxExpiryCut cut;  //!< of the quoted tenors, and so of the surfaces built
-        Real holidayWeight = 0.0;  //!< trading-time weight of non-business days
+        Real holidayWeight = 0.2;  //!< trading-time weight of non-business days, in (0, 1]
     };
 
     //! The FX vol market on a date: spot, curves, quotes by tenor and events
@@ -184,6 +186,10 @@ namespace QuantLib {
         FxVolMarket rolled(const FxVolMarket& today, const Date& next) const;
         //! The variance surface of a market quoted with smile strangles.
         ext::shared_ptr<Surface<Section>> surface(const FxVolMarket& market) const;
+        //! The market on the trading-time clock of its surface, for local vol and SLV.
+        FxTradingTimeMarket
+        tradingTimeMarket(const FxVolMarket& market,
+                          Volatility localVolFallback = Null<Volatility>()) const;
         //@}
 
       private:
@@ -421,6 +427,15 @@ namespace QuantLib {
     }
 
     template <class Section, template <class> class Surface>
+    FxTradingTimeMarket
+    FxVanillaPnlExplain<Section, Surface>::tradingTimeMarket(const FxVolMarket& market,
+                                                            Volatility localVolFallback) const {
+        return FxTradingTimeMarket(makeQuoteHandle(market.spot), market.foreignCurve,
+                                   market.domesticCurve, conventions_.settlement, surface(market),
+                                   localVolFallback);
+    }
+
+    template <class Section, template <class> class Surface>
     void FxVanillaPnlExplain<Section, Surface>::fixedExpiryQuotes(
         const Surface<Section>& surface,
         const FxVolMarket& market,
@@ -619,6 +634,38 @@ namespace QuantLib {
                                 r.vannaRiskReversal + r.vannaButterfly + r.volga);
         return r;
     }
+
+
+    //! The roll of an FX vol market to the next date, as the P&L explain rolls it
+    /*! The rolled market holds eventless vols per tenor and the events'
+        variances, the spot rolled along today's forward (see
+        FxVanillaPnlExplain::rolled()); its process is the local-vol one on
+        the trading-time clock of its surface (FxTradingTimeMarket), for the
+        theta of FxVanillaBumpRisk.
+    */
+    template <class Section, template <class> class Surface = fxVarianceSurfaceNCP>
+    class FxPnlExplainRoll : public FxVolMarketRoll {
+      public:
+        //! The roll of today's market, quoted as the explain's conventions say, to the next date.
+        FxPnlExplainRoll(FxVanillaPnlExplain<Section, Surface> explain,
+                         const FxVolMarket& today,
+                         const Date& next,
+                         Volatility localVolFallback = Null<Volatility>())
+        : explain_(std::move(explain)), rolled_(explain_.rolled(today, next)),
+          localVolFallback_(localVolFallback) {}
+
+        Date nextDate() const override { return rolled_.date; }
+        ext::shared_ptr<GeneralizedBlackScholesProcess> rolledProcess() const override {
+            return explain_.tradingTimeMarket(rolled_, localVolFallback_).localVolProcess();
+        }
+        //! The rolled market.
+        const FxVolMarket& rolled() const { return rolled_; }
+
+      private:
+        FxVanillaPnlExplain<Section, Surface> explain_;
+        FxVolMarket rolled_;
+        Volatility localVolFallback_;
+    };
 
 }
 

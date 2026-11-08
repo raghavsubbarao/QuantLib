@@ -25,6 +25,7 @@
 #define quantlib_fx_vanilla_greeks_hpp
 
 #include <ql/instruments/vanillaoption.hpp>
+#include <ql/methods/finitedifferences/meshers/fdmmesher.hpp>
 #include <ql/processes/blackscholesprocess.hpp>
 #include <ql/quotes/simplequote.hpp>
 #include <ql/experimental/fxslv/fxlocalvolsurface.hpp>
@@ -45,13 +46,16 @@ namespace QuantLib {
         \li \c fwdDelta   — forward-USD per 1% forward move (= spotDelta / B_d)
         \li \c spotGamma  — USD (spot-delta change per 1% spot move)
         \li \c fwdGamma   — forward-USD (fwd-delta change per 1% fwd move)
-        \li \c theta      — USD per calendar day
+        \li \c theta      — USD over the roll of the market to its next date
+                              (see FxVanillaBumpRisk::setRoll()); null without one
         \li \c vega       — USD per 1% (100 bp) parallel ATM vol move
         \li \c rega       — USD per 0.1% 1M-equivalent RR move
         \li \c sega       — USD per 0.01% 1M-equivalent BF move
         \li \c vanna      — USD (spot-delta change per 1% ATM vol move)
         \li \c navva      — USD (vega change per 1% spot move; equals \c vanna)
         \li \c volga      — USD (vega change per 1% ATM vol move)
+        \li \c premiumAdjusted — delta, gamma and vanna for a premium paid
+                              in EUR (see FxPremiumAdjustedGreeks)
 
         \note \c vanna and \c navva are identical numbers — they are both
         equal to \f$ \partial^2 V/(\partial S\,\partial\sigma) \f$ expressed
@@ -59,6 +63,41 @@ namespace QuantLib {
         first-order sensitivity is thought of as "changing": vanna is the
         vol-sensitivity of the delta; navva is the spot-sensitivity of the vega.
     */
+    //! Premium-adjusted delta-type greeks of an FX vanilla position.
+    /*!
+        For pairs whose premium is paid in the foreign (base) currency, e.g.
+        USD/JPY with the premium in USD, the hedge in foreign currency is
+        the delta less the premium, \f$ \Delta - V/S \f$: the premium
+        received in foreign currency is itself a spot exposure.  Here are
+        the greeks of that delta, in the units and scalings of
+        FxVanillaGreeks:
+        \li \c spotDelta \f$ = (\partial V/\partial S - V/S)\,0.01\,S \f$,
+              i.e. the spot delta less 1% of the value;
+        \li \c fwdDelta  \f$ = \f$ \c spotDelta / \f$ B_d \f$;
+        \li \c spotGamma: the change of the premium-adjusted delta per 1%
+              spot move, \f$ \partial^2 V/\partial S^2 - (\partial V/\partial S)/S
+              + V/S^2 \f$ scaled by \f$ (0.01\,S)^2 \f$;
+        \li \c fwdGamma  \f$ = \f$ \c spotGamma / \f$ B_d \f$;
+        \li \c vanna: the change of the premium-adjusted delta per 1% vol
+              move, i.e. vanna less 1% of vega.
+
+        Unlike the plain ones, these greeks do not satisfy simple put-call
+        parity: since \f$ C - P = S B_f - K B_d \f$, the call's
+        premium-adjusted delta exceeds the put's by \f$ K B_d/S \f$, and its
+        gamma falls short of the put's by \f$ K B_d/S^2 \f$.  A call's
+        premium-adjusted gamma is negative deep in the money.
+
+        Values, vega and the other greeks are unchanged by the premium
+        currency and are those of FxVanillaGreeks, in domestic currency.
+    */
+    struct FxPremiumAdjustedGreeks {
+        Real spotDelta;
+        Real fwdDelta;
+        Real spotGamma;
+        Real fwdGamma;
+        Real vanna;
+    };
+
     struct FxVanillaGreeks {
         Real npv;
         Real spotDelta;
@@ -72,6 +111,25 @@ namespace QuantLib {
         Real vanna;
         Real navva;
         Real volga;
+        //! The delta-type greeks with the premium in foreign currency.
+        FxPremiumAdjustedGreeks premiumAdjusted;
+    };
+
+    //! A market rolled to a later date, for the theta of the roll
+    /*! The rolled market is that of the next date, with the vols held as
+        the roll prescribes, e.g. eventless vols held per tenor (see
+        FxVanillaPnlExplain::rolled() and FxPnlExplainRoll).
+    */
+    class FxVolMarketRoll {
+      public:
+        virtual ~FxVolMarketRoll() = default;
+        //! The date the market rolls to.
+        virtual Date nextDate() const = 0;
+        //! The process on the rolled market
+        /*! It is called with the evaluation date set to nextDate(), on
+            which its curves and surface are built.
+        */
+        virtual ext::shared_ptr<GeneralizedBlackScholesProcess> rolledProcess() const = 0;
     };
 
     //! FX vanilla option risk calculator via bump-and-reval.
@@ -87,21 +145,45 @@ namespace QuantLib {
           No finite-difference grid is used and no Dupire computation occurs.
         - <b>Local-vol Dupire FD</b> (\c localVol=true)
 
-        When \c localVol=true, the \c StickyType parameter controls how the
-        volatility surface behaves when spot is bumped for Greek calculation:
+        The \c StickyType parameter controls how the volatility surface behaves
+        when spot is bumped for Greek calculation:
         - <b>StickyType::Delta</b> (default): the FX variance surface re-anchors
-          in delta space when spot moves (market convention).
-        - <b>StickyType::Strike</b>: the Dupire local vol is frozen in (t,K) space
-          via \c FixedLocalVolSurface before bumping — model-consistent delta.
+          in delta space when spot moves (market convention), and the local vol
+          is rebuilt from it.
+        - <b>StickyType::Strike</b>: implied vols at fixed strikes do not move
+          with spot.  A vanilla's price depends only on its own implied vol, so
+          its greeks are Black's at that vol held as spot moves, whichever the
+          \c localVol flag: delta and gamma at the option's implied vol,
+          vega, vanna and volga with it read from the bumped surface, theta
+          from the Black roll.
+        - <b>StickyType::LocalVol</b>: the Dupire local vol is frozen in (t,K)
+          space via \c FixedLocalVolSurface before bumping: the local-vol
+          model's own delta.  It is not sticky strike: under local vol, implied
+          vols at a fixed strike move with spot by about the skew
+          \f$ \partial\sigma/\partial K \f$, the opposite of sticky delta's
+          \f$ -\partial\sigma/\partial K \f$ (Hagan et al., 2002), so that with
+          a put skew a call's local-vol delta is below its sticky-strike (Black)
+          delta, and its sticky-delta one above.  Only effective when
+          \c localVol=true.
 
         <b>Scaling conventions:</b>
         Greeks are reported per the standard FX desk conventions:
         - Spot/fwd delta/gamma are per 1% move in the respective rate.
-        - Vega, vanna, volga are per 1% (100 bp) absolute vol move.
+        - Vega, vanna, volga are per 1% (100 bp) absolute vol move.  They take
+          central differences over a parallel bump of the ATM quotes, by
+          default 1%: volga is a second difference, and with local vol smaller
+          bumps leave it to the noise of the finite-difference and Dupire
+          numerics, which it amplifies by \f$ 1/\text{volBump}^2 \f$ (at 0.1%, a
+          volga of order 10 per 1% for a 3M ATM option, of either sign).
         - Rega bumps each RR pillar by \f$ \text{rrBump} \times \sqrt{T_{1M}/T_i} \f$,
           so the 1M pillar moves by \c rrBump (default 10 bp) and longer tenors
           move by a smaller amount proportional to \f$ 1/\sqrt{T} \f$.
         - Sega bumps each BF pillar similarly with \c bfBump (default 10 bp at 1M).
+        - Theta is the P&L of the roll of the market to its next date, the
+          option repriced on the rolled market; there is none without a roll
+          (see setRoll()).  Holding today's surface fixed while the date moves
+          is not defined: the surface is anchored to today's date, and on the
+          trading-time clock its curves must agree with it.
 
         \ingroup vanillaengines
     */
@@ -112,10 +194,13 @@ namespace QuantLib {
             //! Sticky-delta (market convention): the FX variance surface
             //! re-anchors in delta space when spot moves.
             Delta,
-            //! Sticky-strike (model-consistent): the Dupire local vol grid is
-            //! frozen in (t,K) space before bumping spot.  Only effective when
-            //! \c localVol=true.
-            Strike
+            //! Sticky-strike: implied vols at fixed strikes do not move with
+            //! spot; Black greeks at the option's implied vol.
+            Strike,
+            //! Local vol frozen: the Dupire local vol grid is frozen in (t,K)
+            //! space before bumping spot, giving the local-vol model's own
+            //! delta.  Only effective when \c localVol=true.
+            LocalVol
         };
 
         /*! \param option            Vanilla option to price.
@@ -138,14 +223,15 @@ namespace QuantLib {
             \param bfPillarTimes     Year-fraction time for each BF pillar.
             \param notional          Option notional in foreign currency.
             \param spotBump          Relative spot bump for delta/gamma (e.g. 0.001).
-            \param volBump           Absolute ATM vol bump for vega/vanna/volga.
+            \param volBump           Absolute ATM vol bump for vega/vanna/volga
+                                     (see above for why it is not smaller).
             \param rrBump            Reference (1M) RR bump for rega; other tenors
                                      scale as \f$ \text{rrBump}\,\sqrt{T_{1M}/T_i}\f$.
             \param bfBump            Reference (1M) BF bump for sega.
             \param tGrid             FD time steps.
             \param xGrid             FD spot grid points.
             \param lvTimePts         Time points in the auto-sized local vol grid
-                                     (sticky-strike mode only).
+                                     (frozen local-vol mode only).
             \param lvStrikePts       Strike points in the local vol grid.
             \param lvStrikeSpread    Half-width of local vol strike grid in units of
                                      \f$ \sigma_{ATM}\sqrt{T} \f$.
@@ -161,7 +247,7 @@ namespace QuantLib {
             std::vector<Time> bfPillarTimes = {},
             Real notional = 1.0e6,
             Real spotBump = 0.001,
-            Real volBump = 0.001,
+            Real volBump = 0.01,
             Real rrBump = 0.001,
             Real bfBump = 0.001,
             Size tGrid = 100,
@@ -178,6 +264,14 @@ namespace QuantLib {
         //! Number of times the local vol fallback was used.
         Size localVolFallbacks() const { return localVol_->fallbacks(); }
 
+        //! The roll of the market giving theta
+        /*! Its rolled process should be built as the one given here is, e.g.
+            both on the trading-time clock (FxTradingTimeMarket); with local
+            vol, theta takes the rolled process's Dupire local vol, with the
+            same fallback.
+        */
+        void setRoll(ext::shared_ptr<const FxVolMarketRoll> roll) { roll_ = std::move(roll); }
+
         //! Compute all Greeks via bump-and-reval.
         FxVanillaGreeks calculate(bool localVol = true,
                                   StickyType sticky = StickyType::Delta) const;
@@ -193,11 +287,16 @@ namespace QuantLib {
                                      std::ostream& out = std::cout) const;
 
       private:
+        // the finite-difference grid for the option in the given market
+        ext::shared_ptr<FdmMesher>
+        makeMesher(const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc) const;
+        // finite-difference engines on the given grid
         ext::shared_ptr<PricingEngine>
         makeEngineFor(const ext::shared_ptr<GeneralizedBlackScholesProcess>& proc,
-                      bool localVol) const;
-
-        ext::shared_ptr<PricingEngine> makeEngine(bool localVol) const;
+                      bool localVol,
+                      const ext::shared_ptr<FdmMesher>& mesher) const;
+        ext::shared_ptr<PricingEngine> makeEngine(bool localVol,
+                                                  const ext::shared_ptr<FdmMesher>& mesher) const;
         // Dupire local vol of the process's surface, allowing periods without variance
         void buildLocalVol(Volatility fallbackVol);
         ext::shared_ptr<PricingEngine> makeAnalyticEngine() const;
@@ -207,6 +306,9 @@ namespace QuantLib {
         ext::shared_ptr<GeneralizedBlackScholesProcess>
         makeStickyProcess(const std::vector<Time>& times,
                           const std::vector<Real>& strikes) const;
+
+        // P&L of the roll of the market, from today's value; null without a roll
+        Real rollTheta(bool localVol, Real todaysValue) const;
 
         ext::shared_ptr<VanillaOption> option_;
         ext::shared_ptr<GeneralizedBlackScholesProcess> process_;
@@ -224,6 +326,8 @@ namespace QuantLib {
         // the local vol, and the process with it given explicitly
         ext::shared_ptr<FxLocalVolSurface> localVol_;
         ext::shared_ptr<GeneralizedBlackScholesProcess> localVolProcess_;
+        Volatility localVolFallback_ = Null<Volatility>();
+        ext::shared_ptr<const FxVolMarketRoll> roll_;
     };
 
 }

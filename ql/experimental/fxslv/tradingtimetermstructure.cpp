@@ -131,8 +131,9 @@ namespace QuantLib {
                                                        std::vector<ext::shared_ptr<TradingTimeEvent>> events)
     : TermStructure(referenceDate, std::move(calendar), Actual365Fixed()),
       holidayWeight_(holidayWeight), events_(std::move(events)) {
-        QL_REQUIRE(holidayWeight_ >= 0.0 && holidayWeight_ <= 1.0,
-                   "holiday weight must be in [0, 1]: " << holidayWeight_);
+        QL_REQUIRE(holidayWeight_ > 0.0 && holidayWeight_ <= 1.0,
+                   "holiday weight must be in (0, 1], so that trading time always runs: "
+                       << holidayWeight_);
         for (const auto& e : events_) {
             QL_REQUIRE(e, "null trading-time event given");
             registerWith(e->weight());
@@ -144,8 +145,9 @@ namespace QuantLib {
                                                        std::vector<ext::shared_ptr<TradingTimeEvent>> events)
     : TermStructure(Null<Natural>(), std::move(calendar), Actual365Fixed()),
       holidayWeight_(holidayWeight), events_(std::move(events)) {
-        QL_REQUIRE(holidayWeight_ >= 0.0 && holidayWeight_ <= 1.0,
-                   "holiday weight must be in [0, 1]: " << holidayWeight_);
+        QL_REQUIRE(holidayWeight_ > 0.0 && holidayWeight_ <= 1.0,
+                   "holiday weight must be in (0, 1], so that trading time always runs: "
+                       << holidayWeight_);
         for (const auto& e : events_) {
             QL_REQUIRE(e, "null trading-time event given");
             registerWith(e->weight());
@@ -200,12 +202,11 @@ namespace QuantLib {
             weights_.push_back(w);
             releasedAtReference_.push_back(e.released(referenceSerial_));
         }
-        checkRateIsAbove(-rateTolerance, "trading time would run backwards");
+        checkRateIsPositive();
         upToDate_ = true;
     }
 
-    void TradingTimeTermStructure::checkRateIsAbove(Real floor,
-                                                    const std::string& failure) const {
+    void TradingTimeTermStructure::checkRateIsPositive() const {
         // trading time can never decrease. However, its passage can be 
         // slower than real time. for eg over xmas or on holidays. this can 
         // be done by a negative weighted diffuse trading event. in these 
@@ -241,7 +242,9 @@ namespace QuantLib {
             Real rate = baseRate(day);
             for (Size k = 0; k < pendingEvents_.size(); ++k)
                 rate += weights_[k] * events_[pendingEvents_[k]]->releaseRate(m);
-            QL_REQUIRE(rate >= floor, failure << " on " << day << ": rate " << rate);
+            QL_REQUIRE(rate > rateTolerance,
+                       "trading time would stand still or run backwards on " << day << ": rate "
+                           << rate);
         }
     }
 
@@ -317,13 +320,6 @@ namespace QuantLib {
                 hi = mid;
         }
         return hi / 365.0;
-    }
-
-    void TradingTimeTermStructure::checkRateIsPositive() const {
-        checkReference();
-        QL_REQUIRE(holidayWeight_ > 0.0,
-                   "trading time stands still on holidays: their weight must be positive");
-        checkRateIsAbove(rateTolerance, "trading time would stand still");
     }
 
     std::vector<std::pair<Time, Time>> TradingTimeTermStructure::eventIntervals() const {

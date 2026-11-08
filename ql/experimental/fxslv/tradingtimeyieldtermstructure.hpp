@@ -38,10 +38,10 @@ namespace QuantLib {
         calendar time (TradingTimeTermStructure::calendarTime()), which the
         curve's own day counter measures linearly within each day.
 
-        Trading time must always run, for its times to map to calendar
-        times one-to-one; this is checked when the curve is built and
-        whenever the trading time notifies.  Both must have the same
-        reference date.
+        Trading time always runs, so its times map to calendar times
+        one-to-one.  The curve and the trading time must have the same
+        reference date, which is checked when the curve is built and
+        whenever either notifies.
     */
     class TradingTimeYieldTermStructure : public YieldTermStructure {
       public:
