@@ -17,7 +17,6 @@
  FOR A PARTICULAR PURPOSE.  See the license for more details.
 */
 
-#include <ql/exercise.hpp>
 #include <ql/experimental/fxslv/fxvanillagreeks.hpp>
 #include <ql/exercise.hpp>
 #include <ql/pricingengines/vanilla/analyticeuropeanengine.hpp>
@@ -362,6 +361,15 @@ namespace QuantLib {
             r.volga     = volga_raw * 0.01 * 0.01;
             r.rega      = rega;
             r.sega      = sega;
+
+            // the hedge less the premium, received in foreign currency:
+            // delta - V/S, and its derivatives in spot and vol
+            FxPremiumAdjustedGreeks& pa = r.premiumAdjusted;
+            pa.spotDelta = r.spotDelta - 0.01 * V0;
+            pa.fwdDelta  = pa.spotDelta / Bd;
+            pa.spotGamma = r.spotGamma - 0.01 * r.spotDelta + 1.0e-4 * V0;
+            pa.fwdGamma  = pa.spotGamma / Bd;
+            pa.vanna     = r.vanna - 0.01 * r.vega;
             return r;
         };
 

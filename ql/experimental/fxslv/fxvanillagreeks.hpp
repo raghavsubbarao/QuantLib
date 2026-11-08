@@ -54,6 +54,8 @@ namespace QuantLib {
         \li \c vanna      — USD (spot-delta change per 1% ATM vol move)
         \li \c navva      — USD (vega change per 1% spot move; equals \c vanna)
         \li \c volga      — USD (vega change per 1% ATM vol move)
+        \li \c premiumAdjusted — delta, gamma and vanna for a premium paid
+                              in EUR (see FxPremiumAdjustedGreeks)
 
         \note \c vanna and \c navva are identical numbers — they are both
         equal to \f$ \partial^2 V/(\partial S\,\partial\sigma) \f$ expressed
@@ -61,6 +63,41 @@ namespace QuantLib {
         first-order sensitivity is thought of as "changing": vanna is the
         vol-sensitivity of the delta; navva is the spot-sensitivity of the vega.
     */
+    //! Premium-adjusted delta-type greeks of an FX vanilla position.
+    /*!
+        For pairs whose premium is paid in the foreign (base) currency, e.g.
+        USD/JPY with the premium in USD, the hedge in foreign currency is
+        the delta less the premium, \f$ \Delta - V/S \f$: the premium
+        received in foreign currency is itself a spot exposure.  Here are
+        the greeks of that delta, in the units and scalings of
+        FxVanillaGreeks:
+        \li \c spotDelta \f$ = (\partial V/\partial S - V/S)\,0.01\,S \f$,
+              i.e. the spot delta less 1% of the value;
+        \li \c fwdDelta  \f$ = \f$ \c spotDelta / \f$ B_d \f$;
+        \li \c spotGamma: the change of the premium-adjusted delta per 1%
+              spot move, \f$ \partial^2 V/\partial S^2 - (\partial V/\partial S)/S
+              + V/S^2 \f$ scaled by \f$ (0.01\,S)^2 \f$;
+        \li \c fwdGamma  \f$ = \f$ \c spotGamma / \f$ B_d \f$;
+        \li \c vanna: the change of the premium-adjusted delta per 1% vol
+              move, i.e. vanna less 1% of vega.
+
+        Unlike the plain ones, these greeks do not satisfy simple put-call
+        parity: since \f$ C - P = S B_f - K B_d \f$, the call's
+        premium-adjusted delta exceeds the put's by \f$ K B_d/S \f$, and its
+        gamma falls short of the put's by \f$ K B_d/S^2 \f$.  A call's
+        premium-adjusted gamma is negative deep in the money.
+
+        Values, vega and the other greeks are unchanged by the premium
+        currency and are those of FxVanillaGreeks, in domestic currency.
+    */
+    struct FxPremiumAdjustedGreeks {
+        Real spotDelta;
+        Real fwdDelta;
+        Real spotGamma;
+        Real fwdGamma;
+        Real vanna;
+    };
+
     struct FxVanillaGreeks {
         Real npv;
         Real spotDelta;
@@ -74,6 +111,8 @@ namespace QuantLib {
         Real vanna;
         Real navva;
         Real volga;
+        //! The delta-type greeks with the premium in foreign currency.
+        FxPremiumAdjustedGreeks premiumAdjusted;
     };
 
     //! A market rolled to a later date, for the theta of the roll
