@@ -67,14 +67,26 @@ namespace QuantLib {
                2.0 * cv * (ds + beta * dp * dm) + dp * dm * cw;
     }
 
+    void FxStickyDeltaSolver::extrapolate(Real x, Real& w, Real& beta) const {
+        // total variance linear in x beyond the end node, as in SVI's wings, with
+        // its slope dw^2/dx = -2 w beta at the node capped at Lee's moment bound
+        const Size i = x < x_.front() ? 0 : x_.size() - 1;
+        const Real sv = std::max(-2.0, std::min(2.0, -2.0 * w_[i] * beta_[i]));
+        const Real v = w_[i] * w_[i] + sv * (x - x_[i]);
+        QL_REQUIRE(v > 0.0,
+                   "extrapolated total variance is not positive at log-moneyness " << x);
+        w = std::sqrt(v);
+        beta = -sv / (2.0 * w);
+    }
+
     Real FxStickyDeltaSolver::totalVol(Real x) const {
-        if (x <= x_.front() || x >= x_.back()) {
-            // linear extrapolation beyond the solved range
-            const Size i = x <= x_.front() ? 0 : x_.size() - 1;
-            const Real w = w_[i] - beta_[i] * (x - x_[i]);
-            QL_REQUIRE(w > 0.0, "extrapolated total vol is not positive at log-moneyness " << x);
+        if (x < x_.front() || x > x_.back()) {
+            Real w, beta;
+            extrapolate(x, w, beta);
             return w;
         }
+        if (x == x_.back())
+            return w_.back();
 
         // cubic Hermite interpolation with dw/dx = -beta at the nodes
         const Size i = std::upper_bound(x_.begin(), x_.end(), x) - x_.begin() - 1;
@@ -85,9 +97,12 @@ namespace QuantLib {
     }
 
     Real FxStickyDeltaSolver::slope(Real x) const {
-        if (x <= x_.front())
-            return beta_.front();
-        if (x >= x_.back())
+        if (x < x_.front() || x > x_.back()) {
+            Real w, beta;
+            extrapolate(x, w, beta);
+            return beta;
+        }
+        if (x == x_.back())
             return beta_.back();
 
         const Size i = std::upper_bound(x_.begin(), x_.end(), x) - x_.begin() - 1;
@@ -383,10 +398,9 @@ namespace QuantLib {
     }
 
     Real FxStickyDeltaConvexSmileSolver::convexity(Real x) const {
-        const Real beta = slope(x);
+        const Real beta = slope(x), w = totalVol(x);
         if (x < minLogMoneyness() || x > maxLogMoneyness())
-            return beta / 2.0;  // w'' = 0 beyond the range
-        const Real w = totalVol(x);
+            return 0.5 * (beta - beta * beta / w);  // w'' = -beta^2 / w for linear total variance
         return -costEquation(x, w, beta) / (2.0 * w * costs_[0]);
     }
 
