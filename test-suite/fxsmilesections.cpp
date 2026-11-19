@@ -519,6 +519,67 @@ BOOST_AUTO_TEST_CASE(testStickyDeltaConvexSmileSolver) {
                       Error);
 }
 
+BOOST_AUTO_TEST_CASE(testStickyDeltaSmileWings) {
+    BOOST_TEST_MESSAGE("Testing the wings of the sticky-delta cost smiles...");
+
+    const std::vector<Real> costs = {1.0, -15.3166, -0.06278, 0.28742};
+
+    // reference values beyond the solved range from an independent
+    // implementation (Python), 0.3 outside each end of the convex smile on
+    // the singular point of the smile without convexity plus or minus 8 total vols
+    const std::vector<Real> refW[2] = {{0.137703708652, 0.140814470767},
+                                       {0.138095958300, 0.141219748960}};
+    const std::vector<Real> refBeta[2] = {{0.1404855694, -0.1410063939},
+                                          {0.1406616203, -0.1411798577}};
+    const std::vector<Real> refKappa[2] = {{-0.0014190296, -0.1411024863},
+                                           {-0.0013066645, -0.1411599177}};
+
+    for (bool pa : {false, true}) {
+        const FxStickyDeltaSmileSolver flat(costs, pa, -0.1, 0.1);
+        const Real lo = flat.singularLogMoneyness() - 8.0 * flat.singularTotalVol();
+        const Real hi = flat.singularLogMoneyness() + 8.0 * flat.singularTotalVol();
+        const FxStickyDeltaConvexSmileSolver convex(costs, pa, lo, hi);
+        const Size k = pa ? 1 : 0;
+
+        const Real xs[2] = {lo - 0.3, hi + 0.3};
+        for (Size i = 0; i < 2; ++i) {
+            BOOST_CHECK_SMALL(convex.totalVol(xs[i]) - refW[k][i], 1.0e-10);
+            BOOST_CHECK_SMALL(convex.slope(xs[i]) - refBeta[k][i], 1.0e-8);
+            BOOST_CHECK_SMALL(convex.convexity(xs[i]) - refKappa[k][i], 1.0e-8);
+        }
+
+        for (const FxStickyDeltaSolver* smile :
+             {static_cast<const FxStickyDeltaSolver*>(&flat),
+              static_cast<const FxStickyDeltaSolver*>(&convex)}) {
+            for (Integer side : {-1, 1}) {
+                const Real end = side < 0 ? smile->minLogMoneyness() : smile->maxLogMoneyness();
+                // the smile is continuous at the end node...
+                BOOST_CHECK_SMALL(smile->totalVol(end + side * 1.0e-9) - smile->totalVol(end),
+                                  1.0e-8);
+                // ...and beyond it the total variance is linear in x, with a
+                // slope within Lee's moment bound of 2
+                const Real v1 = std::pow(smile->totalVol(end + side * 0.5), 2),
+                           v2 = std::pow(smile->totalVol(end + side * 1.0), 2),
+                           v3 = std::pow(smile->totalVol(end + side * 1.5), 2);
+                BOOST_CHECK_SMALL((v3 - v2) - (v2 - v1), 1.0e-12);
+                BOOST_CHECK(std::fabs(v2 - v1) / 0.5 <= 2.0 + 1.0e-12);
+                // the slope is that of the extrapolated smile
+                const Real x = end + side * 0.7, h = 1.0e-5;
+                const Real fd = -(smile->totalVol(x + h) - smile->totalVol(x - h)) / (2.0 * h);
+                BOOST_CHECK_SMALL(smile->slope(x) - fd, 1.0e-8);
+                // and the convexity is that of linear total variance, w'' = -beta^2 / w
+                if (smile == &convex) {
+                    const Real w = smile->totalVol(x), beta = smile->slope(x);
+                    BOOST_CHECK_SMALL(smile->convexity(x) - 0.5 * (beta - beta * beta / w),
+                                      1.0e-14);
+                } else {
+                    BOOST_CHECK_EQUAL(smile->convexity(x), 0.0);
+                }
+            }
+        }
+    }
+}
+
 BOOST_AUTO_TEST_CASE(testCostSmileSectionStickyDeltaConvexSteepSkew) {
     BOOST_TEST_MESSAGE("Testing the convex sticky-delta smile on a steep USDJPY skew...");
 
